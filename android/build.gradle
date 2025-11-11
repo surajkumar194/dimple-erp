@@ -1,0 +1,34 @@
+buildscript {
+    ext.kotlin_version = '1.9.22' // ✅ Latest Kotlin version compatible with Gradle 8.3+
+
+    repositories {
+        google()        // ✅ Required for Firebase & Android SDK tools
+        mavenCentral()  // ✅ Needed for Kotlin and Firebase dependencies
+    }
+
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.3.2"                         // ✅ Latest stable Android Gradle Plugin
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"   // ✅ Kotlin plugin
+        classpath "com.google.gms:google-services:4.4.0"                         // ✅ Google Services plugin for Firebase
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// ✅ Specify custom build directory (optional, used in many Flutter apps)
+rootProject.buildDir = "../build"
+
+// ✅ Make sure subprojects use the same structure
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
+// ✅ Define a clean task
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

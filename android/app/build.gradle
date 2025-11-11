@@ -1,0 +1,50 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services" // Firebase plugin
+}
+
+
+android {
+    namespace "com.example.dimple_erp"
+    compileSdk 36 // latest compileSdk for Firebase compatibility
+    ndkVersion "27.0.12077973"
+
+    defaultConfig {
+        applicationId "com.example.dimple_erp"
+        minSdk 23 // Firebase Auth minimum requirement
+        targetSdk 36
+        versionCode 1
+        versionName "1.0.0"
+        multiDexEnabled true // for large method count
+    }
+
+
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+}
+
+flutter {
+    source "../.."
+}
+
+dependencies {
+    // Firebase BOM (keeps all Firebase libs same version)
+    implementation platform("com.google.firebase:firebase-bom:33.7.0")
+    implementation "com.google.firebase:firebase-analytics"
+    implementation "com.google.firebase:firebase-auth"
+}
