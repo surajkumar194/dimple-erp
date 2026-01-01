@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -10,7 +10,6 @@ import 'package:intl/intl.dart';
 
 class StoreStockScreen extends StatefulWidget {
   const StoreStockScreen({super.key});
-
   @override
   _StoreStockScreenState createState() => _StoreStockScreenState();
 }
@@ -30,8 +29,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
   String? _selectedGroup;
   List<String> _groupList = [];
 
-  final List<String> _departments = ['Production', 'Maintenance', 'QC', 'Packing', 'Store', 'Admin'];
-  final List<String> _secondParties = ['Vendor A', 'Vendor B', 'Supplier X', 'Client Y', 'Other'];
+  final List<String> _departments = ['Gora Depatment', 'Mdf hall 1', 'Mdf hall 2', 'designing room', ];
 
   @override
   void initState() {
@@ -44,6 +42,22 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // RE-NUMBER SR AFTER DELETE
+  Future<void> _renumberSrNumbers() async {
+    try {
+      final snapshot = await _firestore.collection('stock_items').orderBy('sr').get();
+      final WriteBatch batch = _firestore.batch();
+      int newSr = 1;
+      for (var doc in snapshot.docs) {
+        batch.update(doc.reference, {'sr': newSr});
+        newSr++;
+      }
+      await batch.commit();
+    } catch (e) {
+      _showSnackBar('Renumbering failed: $e', isError: true);
+    }
   }
 
   Future<int> _getNextSrNumber() async {
@@ -149,86 +163,257 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     );
   }
 
-  // ISSUE STOCK WITH DEPARTMENT
-  void _issueStockWithDepartment(Map<String, dynamic> item) {
-    String? selectedDept;
-    final qtyCtrl = TextEditingController();
+ void _issueStockWithDepartment(Map<String, dynamic> item) {
+  final qtyCtrl = TextEditingController();
+  String? selectedJobCard;
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setStateDialog) => AlertDialog(
+  showDialog(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setStateDialog) {
+        return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text("Issue Stock", style: TextStyle(color: Colors.red[700])),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedDept,
-                hint: Text("Select Department"),
-                items: _departments.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                onChanged: (v) => setStateDialog(() => selectedDept = v),
-                decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: qtyCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: "Quantity",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text("Issue Stock to Job", style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 🔹 Fetch job cards
+                FutureBuilder<QuerySnapshot>(
+                  future: _firestore.collection('jobCards').orderBy('createdAt', descending: true).get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(child: CircularProgressIndicator(color: Colors.orange));
+                    }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return Text("No Job Cards found.", style: TextStyle(color: Colors.grey[600]));
+                    }
+
+                    final jobCards = snapshot.data!.docs;
+                    return DropdownButtonFormField<String>(
+                      value: selectedJobCard,
+                      decoration: InputDecoration(
+                        labelText: "Select Job Card",
+                        prefixIcon: Icon(Icons.work, color: Colors.red[700]),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      items: jobCards.map((d) {
+                        final data = d.data() as Map<String, dynamic>;
+                        final jobNo = data['jobNo'] ?? 'N/A';
+                        final product = data['productName'] ?? '';
+                        return DropdownMenuItem(
+                          value: d.id,
+                          child: Text("$jobNo - $product"),
+                        );
+                      }).toList(),
+                      onChanged: (v) => setStateDialog(() => selectedJobCard = v),
+                    );
+                  },
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: "Enter Quantity to Issue",
+                    prefixIcon: Icon(Icons.inventory, color: Colors.red[700]),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Cancel")),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text("Cancel"),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600]),
-              onPressed: selectedDept == null || qtyCtrl.text.isEmpty
-                  ? null
-                  : () async {
-                      final qty = int.tryParse(qtyCtrl.text) ?? 0;
-                      if (qty <= 0) {
-                        _showSnackBar("Enter valid quantity", isError: true);
-                        return;
-                      }
-                      final newStock = (item['current'] ?? 0) - qty;
-                      if (newStock < 0) {
-                        _showSnackBar("Not enough stock!", isError: true);
-                        return;
-                      }
+              onPressed: () async {
+                if (selectedJobCard == null) {
+                  _showSnackBar("Please select a Job Card", isError: true);
+                  return;
+                }
 
-                      await _firestore.collection('stock_transactions').add({
-                        'itemId': item['docId'],
-                        'type': 'issue',
-                        'department': selectedDept,
-                        'quantity': qty,
-                        'timestamp': FieldValue.serverTimestamp(),
-                      });
+                final qtyText = qtyCtrl.text.trim();
+                final qty = int.tryParse(qtyText) ?? 0;
+                if (qty <= 0) {
+                  _showSnackBar("Enter valid quantity", isError: true);
+                  return;
+                }
 
-                      await _firestore.collection('stock_items').doc(item['docId']).update({
-                        'current': newStock,
-                        'issue': (item['issue'] ?? 0) + qty,
-                        'dateEdit': DateFormat('dd-MM-yyyy').format(DateTime.now()),
-                        'updatedAt': FieldValue.serverTimestamp(),
-                      });
+                final currentStock = item['current'] ?? 0;
+                if (currentStock < qty) {
+                  _showSnackBar("Not enough stock available!", isError: true);
+                  return;
+                }
 
-                      await _loadDataFromFirebase();
-                      _showSnackBar("Issued $qty to $selectedDept");
-                      Navigator.pop(ctx);
-                    },
-              child: Text("Continue Issue"),
-            ),
-          ],
-        ),
-      ),
-    );
+             try {
+  // ✅ 1️⃣ Record issue transaction
+  await _firestore.collection('stock_transactions').add({
+    'itemId': item['docId'],
+    'type': 'issue',
+    'jobCardId': selectedJobCard,
+    'quantity': qty,
+    'timestamp': FieldValue.serverTimestamp(),
+  });
+
+                  // 🔹 Update stock item
+                await _firestore.collection('stock_items').doc(item['docId']).update({
+    'current': currentStock - qty,
+    'issue': (item['issue'] ?? 0) + qty,
+    'dateEdit': DateFormat('dd-MM-yyyy').format(DateTime.now()),
+    'updatedAt': FieldValue.serverTimestamp(),
+  });
+
+                  // 🔹 Update jobCard dispatch log
+                final jobDoc = _firestore.collection('jobCards').doc(selectedJobCard);
+  final jobSnap = await jobDoc.get();
+  if (jobSnap.exists) {
+    final jobData = jobSnap.data() as Map<String, dynamic>;
+    final totalQty = int.tryParse(jobData['quantity']?.toString() ?? '0') ?? 0;
+    final issuedQty = int.tryParse(jobData['issuedQuantity']?.toString() ?? '0') ?? 0;
+    final newIssued = issuedQty + qty;
+    final newStatus = newIssued >= totalQty ? "Completed" : "Partially Issued";
+
+    await jobDoc.update({
+      'issuedQuantity': newIssued,
+      'status': newStatus,
+      'dispatchLog': FieldValue.arrayUnion([
+        {
+          'department': 'Store',
+          'issuedQty': qty,
+          'time': DateTime.now(),
+          'itemName': item['name'],
+        }
+      ]),
+    });
+  }
+  final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  final dailyRef = _firestore
+      .collection('stock_daily_history')
+      .doc(todayKey)
+      .collection('items')
+      .doc(item['docId']);
+
+  final dailySnap = await dailyRef.get();
+  if (dailySnap.exists) {
+    await dailyRef.update({
+      'totalIssued': FieldValue.increment(qty),
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+  } else {
+    await dailyRef.set({
+      'itemId': item['docId'],
+      'itemName': item['name'],
+      'totalIssued': qty,
+      'date': todayKey,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
-  // ADD ADDITIONAL WITH PARTY
+                  await _loadDataFromFirebase();
+                  Navigator.pop(ctx);
+                  _showSnackBar("Issued $qty units to Job successfully!");
+                } catch (e) {
+                  _showSnackBar("Error issuing stock: $e", isError: true);
+                }
+              },
+              child: Text("Issue Now"),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+
+
+void _showItemHistoryBelowDialog(Map<String, dynamic> item) {
+  showDialog(
+    context: context,
+    builder: (ctx) => FutureBuilder<QuerySnapshot>(
+      future: _firestore
+          .collection('stock_transactions')
+          .where('itemId', isEqualTo: item['docId'])
+          .where('type', isEqualTo: 'issue')
+          .orderBy('timestamp', descending: true)
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator(color: Colors.orange));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.history, color: Colors.orange[700]),
+                SizedBox(width: 8),
+                Text("Issue History", style: TextStyle(color: Colors.orange[700])),
+              ],
+            ),
+            content: Text("No previous issues found."),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Close")),
+            ],
+          );
+        }
+
+        final docs = snapshot.data!.docs;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.history, color: Colors.orange[700]),
+              SizedBox(width: 8),
+              Text("${item['name']} Issue History", style: TextStyle(color: Colors.orange[700])),
+            ],
+          ),
+          content: Container(
+            width: double.maxFinite,
+            constraints: BoxConstraints(maxHeight: 60.h),
+            child: ListView.builder(
+              itemCount: docs.length,
+              itemBuilder: (context, i) {
+                final data = docs[i].data() as Map<String, dynamic>;
+                final dept = data['department'] ?? '-';
+                final qty = data['quantity'] ?? 0;
+                final remaining = data['remaining'] ?? '-';
+                final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
+                final dateStr = timestamp != null
+                    ? DateFormat('dd-MM-yyyy hh:mm a').format(timestamp)
+                    : '';
+
+                return Card(
+                  margin: EdgeInsets.symmetric(vertical: 4),
+                  elevation: 2,
+                  child: ListTile(
+                    leading: Icon(Icons.arrow_upward, color: Colors.red[700]),
+                    title: Text("Issued $qty → $dept", style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.w600)),
+                    subtitle: Text("Remaining: $remaining | $dateStr", style: TextStyle(fontSize: 12)),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text("Close", style: TextStyle(color: Colors.orange[700])),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+
   void _addAdditionalWithParty(Map<String, dynamic> item) {
-    String? selectedParty;
+    final partyCtrl = TextEditingController();
     final qtyCtrl = TextEditingController();
 
     showDialog(
@@ -240,12 +425,15 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButtonFormField<String>(
-                value: selectedParty,
-                hint: Text("Select Second Party"),
-                items: _secondParties.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-                onChanged: (v) => setStateDialog(() => selectedParty = v),
-                decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+              // TEXT FIELD FOR PARTY NAME
+              TextField(
+                controller: partyCtrl,
+                decoration: InputDecoration(
+                  labelText: "Second Party Name",
+                  hintText: "Enter party name (e.g., Vendor A)",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: Icon(Icons.person, color: Colors.green[700]),
+                ),
               ),
               SizedBox(height: 16),
               TextField(
@@ -254,6 +442,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                 decoration: InputDecoration(
                   labelText: "Quantity",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: Icon(Icons.add_box, color: Colors.green[700]),
                 ),
               ),
             ],
@@ -262,7 +451,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Cancel")),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green[600]),
-              onPressed: selectedParty == null || qtyCtrl.text.isEmpty
+              onPressed: partyCtrl.text.trim().isEmpty || qtyCtrl.text.isEmpty
                   ? null
                   : () async {
                       final qty = int.tryParse(qtyCtrl.text) ?? 0;
@@ -275,7 +464,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                       await _firestore.collection('stock_transactions').add({
                         'itemId': item['docId'],
                         'type': 'received',
-                        'party': selectedParty,
+                        'party': partyCtrl.text.trim(),
                         'quantity': qty,
                         'timestamp': FieldValue.serverTimestamp(),
                       });
@@ -288,7 +477,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                       });
 
                       await _loadDataFromFirebase();
-                      _showSnackBar("Received $qty from $selectedParty");
+                      _showSnackBar("Received $qty from ${partyCtrl.text.trim()}");
                       Navigator.pop(ctx);
                     },
               child: Text("Continue Received"),
@@ -339,7 +528,6 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     );
   }
 
-  // ITEM-WISE AVERAGE (30 DAYS)
   Future<double> _calculateAverageStock(String itemId) async {
     try {
       final thirtyDaysAgo = DateTime.now().subtract(Duration(days: 30));
@@ -417,7 +605,6 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
               decoration: BoxDecoration(
                 color: Colors.purple[50],
                 borderRadius: BorderRadius.circular(12),
-               // border: Border.all(color: Colors.purple[200]!),
               ),
               child: Column(
                 children: [
@@ -443,7 +630,6 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     );
   }
 
-  // GROUP-WISE 30-DAY AVERAGE
   Future<void> _showGroupWiseAverageDialog() async {
     final thirtyDaysAgo = DateTime.now().subtract(Duration(days: 30));
     final itemSnapshot = await _firestore.collection('stock_items').get();
@@ -671,7 +857,6 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                               decoration: BoxDecoration(
                                 color: Colors.orange[50],
                                 borderRadius: BorderRadius.circular(12),
-                               // border: Border.all(color: Colors.orange[200]!),
                               ),
                               child: Row(
                                 children: [
@@ -895,8 +1080,9 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
             onPressed: () async {
               try {
                 await _firestore.collection('stock_items').doc(docId).delete();
+                await _renumberSrNumbers();
                 await _loadDataFromFirebase();
-                _showSnackBar("Item deleted");
+                _showSnackBar("Item deleted & Sr No. updated");
               } catch (e) {
                 _showSnackBar("Error: $e", isError: true);
               }
@@ -985,24 +1171,312 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     ),
   );
 
-  Widget _averageButton(Map<String, dynamic> item, double width) => SizedBox(
-    width: width,
-    child: Center(
-      child: ElevatedButton(
-        onPressed: () => _showAverageStockDialog(item),
-        child: Text("Avg", style: TextStyle(fontSize: 11, color: Colors.white)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.purple[600],
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        ),
-      ),
+
+void _showDailyIssueHistory() async {
+  final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  final dayRef = _firestore.collection('stock_daily_history').doc(todayKey).collection('items');
+
+  showDialog(
+    context: context,
+    builder: (ctx) => StreamBuilder<QuerySnapshot>(
+      stream: dayRef.orderBy('itemName').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator(color: Colors.orange));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text("Issued Today", style: TextStyle(color: Colors.deepOrange)),
+            content: Text("No items issued today."),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Close"))],
+          );
+        }
+
+        final items = snapshot.data!.docs;
+
+        return AlertDialog(
+          backgroundColor: Colors.grey[100],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.history, color: Colors.deepOrange),
+              SizedBox(width: 8),
+              Text("Issued Today (${items.length})",
+                  style: TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Container(
+            width: double.maxFinite,
+            constraints: BoxConstraints(maxHeight: 60.h),
+            child: ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (context, i) {
+                final item = items[i].data() as Map<String, dynamic>;
+                final itemId = items[i].id;
+
+                return ExpansionTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.orange[100],
+                    child: Icon(Icons.inventory_2, color: Colors.deepOrange),
+                  ),
+                  title: Text(
+                    item['itemName'] ?? '-',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  trailing: Text(
+                    "${item['totalIssued'] ?? 0} pcs",
+                    style: TextStyle(
+                        color: Colors.red[700], fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  children: [
+                    StreamBuilder<QuerySnapshot>(
+                      stream: dayRef.doc(itemId).collection('transactions').orderBy('timestamp', descending: true).snapshots(),
+                      builder: (context, txSnap) {
+                        if (!txSnap.hasData || txSnap.data!.docs.isEmpty) {
+                          return Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Text("No detailed records",
+                                style: TextStyle(color: Colors.grey[600])),
+                          );
+                        }
+
+                        return Column(
+                          children: txSnap.data!.docs.map((t) {
+                            final tx = t.data() as Map<String, dynamic>;
+                            final time = (tx['timestamp'] as Timestamp?)?.toDate();
+                            final dateStr = time != null
+                                ? DateFormat('dd-MM-yyyy hh:mm a').format(time)
+                                : '-';
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(Icons.arrow_right, color: Colors.orange),
+                              title: Text(
+                                "JobCard: ${tx['jobNo'] ?? '-'} (${tx['productName'] ?? ''})",
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text("Issued on: $dateStr",
+                                  style: TextStyle(fontSize: 12)),
+                              trailing: Text(
+                                "${tx['quantity']} pcs",
+                                style: TextStyle(
+                                    color: Colors.red[800],
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13),
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text("Close", style: TextStyle(color: Colors.deepOrange)),
+            ),
+          ],
+        );
+      },
     ),
   );
+}
+
+
+Widget _responsiveTable() {
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    physics: BouncingScrollPhysics(),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.vertical,
+      physics: BouncingScrollPhysics(),
+      child: Container(
+        width: 1500, // Increased width to fit all columns properly
+        padding: EdgeInsets.symmetric(horizontal: 8),
+        child: Column(
+          children: [
+            // 🔹 Table Header
+            Container(
+              padding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [Colors.orange[600]!, Colors.orange[400]!]),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 8, offset: Offset(0, 3))
+                ],
+              ),
+              child: Row(children: [
+                      _header("Sr No.", 70),
+                      _header("CODE", 100),
+                      _header("ITEM PICTURES", 110),
+                      _header("ITEM NAME", 160),
+                      _header("GROUP", 110),
+                      _header("STOCK LOCATED", 110),
+                      _header("RECEIVED STOCK", 130),
+                      _header("ISSUE STOCK", 110),
+                      _header("STOCK IN HAND", 120),
+                      _header("DATE EDIT", 90),
+                      _header("MOVING ITEMS", 130),
+                      _header("ACTIONS", 100),
+                      _header("UPDATE", 100),
+                    ]),
+                  ),
+                  SizedBox(height: 4),
+
+                  // 🔹 Rows with collapsible history
+                  ..._paginatedData.map((item) {
+                    final itemId = item['docId'];
+                    final bool isExpanded = item['isExpanded'] == true;
+
+                    return Column(
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() {
+                            item['isExpanded'] = !isExpanded;
+                          }),
+                          child: Container(
+                            margin: EdgeInsets.only(bottom: 4),
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(children: [
+                              _cell(item["sr"].toString(), 70),
+                              _cell(item["code"], 100, bold: true),
+                              _cellImage(item["image"], 110),
+                              _cell(item["name"], 160, bold: true, color: Colors.blue[700]),
+                              _cell(item["group"], 110),
+                              _cell(item["located"] ?? "", 110),
+                              _cell(item["received"].toString(), 130),
+                              _cell(item["issue"].toString(), 110),
+                              _cell(item["current"].toString(), 120,
+                                  color: Colors.green[900], bold: true, fontSize: 16.sp),
+                              _cell(item["dateEdit"]?.toString() ?? "", 90),
+                              _statusBadge(item["moving"], 130),
+                              _actionButtons(item, 100),
+                              _updateButton(item, 100),
+                            ]),
+                          ),
+                        ),
+
+                        // 🔻 Expandable History Section
+                        if (isExpanded)
+                          Container(
+                            margin: EdgeInsets.only(bottom: 8, left: 8, right: 8),
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[50],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: StreamBuilder<QuerySnapshot>(
+                              stream: _firestore
+                                  .collection('stock_transactions')
+                                  .where('itemId', isEqualTo: itemId)
+                                  .where('type', isEqualTo: 'issue')
+                                  .orderBy('timestamp', descending: true)
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(8),
+                                      child: CircularProgressIndicator(color: Colors.orange),
+                                    ),
+                                  );
+                                }
+                                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                                  return Padding(
+                                    padding: EdgeInsets.all(8),
+                                    child: Text("No issue history for this item.",
+                                        style: TextStyle(color: Colors.grey[700])),
+                                  );
+                                }
+
+                                final docs = snapshot.data!.docs;
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(Icons.history, color: Colors.orange[700], size: 18),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          "Issue History (${docs.length})",
+                                          style: TextStyle(
+                                              color: Colors.orange[700],
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 6),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: ListView.builder(
+                                        shrinkWrap: true,
+                                        physics: NeverScrollableScrollPhysics(),
+                                        itemCount: docs.length,
+                                        itemBuilder: (context, i) {
+                                          final data = docs[i].data() as Map<String, dynamic>;
+                                          final qty = data['quantity'] ?? 0;
+                                          final jobId = data['jobCardId'] ?? '-';
+                                          final ts = (data['timestamp'] as Timestamp?)?.toDate();
+                                          final dateStr = ts != null
+                                              ? DateFormat('dd-MM-yyyy hh:mm a').format(ts)
+                                              : '-';
+
+                                          return ListTile(
+                                            dense: true,
+                                            leading: Icon(Icons.arrow_upward,
+                                                color: Colors.red[600]),
+                                            title: Text(
+                                              "Issued $qty pcs",
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.red[700]),
+                                            ),
+                                            subtitle: Text(
+                                              "Job Card: $jobId\n$dateStr",
+                                              style: TextStyle(fontSize: 12),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    );
+                  }).toList(),
+                ],
+              ),
+            ),
+          ),
+        );
+}
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         toolbarHeight: 85,
@@ -1026,7 +1500,20 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
-          ),
+          ),Padding(
+  padding: EdgeInsets.only(right: 16),
+  child: ElevatedButton.icon(
+    onPressed: _showDailyIssueHistory,
+    icon: Icon(Icons.history, size: 18),
+    label: Text("Daily Issue", style: TextStyle(fontSize: 12)),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.deepOrange,
+      foregroundColor: Colors.white,
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+  ),
+),
         ],
       ),
       body: _isLoading
@@ -1063,64 +1550,8 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                     ),
                   ]),
                 ),
-                SizedBox(height: 0.5.h),
-                Container(
-                  padding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                  decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.orange[600]!, Colors.orange[400]!]), borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.3), blurRadius: 8, offset: Offset(0, 3))]),
-                  child: Row(children: [
-                    _header("Sr No.", 70),
-                    _header("CODE", 100),
-                    _header("ITEM PICTURES", 110),
-                    _header("ITEM NAME", 160),
-                    _header("GROUP", 110),
-                    _header("STOCK LOCATED", 110),
-                    _header("RECEIVED STOCK", 130),
-                    _header("ISSUE STOCK", 110),
-                    _header("STOCK IN HAND", 120),
-                    _header("DATE EDIT", 90),
-                    _header("MOVING ITEMS", 130),
-                    _header("ACTIONS", 100),
-                    _header("UPDATE", 100),
-                  ]),
-                ),
-                SizedBox(height: 0.2.h),
-                Expanded(
-                  child: stockData.isEmpty
-                      ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey[300]),
-                          SizedBox(height: 16),
-                          Text("No items found", style: TextStyle(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.w500)),
-                          SizedBox(height: 8),
-                          Text("Click + to add or upload Excel", style: TextStyle(color: Colors.grey[400])),
-                        ]))
-                      : ListView.builder(
-                          itemCount: _paginatedData.length,
-                          itemBuilder: (ctx, i) {
-                            final item = _paginatedData[i];
-                            return Container(
-                              margin: EdgeInsets.only(bottom: 0.2.h),
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: Offset(0, 2))]),
-                              child: Row(children: [
-                                _cell(item["sr"].toString(), 70),
-                                _cell(item["code"], 100, bold: true),
-                                _cellImage(item["image"], 110),
-                                _cell(item["name"], 160, bold: true, color: Colors.blue[700]),
-                                _cell(item["group"], 110),
-                                _cell(item["located"] ?? "", 110),
-                                _cell(item["received"].toString(), 130),
-                                _cell(item["issue"].toString(), 110),
-                                _cell(item["current"].toString(), 120, color: Colors.green[900], bold: true, fontSize: 16.sp),
-                                _cell(item["dateEdit"]?.toString() ?? "", 90),
-                                _statusBadge(item["moving"], 130),
-                                _actionButtons(item, 100),
-                                _updateButton(item, 100),
-                              ]),
-                            );
-                          },
-                        ),
-                ),
-                if (stockData.isNotEmpty)
+                Expanded(child: _responsiveTable()),
+                if (filteredData.isNotEmpty)
                   Container(
                     margin: EdgeInsets.only(top: 16),
                     padding: EdgeInsets.all(8),

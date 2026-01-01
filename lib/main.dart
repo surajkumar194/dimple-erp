@@ -1,13 +1,14 @@
-import 'package:dimple_erp/all%20pages/firebase_optional.dart';
-import 'package:dimple_erp/all%20screen/MainScreen.dart';
+import 'package:dimple_erp/all pages/firebase_optional.dart';
+import 'package:dimple_erp/ready stock/LoginScreen.dart';
+import 'package:dimple_erp/all screen/MainScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sizer/sizer.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -16,17 +17,40 @@ void main() async {
   } catch (e) {
     print("❌ Firebase initialization error: $e");
   }
-  
-  runApp(const MyApp());
+
+  // Check if session is still valid
+  final initialScreen = await _getInitialScreen();
+
+  runApp(MyApp(initialScreen: initialScreen));
 }
 
+Future<Widget> _getInitialScreen() async {
+  final prefs = await SharedPreferences.getInstance();
+  final loginTime = prefs.getInt('loginTime');
+  final user = FirebaseAuth.instance.currentUser;
+
+  if (user != null && loginTime != null) {
+    final currentTime = DateTime.now().millisecondsSinceEpoch;
+    final elapsedMinutes = (currentTime - loginTime) / (1000 * 60);
+
+    if (elapsedMinutes <= 15) {
+      // Session valid
+      return const MainScreen();
+    } else {
+      // Session expired → logout
+      await FirebaseAuth.instance.signOut();
+      await prefs.remove('loginTime');
+    }
+  }
+  return const LoginScreen();
+}
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final Widget initialScreen;
+  const MyApp({super.key, required this.initialScreen});
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Wrap the MaterialApp inside Sizer
     return Sizer(
       builder: (context, orientation, deviceType) {
         return MaterialApp(
@@ -36,13 +60,14 @@ class MyApp extends StatelessWidget {
             useMaterial3: true,
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
           ),
-          home: const MainScreen(),
+          home: initialScreen,
           debugShowCheckedModeBanner: false,
         );
       },
     );
   }
 }
+
 
 // class AuthWrapper extends StatelessWidget {
 //   const AuthWrapper({super.key});

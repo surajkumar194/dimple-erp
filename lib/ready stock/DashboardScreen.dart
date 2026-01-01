@@ -1,4 +1,5 @@
 // lib/screens/DashboardScreen.dart
+import 'package:dimple_erp/ready%20stock/DispatchSweetsStockScreen.dart';
 import 'package:dimple_erp/ready%20stock/Readystock.dart';
 import 'package:dimple_erp/ready%20stock/storestock.dart';
 import 'package:flutter/material.dart';
@@ -11,73 +12,73 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xffb4d449),
-        title: Padding(
-          padding:  EdgeInsets.only(left: 5.w),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
+      // appBar: AppBar(
+      //   elevation: 0,
+      //   backgroundColor: const Color(0xffb4d449),
+      //   title: Padding(
+      //     padding:  EdgeInsets.only(left: 5.w),
+      //     child: Row(
+      //       mainAxisAlignment: MainAxisAlignment.start,
+      //       children: [
             
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: Image.asset(
-                    'assets/do.jpg',
-                    height: 32,
-                    width: 32,
-                    fit: BoxFit.fill,
+      //         Container(
+      //           padding: const EdgeInsets.all(6),
+      //           decoration: BoxDecoration(
+      //             color: Colors.white,
+      //             borderRadius: BorderRadius.circular(12),
+      //             boxShadow: [
+      //               BoxShadow(
+      //                 color: Colors.black.withOpacity(0.1),
+      //                 blurRadius: 8,
+      //                 offset: const Offset(0, 2),
+      //               ),
+      //             ],
+      //           ),
+      //           child: ClipRRect(
+      //             borderRadius: BorderRadius.circular(4),
+      //             child: Image.asset(
+      //               'assets/do.jpg',
+      //               height: 32,
+      //               width: 32,
+      //               fit: BoxFit.fill,
                    
-                  ),
-                ),
-              ),
-              SizedBox(width: 2.w),
-              const Text(
-                "Dimple Packaging Pvt Ltd",
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.notifications_active, color: Colors.white, size: 22),
-          ),
-          Container(
-            margin: const EdgeInsets.only(right: 20),
-            padding: const EdgeInsets.all(10),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.person, color: Color(0xffb4d449), size: 22),
-          ),
-        ],
-      ),
+      //             ),
+      //           ),
+      //         ),
+      //         SizedBox(width: 2.w),
+      //         const Text(
+      //           "Dimple Packaging Pvt Ltd",
+      //           style: TextStyle(
+      //             fontWeight: FontWeight.w800,
+      //             fontSize: 20,
+      //             color: Colors.white,
+      //             letterSpacing: 0.5,
+      //           ),
+      //         ),
+      //       ],
+      //     ),
+      //   ),
+      //   actions: [
+      //     Container(
+      //       margin: const EdgeInsets.only(right: 12),
+      //       padding: const EdgeInsets.all(8),
+      //       decoration: BoxDecoration(
+      //         color: Colors.white.withOpacity(0.2),
+      //         shape: BoxShape.circle,
+      //       ),
+      //       child: const Icon(Icons.notifications_active, color: Colors.white, size: 22),
+      //     ),
+      //     Container(
+      //       margin: const EdgeInsets.only(right: 20),
+      //       padding: const EdgeInsets.all(10),
+      //       decoration: const BoxDecoration(
+      //         color: Colors.white,
+      //         shape: BoxShape.circle,
+      //       ),
+      //       child: const Icon(Icons.person, color: Color(0xffb4d449), size: 22),
+      //     ),
+      //   ],
+      // ),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -108,7 +109,7 @@ class DashboardScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "Welcome Back! 👋",
+                          "Stock Store! 👋",
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
@@ -117,22 +118,23 @@ class DashboardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "Manage your inventory and operations efficiently",
+                          "Manage your Store Stock erp all categories",
                           style: TextStyle(
                             fontSize: 16,
+                            fontWeight: FontWeight.w400,
                             color: Colors.white.withOpacity(0.9),
                           ),
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.dashboard, color: Colors.white, size: 40),
-                    ),
+                    // Container(
+                    //   padding: const EdgeInsets.all(7),
+                    //   decoration: BoxDecoration(
+                    //     color: Colors.white.withOpacity(0.2),
+                    //     shape: BoxShape.circle,
+                    //   ),
+                       Image.asset("assets/dpl.png",scale: 3.5,)
+                 //   ),
                   ],
                 ),
               ),
@@ -182,7 +184,7 @@ class DashboardScreen extends StatelessWidget {
                         Icons.shopping_basket,
                         [Colors.green[600]!, Colors.green[400]!],
                         () {
-                          // Navigator.push(context, MaterialPageRoute(builder: (_) => const BasketScreen()));
+                         Navigator.push(context, MaterialPageRoute(builder: (_) =>  DispatchSweetsStockScreen()));
                         },
                       ),
                     
