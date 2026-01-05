@@ -27,7 +27,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
   double _gstPercent = 5.0;
   final List<double> _gstOptions = [5.0, 12.0, 18.0];
   DateTime _selectedDate = DateTime.now();
-  String _selectedPriority = 'Medium';
+ String _selectedPriority = 'Medium';
   String? _selectedSalesPerson;
   String? _customSalesPerson;
   String _selectedProductCategory = 'MDF';
@@ -42,12 +42,16 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
   ];
 
   // Product codes A-Z
-  final List<String> _productCodes = List.generate(26, (index) => String.fromCharCode(65 + index));
+  final List<String> _productCodes = List.generate(
+    26,
+    (index) => String.fromCharCode(65 + index),
+  );
 
   bool _isLoading = false;
   final ImagePicker _picker = ImagePicker();
 
-  final TextEditingController _otherSalesPersonController = TextEditingController();
+  final TextEditingController _otherSalesPersonController =
+      TextEditingController();
   final List<String> _salesPersons = [
     "Abhijit Sinha",
     "Komal Sir",
@@ -238,8 +242,12 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
           'images': imageUrls,
         });
       }
+final orderRef =
+    FirebaseFirestore.instance.collection('orders').doc();
 
-      await FirebaseFirestore.instance.collection('orders').add({
+    await orderRef.set({
+
+          'orderId': orderRef.id, // 🔥 IMPORTANT
         'customerName': _customerNameController.text,
         'companyName': _companyNameController.text,
         'phone': _phoneController.text,
@@ -291,7 +299,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
       );
       return;
     }
-    
+
     setState(() {
       _products.add({
         'code': _productCodes[_products.length],
@@ -312,7 +320,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
         _products[index]['price']!.dispose();
         _products[index]['remarks']!.dispose();
         _products.removeAt(index);
-        
+
         // Reassign codes after removal
         for (int i = 0; i < _products.length; i++) {
           _products[i]['code'] = _productCodes[i];
@@ -386,11 +394,10 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _phoneController,
-                  label: 'Phone Number',
+                  label: 'Phone Number (Optional)',
                   icon: Icons.phone,
                   keyboardType: TextInputType.phone,
-                  validator: (value) =>
-                      value!.isEmpty ? 'Phone number is required' : null,
+            
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
@@ -400,7 +407,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                   keyboardType: TextInputType.emailAddress,
                 ),
                 const SizedBox(height: 16),
-  _buildTextField(
+                _buildTextField(
                   controller: _locationController,
                   label: 'Location',
                   icon: Icons.location_on,
@@ -408,7 +415,6 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                       value!.isEmpty ? 'Location is required' : null,
                 ),
                 const SizedBox(height: 16),
-
 
                 _buildTextField(
                   controller: _gstNumberController,
@@ -434,7 +440,6 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
               title: 'Order Location',
               icon: Icons.location_on,
               children: [
-              
                 // DropdownButtonFormField<String>(
                 //   value: _selectedProductCategory,
                 //   decoration: InputDecoration(
@@ -616,7 +621,9 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                     fillColor: Colors.white,
                   ),
                   items: _productCategories
-                      .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                      .map(
+                        (cat) => DropdownMenuItem(value: cat, child: Text(cat)),
+                      )
                       .toList(),
                   onChanged: (value) {
                     setState(() {
@@ -748,7 +755,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        
+
                         // Remarks field
                         _buildTextField(
                           controller: _products[index]['remarks']!,
@@ -882,7 +889,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            
+
             // Total Amount Section
             Container(
               padding: const EdgeInsets.all(20),
@@ -925,7 +932,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                   ),
                   const SizedBox(height: 8),
                   Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
                     children: [
                       Row(
@@ -939,14 +946,18 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF1976D2)),
+                              border: Border.all(
+                                color: const Color(0xFF1976D2),
+                              ),
                             ),
-                            
-                            
+
                             child: DropdownButton<double>(
                               value: _gstPercent,
                               underline: const SizedBox(),
@@ -963,10 +974,9 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                               },
                             ),
                           ),
-                        
                         ],
                       ),
-                        Text(
+                      Text(
                         '₹${(_calculateTotalAmount() * _gstPercent / 100).toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 12.sp,
@@ -975,7 +985,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                       ),
                     ],
                   ),
-                  
+
                   const Divider(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1001,7 +1011,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            
+
             // Order Details Section
             _buildSection(
               title: 'Order Details',

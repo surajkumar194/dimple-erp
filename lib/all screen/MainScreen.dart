@@ -1,17 +1,19 @@
 import 'dart:async';
-import 'package:dimple_erp/PRODUCTION/DashboardScreen.dart';
-import 'package:dimple_erp/all screen/SalesDashboard.dart';
-import 'package:dimple_erp/all%20screen/MOMScreen.dart';
-import 'package:dimple_erp/all%20screen/PurchaseOrderScreen.dart';
-import 'package:dimple_erp/all%20screen/QualityCheckScreen.dart';
-import 'package:dimple_erp/all%20screen/master_screen.dart';
-import 'package:dimple_erp/material/PurchaseOrder.dart';
-import 'package:dimple_erp/ready stock/DashboardScreen.dart';
-import 'package:dimple_erp/ready stock/LoginScreen.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sizer/sizer.dart';
+
+// SCREENS
+import 'package:dimple_erp/ready stock/DashboardScreen.dart';
+import 'package:dimple_erp/all screen/SalesDashboard.dart';
+import 'package:dimple_erp/PRODUCTION/DashboardScreen.dart';
+import 'package:dimple_erp/all screen/PurchaseOrderScreen.dart';
+import 'package:dimple_erp/all screen/QualityCheckScreen.dart';
+import 'package:dimple_erp/all screen/MOMScreen.dart';
+import 'package:dimple_erp/all screen/master_screen.dart';
+import 'package:dimple_erp/ready stock/LoginScreen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -22,55 +24,92 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  late TabController _tabController;
-  int _currentIndex = 0;
+  TabController? _tabController;
   Timer? _sessionTimer;
 
-  static const int sessionDurationMinutes = 60; // ✅ 1 HOUR
+  String _role = '';
+  Map<String, dynamic> _permissions = {};
+  bool _loading = true;
 
-  final List<String> _tabs = [
-    'Stock',
-    'Sales',
-    'Production',
-    'Purchase Order',
-    'Quality Check',
-    'Mom',
-    'Master Screen',
+  static const int sessionDurationMinutes = 60;
 
-  ];
-
-  final List<Widget> _screens = [
-    DashboardScreen(),
-    const SalesDashboard(),
-    ProductionDashboard(),
-    PurchaseOrderScreen(),
-    QualityCheckScreen(),
-    MinutesOfMeetingScreen (),
-    MasterScreen(),
-
-  ];
-
-
+  // ================= INIT =================
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    _tabController = TabController(length: _tabs.length, vsync: this);
-    _tabController.addListener(() {
-      setState(() {
-        _currentIndex = _tabController.index;
-      });
-    });
-
+    _loadUserData();
     _checkSession();
-
-    // 🔁 Auto check every 1 minute
-    _sessionTimer =
-        Timer.periodic(const Duration(minutes: 1), (_) => _checkSession());
+    _sessionTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _checkSession(),
+    );
   }
 
-  /// 🔹 SESSION CHECK (1 HOUR)
+  // ================= LOAD ROLE + PERMISSIONS =================
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final role = prefs.getString('role') ?? '';
+    final rawPermissions = prefs.getString('permissions');
+
+    final permissions = rawPermissions != null
+        ? jsonDecode(rawPermissions)
+        : {};
+
+    setState(() {
+      _role = role;
+
+      // ✅ ADMIN → ALL ACCESS
+      _permissions = role == 'admin'
+          ? {
+              'stock': true,
+              'sales': true,
+              'production': true,
+              'purchase': true,
+              'quality': true,
+              'mom': true,
+              'master': true,
+            }
+          : Map<String, dynamic>.from(permissions);
+
+      _tabController?.dispose();
+      _tabController = TabController(length: _buildTabs().length, vsync: this);
+
+      _loading = false;
+    });
+
+    debugPrint('ROLE => $_role');
+    debugPrint('PERMISSIONS => $_permissions');
+  }
+
+  // ================= BUILD TABS =================
+  List<Tab> _buildTabs() {
+    return [
+      if (_permissions['stock'] == true) const Tab(text: 'Stock'),
+      if (_permissions['sales'] == true) const Tab(text: 'Sales'),
+      if (_permissions['production'] == true) const Tab(text: 'Production'),
+      if (_permissions['purchase'] == true) const Tab(text: 'Purchase Order'),
+      if (_permissions['quality'] == true) const Tab(text: 'Quality Check'),
+      if (_permissions['mom'] == true) const Tab(text: 'MOM'),
+      if (_permissions['master'] == true) const Tab(text: 'Master'),
+    ];
+  }
+
+  // ================= BUILD SCREENS =================
+  List<Widget> _buildScreens() {
+    return [
+      if (_permissions['stock'] == true) DashboardScreen(),
+      if (_permissions['sales'] == true) const SalesDashboard(),
+      if (_permissions['production'] == true) ProductionDashboard(),
+      if (_permissions['purchase'] == true) PurchaseOrderScreen(),
+      if (_permissions['quality'] == true) QualityCheckScreen(),
+      if (_permissions['mom'] == true) MinutesOfMeetingScreen(),
+      if (_permissions['master'] == true) MasterDashboardScreen(),
+    ];
+  }
+
+  // ================= SESSION CHECK =================
   Future<void> _checkSession() async {
     final prefs = await SharedPreferences.getInstance();
     final loginTime = prefs.getInt('loginTime');
@@ -81,15 +120,14 @@ class _MainScreenState extends State<MainScreen>
     }
 
     final currentTime = DateTime.now().millisecondsSinceEpoch;
-    final elapsedMinutes =
-        (currentTime - loginTime) / (1000 * 60);
+    final elapsedMinutes = (currentTime - loginTime) / (1000 * 60);
 
     if (elapsedMinutes >= sessionDurationMinutes) {
       _logout(sessionExpired: true);
     }
   }
 
-  /// 🔹 LOGOUT
+  // ================= LOGOUT =================
   Future<void> _logout({bool sessionExpired = false}) async {
     await FirebaseAuth.instance.signOut();
     final prefs = await SharedPreferences.getInstance();
@@ -100,7 +138,7 @@ class _MainScreenState extends State<MainScreen>
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
+      (_) => false,
     );
 
     if (sessionExpired) {
@@ -113,87 +151,65 @@ class _MainScreenState extends State<MainScreen>
     }
   }
 
-  /// 🔹 APP RESUME CHECK
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _checkSession();
-    }
-  }
-
+  // ================= DISPOSE =================
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _tabController.dispose();
+    _tabController?.dispose();
     _sessionTimer?.cancel();
     super.dispose();
   }
 
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
+    if (_loading || _tabController == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final tabs = _buildTabs();
+    final screens = _buildScreens();
+
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        actions: [
-          IconButton(
-            tooltip: 'Logout',
-            icon: const Icon(Icons.logout, color: Colors.black87),
-            onPressed: () => _logout(),
-          ),
-        ],
-        title: Row(
-          children: [
-            Image.asset(
-              "assets/dpl.png",
-              fit: BoxFit.fill,
-              scale: 3.5,
-            ),
-            const SizedBox(width: 16),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // ================= TOP BAR (TAB + LOGOUT) =================
+          Container(
+            color: const Color(0xFFafcb1f),
+            child: Row(
               children: [
-                Text(
-                  'Dimple Packaging Pvt Ltd',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                // ---------- TAB BAR ----------
+                Expanded(
+                  child: TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    indicatorColor: Colors.white,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white70,
+                    labelStyle: TextStyle(
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    tabs: tabs,
                   ),
                 ),
-                Text(
-                  'Ludhiana, Punjab',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                  ),
+
+                // ---------- LOGOUT BUTTON (LAST RIGHT) ----------
+                IconButton(
+                  tooltip: 'Logout',
+                  icon: const Icon(Icons.logout, color: Colors.white),
+                  onPressed: _logout,
                 ),
               ],
             ),
-          ],
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Container(
-            color: const Color(0xFFafcb1f),
-            child: TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              indicatorColor: Colors.white,
-              indicatorWeight: 3,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              labelStyle: TextStyle(
-                fontSize: 17.sp,
-                fontWeight: FontWeight.bold,
-              ),
-              tabs: _tabs.map((tab) => Tab(text: tab)).toList(),
-            ),
           ),
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: _screens,
+
+          // ================= TAB BODY =================
+          Expanded(
+            child: TabBarView(controller: _tabController, children: screens),
+          ),
+        ],
       ),
     );
   }

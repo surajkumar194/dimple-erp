@@ -1,9 +1,4 @@
-// pubspec.yaml dependencies add karein:
-// pdf: ^3.10.4
-// printing: ^5.11.0
-// path_provider: ^2.1.1
-// intl: ^0.18.0
-// cloud_firestore: latest
+
 
 import 'dart:typed_data';
 import 'package:flutter/material.dart';

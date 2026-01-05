@@ -77,14 +77,18 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
     DateTime deliveryDate = (order['deliveryDate'] as Timestamp).toDate();
     String status = order['status'] ?? 'Pending';
     double subtotal = 0;
-    for (var product in products) {
-      subtotal += (product['amount'] ?? 0);
+
+    for (var p in products) {
+      final qty = double.tryParse(p['quantity']?.toString() ?? '0') ?? 0;
+      final price = double.tryParse(p['price']?.toString() ?? '0') ?? 0;
+      subtotal += qty * price;
     }
 
-    // GST calculation (assuming 5% default or you can get from order if stored)
-    double gstPercent = 5.0; // You can get this from order if stored
+    double gstPercent = (order['gstPercent'] ?? 0).toDouble();
     double gstAmount = subtotal * gstPercent / 100;
-    double totalAmount = subtotal + gstAmount;
+    double totalAmount = (order['grandTotal'] ?? (subtotal + gstAmount))
+        .toDouble();
+
     // ✅ Build the PDF
     pdf.addPage(
       pw.MultiPage(
@@ -141,41 +145,7 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                 ),
               ),
             ),
-            pw.SizedBox(height: 20),
-
-            // // ---------------- CUSTOMER INFO ----------------
-            // pw.Container(
-            //   padding: const pw.EdgeInsets.all(15),
-            //   decoration: pw.BoxDecoration(
-            //     border: pw.Border.all(color: PdfColors.grey400),
-            //     borderRadius: pw.BorderRadius.circular(8),
-            //   ),
-            //   child: pw.Column(
-            //     crossAxisAlignment: pw.CrossAxisAlignment.start,
-            //     children: [
-            //       pw.Text(
-            //         'CUSTOMER INFORMATION',
-            //         style: pw.TextStyle(
-            //           fontSize: 16,
-            //           fontWeight: pw.FontWeight.bold,
-            //           color: PdfColors.blue700,
-            //         ),
-            //       ),
-            //       pw.Divider(thickness: 1),
-            //       _buildPdfRow('Customer Name', order['customerName'] ?? 'N/A'),
-            //       if (order['companyName']?.toString().isNotEmpty ?? false)
-            //         _buildPdfRow('Company Name', order['companyName']),
-            //       _buildPdfRow('Phone', order['phone'] ?? 'N/A'),
-            //       if (order['email']?.toString().isNotEmpty ?? false)
-            //         _buildPdfRow('Email', order['email']),
-            //       _buildPdfRow('Location', order['location'] ?? 'N/A'),
-            //       if (order['salesPerson'] != null)
-            //         _buildPdfRow('Sales Person', order['salesPerson']),
-            //     ],
-            //   ),
-            // ),
-
-            // pw.SizedBox(height: 20),
+            pw.SizedBox(height: 10),
             pw.Container(
               padding: const pw.EdgeInsets.all(15),
               decoration: pw.BoxDecoration(
@@ -220,8 +190,7 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                     ),
                   ),
 
-                  pw.SizedBox(width: 20), // बीच का gap
-                  // RIGHT SIDE: ORDER DETAILS
+                  pw.SizedBox(width: 10),
                   pw.Expanded(
                     flex: 1,
                     child: pw.Container(
@@ -238,7 +207,6 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                             ),
                           ),
                           pw.Divider(thickness: 1),
-                          pw.SizedBox(height: 10),
                           _buildPdfRow(
                             'Order Date',
                             '${orderDate.day}/${orderDate.month}/${orderDate.year}',
@@ -264,7 +232,7 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
               ),
             ),
 
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 10),
             // ---------------- PRODUCTS ----------------
             pw.Text(
               'PRODUCT DETAILS',
@@ -280,25 +248,24 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
               border: pw.TableBorder.all(color: PdfColors.grey400, width: 1),
               defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
               columnWidths: {
-             0: const pw.FixedColumnWidth(40), // S.No
-  1: const pw.FlexColumnWidth(2),  // Product Name
-  2: const pw.FlexColumnWidth(1),  // Quantity
-  3: const pw.FlexColumnWidth(1),  // Price
-  4: const pw.FlexColumnWidth(2),  // Image
-  5: const pw.FlexColumnWidth(1), 
-
+                0: const pw.FixedColumnWidth(40), // S.No
+                1: const pw.FlexColumnWidth(2), // Product Name
+                2: const pw.FlexColumnWidth(1), // Quantity
+                3: const pw.FlexColumnWidth(1), // Price
+                4: const pw.FlexColumnWidth(2), // Image
+                5: const pw.FlexColumnWidth(1),
               },
               children: [
                 // Header Row
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.grey300),
                   children: [
-                  _buildTableCell('S.No', isHeader: true),
-    _buildTableCell('Product Name', isHeader: true),
-    _buildTableCell('Quantity', isHeader: true),
-    _buildTableCell('Price', isHeader: true),
-    _buildTableCell('Image', isHeader: true),
-    _buildTableCell('Remarks', isHeader: true),
+                    _buildTableCell('S.No', isHeader: true),
+                    _buildTableCell('Product Name', isHeader: true),
+                    _buildTableCell('Quantity', isHeader: true),
+                    _buildTableCell('Price', isHeader: true),
+                    _buildTableCell('Image', isHeader: true),
+                    _buildTableCell('Remarks', isHeader: true),
                   ],
                 ),
 
@@ -308,45 +275,49 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                   final p = entry.value;
                   final imgs = List<pw.MemoryImage>.from(p['pdfImages'] ?? []);
 
-                return pw.TableRow(
-  children: [
-    _buildTableCell(index.toString()),
-    _buildTableCell(p['productName'] ?? 'N/A'),
-    _buildTableCell('${p['quantity']}'),
-    _buildTableCell('Rs ${p['price']}'),
+                  return pw.TableRow(
+                    children: [
+                      _buildTableCell(index.toString()),
+                      _buildTableCell(p['productName'] ?? 'N/A'),
+                      _buildTableCell('${p['quantity']}'),
+                      _buildTableCell(
+                        'Rs ${(double.tryParse(p['price']?.toString() ?? '0') ?? 0).toStringAsFixed(2)}',
+                      ),
+                      // IMAGE COLUMN
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(4),
+                        child: imgs.isNotEmpty
+                            ? pw.Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: imgs.map((img) {
+                                  return pw.Container(
+                                    width: 65,
+                                    height: 65,
+                                      padding: const pw.EdgeInsets.all(4),
 
-    // IMAGE COLUMN
-    pw.Padding(
-      padding: const pw.EdgeInsets.all(4),
-      child: imgs.isNotEmpty
-          ? pw.Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: imgs.map((img) {
-                return pw.Container(
-                  width: 40,
-                  height: 40,
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(
-                      color: PdfColors.grey400,
-                      width: 0.5,
-                    ),
-                  ),
-                  child: pw.Image(img, fit: pw.BoxFit.cover),
-                );
-              }).toList(),
-            )
-          : pw.Text('—', textAlign: pw.TextAlign.center),
-    ),
+                                    decoration: pw.BoxDecoration(
+                                      border: pw.Border.all(
+                                        color: PdfColors.grey400,
+                                        width: 0.5,
+                                      ),
+                                    ),
+                                    child: pw.Image(img, fit: pw.BoxFit.contain),
+                                  );
+                                }).toList(),
+                              )
+                            : pw.Text('—', textAlign: pw.TextAlign.center),
+                      ),
 
-    // ✅ REMARKS COLUMN
-    _buildTableCell(
-      (p['remarks'] != null && p['remarks'].toString().isNotEmpty)
-          ? p['remarks']
-          : '—',
-    ),
-  ],
-);
+                      // ✅ REMARKS COLUMN
+                      _buildTableCell(
+                        (p['remarks'] != null &&
+                                p['remarks'].toString().isNotEmpty)
+                            ? p['remarks']
+                            : 'N/A',
+                      ),
+                    ],
+                  );
                 }),
               ],
             ),
@@ -1075,13 +1046,13 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                                   style: const TextStyle(fontSize: 13),
                                 ),
                               ),
-                              Text(
-                                '₹${(p['amount'] ?? 0).toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
+                              // Text(
+                              //   '₹${(p['amount'] ?? 0).toStringAsFixed(2)}',
+                              //   style: const TextStyle(
+                              //     fontWeight: FontWeight.w600,
+                              //     fontSize: 1300,
+                              //   ),
+                              // ),
                             ],
                           ),
                         );
@@ -1160,7 +1131,7 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                       Row(
                         children: [
                           Text(
-                            '₹${(order['totalAmount'] ?? 0).toStringAsFixed(2)}',
+                            '₹${(order['grandTotal'] ?? 0).toStringAsFixed(2)}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 20,
@@ -1446,7 +1417,7 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${p['quantity']} × ₹${p['price']}',
+                                    '${p['quantity']}  ₹${p['price']}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[600],
@@ -1455,14 +1426,14 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                                 ],
                               ),
                             ),
-                            Text(
-                              '₹${(p['amount'] ?? 0).toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: Color(0xFF1976D2),
-                              ),
-                            ),
+                            // Text(
+                            //   '₹${(p['amount'] ?? 0).toStringAsFixed(2)}',
+                            //   style: const TextStyle(
+                            //     fontWeight: FontWeight.bold,
+                            //     fontSize: 16,
+                            //     color: Color(0xFF1976D2),
+                            //   ),
+                            // ),
                           ],
                         ),
                       );
@@ -1533,7 +1504,7 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                             ],
                           ),
                           Text(
-                            '₹${(order['totalAmount'] ?? 0).toStringAsFixed(2)}',
+                            '₹${(order['grandTotal'] ?? 0).toStringAsFixed(2)}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 32,

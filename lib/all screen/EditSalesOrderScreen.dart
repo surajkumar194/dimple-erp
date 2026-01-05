@@ -9,7 +9,6 @@ import 'dart:io' show File;
 class EditSalesOrderScreen extends StatefulWidget {
   final String orderId;
   final Map<String, dynamic> orderData;
-
   const EditSalesOrderScreen({
     super.key,
     required this.orderId,
@@ -40,42 +39,36 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
   late List<Map<String, dynamic>> _products;
   late List<Map<String, dynamic>> _partialDispatches;
   final _trayController = TextEditingController();
-final _salophinController = TextEditingController();
-final _boxCoverController = TextEditingController();
-final _innerController = TextEditingController();
-final _bottomController = TextEditingController();
-final _dieController = TextEditingController();
-final _otherController = TextEditingController();
+  final _salophinController = TextEditingController();
+  final _boxCoverController = TextEditingController();
+  final _innerController = TextEditingController();
+  final _bottomController = TextEditingController();
+  final _dieController = TextEditingController();
+  final _otherController = TextEditingController();
 
   bool _isSaving = false;
   final ImagePicker _picker = ImagePicker();
-String _selectedUnit = 'Unit 1';
-String _selectedProductCategory = 'MDF';
+  String _selectedUnit = 'Unit 1';
+  String _selectedProductCategory = 'MDF';
 
-final List<String> _units = [
-  'Unit 1',
-  'Unit 2',
-  'Meena Bazar',
-  'College Road',
-];
+  final List<String> _units = [
+    'Unit 1',
+    'Unit 2',
+    'Meena Bazar',
+    'College Road',
+  ];
 
-final List<String> _productCategories = [
-  'MDF',
-  'Kappa Box',
-  'Other',
-];
+  final List<String> _productCategories = ['MDF', 'Kappa Box', 'Other'];
 
-
-final Map<String, bool> _sectionSelected = {
-  'Tray': false,
-  'Salophin': false,
-  'Box Cover': false,
-  'Inner': false,
-  'Bottom': false,
-  'Die': false,
-  'Others': false,
-};
-
+  final Map<String, bool> _sectionSelected = {
+    'Tray': false,
+    'Salophin': false,
+    'Box Cover': false,
+    'Inner': false,
+    'Bottom': false,
+    'Die': false,
+    'Others': false,
+  };
 
   final TextEditingController _otherSalesPersonController =
       TextEditingController();
@@ -123,39 +116,44 @@ final Map<String, bool> _sectionSelected = {
       text: widget.orderData['notes'] ?? '',
     );
 
+    final sections = widget.orderData['sections'] as Map<String, dynamic>?;
 
-final sections = widget.orderData['sections'] as Map<String, dynamic>?;
-
-if (sections != null) {
-  if (sections['tray'] != null) {
-    _sectionSelected['Tray'] = true;
-    _trayController.text = sections['tray'];
-  }
-  if (sections['salophin'] != null) {
-    _sectionSelected['Salophin'] = true;
-    _salophinController.text = sections['salophin'];
-  }
-  if (sections['boxCover'] != null) {
-    _sectionSelected['Box Cover'] = true;
-    _boxCoverController.text = sections['boxCover'];
-  }
-  if (sections['inner'] != null) {
-    _sectionSelected['Inner'] = true;
-    _innerController.text = sections['inner'];
-  }
-  if (sections['bottom'] != null) {
-    _sectionSelected['Bottom'] = true;
-    _bottomController.text = sections['bottom'];
-  }
-  if (sections['die'] != null) {
-    _sectionSelected['Die'] = true;
-    _dieController.text = sections['die'];
-  }
-  if (sections['other'] != null) {
-    _sectionSelected['Others'] = true;
-    _otherController.text = sections['other'];
-  }
-}
+    if (sections != null) {
+      if (sections['tray'] != null) {
+        _sectionSelected['Tray'] = true;
+        _trayController.text = sections['tray'];
+      }
+      if (sections['salophin'] != null) {
+        _sectionSelected['Salophin'] = true;
+        _salophinController.text = sections['salophin'];
+      }
+      if (sections['boxCover'] != null) {
+        _sectionSelected['Box Cover'] = true;
+        _boxCoverController.text = sections['boxCover'];
+      }
+      if (sections['inner'] != null) {
+        _sectionSelected['Inner'] = true;
+        _innerController.text = sections['inner'];
+      }
+      if (sections['bottom'] != null) {
+        _sectionSelected['Bottom'] = true;
+        _bottomController.text = sections['bottom'];
+      }
+      if (sections['die'] != null) {
+        _sectionSelected['Die'] = true;
+        _dieController.text = sections['die'];
+      }
+      if (sections['other'] != null) {
+        _sectionSelected['Others'] = true;
+        _otherController.text = sections['other'];
+      }
+    }
+    String safeText(dynamic v) {
+      if (v == null) return '';
+      if (v is num) return v.toString();
+      if (v is String) return v;
+      return '';
+    }
 
     _orderDate =
         (widget.orderData['orderDate'] as Timestamp?)?.toDate() ??
@@ -165,10 +163,9 @@ if (sections != null) {
         DateTime.now();
     _priority = widget.orderData['priority'] ?? 'Medium';
     _selectedSalesPerson = widget.orderData['salesPerson'];
-  // ✅ LOAD UNIT & PRODUCT CATEGORY
-  _selectedUnit = widget.orderData['unit'] ?? 'Unit 1';
-  _selectedProductCategory =
-      widget.orderData['productCategory'] ?? 'MDF';
+    // ✅ LOAD UNIT & PRODUCT CATEGORY
+    _selectedUnit = widget.orderData['unit'] ?? 'Unit 1';
+    _selectedProductCategory = widget.orderData['productCategory'] ?? 'MDF';
 
     // Load products with proper structure
     _products =
@@ -178,9 +175,12 @@ if (sections != null) {
               text: p['productName'] ?? '',
             ),
             'quantityController': TextEditingController(
-              text: p['quantity']?.toString() ?? '',
+              text: safeText(p['quantity']),
             ),
             'sizeController': TextEditingController(text: p['size'] ?? ''),
+            'priceController': TextEditingController(
+              text: safeText(p['price']),
+            ),
             'remarkController': TextEditingController(
               text: p['remarks'] ?? '',
             ), // ✅
@@ -211,8 +211,8 @@ if (sections != null) {
       'nameController': TextEditingController(),
       'quantityController': TextEditingController(),
       'sizeController': TextEditingController(),
+      'priceController': TextEditingController(),
       'remarkController': TextEditingController(), // ✅
-
       'images': <String>[],
       'newImages': <XFile>[],
     };
@@ -240,14 +240,12 @@ if (sections != null) {
         (_products[index]['quantityController'] as TextEditingController)
             .dispose();
         (_products[index]['sizeController'] as TextEditingController).dispose();
-           (_products[index]['remarkController'] as TextEditingController)
-          .dispose();
+        (_products[index]['remarkController'] as TextEditingController)
+            .dispose();
         _products.removeAt(index);
       });
     }
   }
-
-
 
   void _addPartialDispatch() {
     setState(() {
@@ -354,6 +352,40 @@ if (sections != null) {
     );
   }
 
+  Future<void> _updateLinkedJobCard(
+    List<Map<String, dynamic>> productsData,
+    Map<String, dynamic> sections,
+    List<Map<String, dynamic>> partialDispatchesData,
+  ) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('jobCards')
+        .where('linkedOrderId', isEqualTo: widget.orderId)
+        .limit(1)
+        .get();
+
+    if (snap.docs.isEmpty) return;
+
+    final jobDoc = snap.docs.first;
+
+    await FirebaseFirestore.instance
+        .collection('jobCards')
+        .doc(jobDoc.id)
+        .update({
+          'customerName': _customerController.text.trim(), // ✅ ADD THIS
+          'products': productsData,
+          'sections': sections,
+          'partialDispatches': partialDispatchesData,
+          'priority': _priority,
+          'salesPerson': _selectedSalesPerson == 'Others'
+              ? _customSalesPerson
+              : _selectedSalesPerson,
+          'location': _locationController.text.trim(),
+          'date': _orderDate, // ✅ ADD
+
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+  }
+
   Future<void> _saveOrder() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -371,6 +403,8 @@ if (sections != null) {
             product['quantityController'] as TextEditingController;
         final sizeController =
             product['sizeController'] as TextEditingController;
+              final priceController =
+      product['priceController'] as TextEditingController; 
         final existingImages = List<String>.from(product['images'] as List);
         final newImages = product['newImages'] as List<XFile>;
         final remarkController =
@@ -400,10 +434,10 @@ if (sections != null) {
 
         productsData.add({
           'productName': nameController.text.trim(),
-          'quantity': quantityController.text.trim(),
+          'quantity': int.tryParse(quantityController.text.trim()) ?? 0,
           'size': sizeController.text.trim(),
+            'price': double.tryParse(priceController.text.trim()) ?? 0, // ✅ ADD
           'remarks': remarkController.text.trim(), // ✅ ADD THIS
-
           'images': allImages,
         });
       }
@@ -422,7 +456,7 @@ if (sections != null) {
         if (name.isNotEmpty || qty.isNotEmpty || dateStr.isNotEmpty) {
           partialDispatchesData.add({
             'name': name,
-            'quantity': qty,
+            'quantity': int.tryParse(qty) ?? 0, // ✅ FIX
             'date': dateStr,
             'timestamp': dispatch['selectedDate'],
           });
@@ -430,28 +464,27 @@ if (sections != null) {
       }
       final Map<String, dynamic> sections = {};
 
-if (_sectionSelected['Tray'] == true) {
-  sections['tray'] = _trayController.text.trim();
-}
-if (_sectionSelected['Salophin'] == true) {
-  sections['salophin'] = _salophinController.text.trim();
-}
-if (_sectionSelected['Box Cover'] == true) {
-  sections['boxCover'] = _boxCoverController.text.trim();
-}
-if (_sectionSelected['Inner'] == true) {
-  sections['inner'] = _innerController.text.trim();
-}
-if (_sectionSelected['Bottom'] == true) {
-  sections['bottom'] = _bottomController.text.trim();
-}
-if (_sectionSelected['Die'] == true) {
-  sections['die'] = _dieController.text.trim();
-}
-if (_sectionSelected['Others'] == true) {
-  sections['other'] = _otherController.text.trim();
-}
-
+      if (_sectionSelected['Tray'] == true) {
+        sections['tray'] = _trayController.text.trim();
+      }
+      if (_sectionSelected['Salophin'] == true) {
+        sections['salophin'] = _salophinController.text.trim();
+      }
+      if (_sectionSelected['Box Cover'] == true) {
+        sections['boxCover'] = _boxCoverController.text.trim();
+      }
+      if (_sectionSelected['Inner'] == true) {
+        sections['inner'] = _innerController.text.trim();
+      }
+      if (_sectionSelected['Bottom'] == true) {
+        sections['bottom'] = _bottomController.text.trim();
+      }
+      if (_sectionSelected['Die'] == true) {
+        sections['die'] = _dieController.text.trim();
+      }
+      if (_sectionSelected['Others'] == true) {
+        sections['other'] = _otherController.text.trim();
+      }
 
       await FirebaseFirestore.instance
           .collection('orders')
@@ -462,21 +495,22 @@ if (_sectionSelected['Others'] == true) {
             'phone': _phoneController.text.trim(),
             'email': _emailController.text.trim(),
             'location': _locationController.text.trim(),
-              'unit': _selectedUnit,
-  'productCategory': _selectedProductCategory,
+            'unit': _selectedUnit,
+            'productCategory': _selectedProductCategory,
             'orderDate': _orderDate,
             'deliveryDate': _deliveryDate,
             'priority': _priority,
             'salesPerson': _selectedSalesPerson == 'Others'
                 ? _customSalesPerson
                 : _selectedSalesPerson,
-                  'sections': sections,
+            'sections': sections,
             'products': productsData,
-            'partialDispatches': partialDispatchesData,
+          //  'partialDispatches': partialDispatchesData,
             'notes': _notesController.text.trim(),
             'updatedAt': FieldValue.serverTimestamp(),
           });
 
+      await _updateLinkedJobCard(productsData, sections, partialDispatchesData);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -583,91 +617,66 @@ if (_sectionSelected['Others'] == true) {
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
-                  controller: _companyController,
-                  label: 'Company Name',
-                  icon: Icons.business,
+                  controller: _locationController,
+                  label: 'Location',
+                  icon: Icons.location_on,
                 ),
-
-           
-                // const SizedBox(height: 16),
-                // _buildTextField(
-                //   controller: _phoneController,
-                //   label: 'Phone',
-                //   icon: Icons.phone,
-                //   keyboardType: TextInputType.phone,
-                // ),
-                // const SizedBox(height: 16),
-                // _buildTextField(
-                //   controller: _emailController,
-                //   label: 'Email',
-                //   icon: Icons.email,
-                //   keyboardType: TextInputType.emailAddress,
-                // ),
-                // const SizedBox(height: 16),
-                // _buildTextField(
-                //   controller: _locationController,
-                //   label: 'Location',
-                //   icon: Icons.location_on,
-                // ),
               ],
             ),
             const SizedBox(height: 20),
-     _buildSection(
-  title: 'Order Location & Category',
-  icon: Icons.location_on,
-  children: [
-    // ✅ ORDER LOCATION (UNIT)
-    DropdownButtonFormField<String>(
-      value: _selectedUnit,
-      decoration: InputDecoration(
-        labelText: 'Order Location (Unit)',
-        prefixIcon: const Icon(Icons.factory_outlined),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        filled: true,
-        fillColor: Colors.white,
-      ),
-      items: _units
-          .map(
-            (u) => DropdownMenuItem<String>(
-              value: u,
-              child: Text(u),
-            ),
-          )
-          .toList(),
-      onChanged: (v) => setState(() => _selectedUnit = v!),
-      validator: (v) => v == null ? 'Select unit' : null,
-    ),
+            _buildSection(
+              title: 'Order Location & Category',
+              icon: Icons.location_on,
+              children: [
+                // ✅ ORDER LOCATION (UNIT)
+                DropdownButtonFormField<String>(
+                  value: _selectedUnit,
+                  decoration: InputDecoration(
+                    labelText: 'Order Location (Unit)',
+                    prefixIcon: const Icon(Icons.factory_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                  items: _units
+                      .map(
+                        (u) =>
+                            DropdownMenuItem<String>(value: u, child: Text(u)),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedUnit = v!),
+                  validator: (v) => v == null ? 'Select unit' : null,
+                ),
 
-    const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-    // ✅ PRODUCT CATEGORY
-    DropdownButtonFormField<String>(
-      value: _selectedProductCategory,
-      decoration: InputDecoration(
-        labelText: 'Product Category',
-        prefixIcon: const Icon(Icons.category),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        filled: true,
-        fillColor: Colors.white,
-      ),
-      items: _productCategories
-          .map(
-            (c) => DropdownMenuItem<String>(
-              value: c,
-              child: Text(c),
+                // ✅ PRODUCT CATEGORY
+                DropdownButtonFormField<String>(
+                  value: _selectedProductCategory,
+                  decoration: InputDecoration(
+                    labelText: 'Product Category',
+                    prefixIcon: const Icon(Icons.category),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                  items: _productCategories
+                      .map(
+                        (c) =>
+                            DropdownMenuItem<String>(value: c, child: Text(c)),
+                      )
+                      .toList(),
+                  onChanged: (v) =>
+                      setState(() => _selectedProductCategory = v!),
+                  validator: (v) => v == null ? 'Select category' : null,
+                ),
+              ],
             ),
-          )
-          .toList(),
-      onChanged: (v) => setState(() => _selectedProductCategory = v!),
-      validator: (v) => v == null ? 'Select category' : null,
-    ),
-  ],
-),
-    const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
             // Products Section
             _buildSection(
@@ -686,6 +695,8 @@ if (_sectionSelected['Others'] == true) {
                         product['quantityController'] as TextEditingController;
                     final sizeController =
                         product['sizeController'] as TextEditingController;
+                    final priceController =
+                        product['priceController'] as TextEditingController;
                     final remarkController =
                         product['remarkController'] as TextEditingController;
                     final existingImages = product['images'] as List<String>;
@@ -731,37 +742,46 @@ if (_sectionSelected['Others'] == true) {
                             validator: _req,
                           ),
                           const SizedBox(height: 12),
-                     Row(
-  children: [
-    Expanded(
-      child: _buildTextField(
-        controller: quantityController,
-        label: 'Quantity',
-        icon: Icons.numbers,
-        keyboardType: TextInputType.number,
-        validator: _req,
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-        ],
-      ),
-    ),
-    const SizedBox(width: 12),
-    Expanded(
-      child: _buildTextField(
-        controller: sizeController,
-        label: 'Size',
-        icon: Icons.straighten,
-      ),
-    ),
-  ],
-),
-const SizedBox(height: 12),
-_buildTextField(
-  controller: remarkController,
-  label: 'Product Remark',
-  icon: Icons.comment_outlined,
-  maxLines: 2,
-),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: quantityController,
+                                  label: 'Quantity',
+                                  icon: Icons.numbers,
+                                  keyboardType: TextInputType.number,
+                                  validator: _req,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: sizeController,
+                                  label: 'Size',
+                                  icon: Icons.straighten,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            controller: priceController,
+                            label: 'Price',
+                            icon: Icons.shopping_cart_outlined,
+                            keyboardType: TextInputType.number,
+                            maxLines: 1,
+                          ),
+                          const SizedBox(height: 12),
+
+                          _buildTextField(
+                            controller: remarkController,
+                            label: 'Product Remark',
+                            icon: Icons.comment_outlined,
+                            maxLines: 1,
+                          ),
 
                           const SizedBox(height: 12),
                           const Text(
@@ -799,88 +819,87 @@ _buildTextField(
               ],
             ),
             const SizedBox(height: 20),
-_buildSection(
-  title: 'Packaging Sections',
-  icon: Icons.dashboard_customize,
-  children: [
-    Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: _sectionSelected.keys.map((key) {
-        return FilterChip(
-          label: Text(key),
-          selected: _sectionSelected[key]!,
-          onSelected: (val) {
-            setState(() {
-              _sectionSelected[key] = val;
-            });
-          },
-          selectedColor: Colors.teal.shade200,
-        );
-      }).toList(),
-    ),
+            _buildSection(
+              title: 'Packaging Sections',
+              icon: Icons.dashboard_customize,
+              children: [
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: _sectionSelected.keys.map((key) {
+                    return FilterChip(
+                      label: Text(key),
+                      selected: _sectionSelected[key]!,
+                      onSelected: (val) {
+                        setState(() {
+                          _sectionSelected[key] = val;
+                        });
+                      },
+                      selectedColor: Colors.teal.shade200,
+                    );
+                  }).toList(),
+                ),
 
-    // 🔽 Conditional Fields
-    if (_sectionSelected['Tray'] == true) ...[
-      const SizedBox(height: 16),
-      _buildTextField(
-        controller: _trayController,
-        label: 'Tray Details',
-        icon: Icons.view_agenda,
-      ),
-    ],
-    if (_sectionSelected['Salophin'] == true) ...[
-      const SizedBox(height: 16),
-      _buildTextField(
-        controller: _salophinController,
-        label: 'Salophin Details',
-        icon: Icons.layers,
-      ),
-    ],
-    if (_sectionSelected['Box Cover'] == true) ...[
-      const SizedBox(height: 16),
-      _buildTextField(
-        controller: _boxCoverController,
-        label: 'Box Cover Details',
-        icon: Icons.cases_outlined,
-      ),
-    ],
-    if (_sectionSelected['Inner'] == true) ...[
-      const SizedBox(height: 16),
-      _buildTextField(
-        controller: _innerController,
-        label: 'Inner Details',
-        icon: Icons.table_rows,
-      ),
-    ],
-    if (_sectionSelected['Bottom'] == true) ...[
-      const SizedBox(height: 16),
-      _buildTextField(
-        controller: _bottomController,
-        label: 'Bottom Details',
-        icon: Icons.align_vertical_bottom,
-      ),
-    ],
-    if (_sectionSelected['Die'] == true) ...[
-      const SizedBox(height: 16),
-      _buildTextField(
-        controller: _dieController,
-        label: 'Die Details',
-        icon: Icons.cut,
-      ),
-    ],
-    if (_sectionSelected['Others'] == true) ...[
-      const SizedBox(height: 16),
-      _buildTextField(
-        controller: _otherController,
-        label: 'Other Details',
-        icon: Icons.more_horiz,
-      ),
-    ],
-  ],
-),
+                // 🔽 Conditional Fields
+                if (_sectionSelected['Tray'] == true) ...[
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _trayController,
+                    label: 'Tray Details',
+                    icon: Icons.view_agenda,
+                  ),
+                ],
+                if (_sectionSelected['Salophin'] == true) ...[
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _salophinController,
+                    label: 'Salophin Details',
+                    icon: Icons.layers,
+                  ),
+                ],
+                if (_sectionSelected['Box Cover'] == true) ...[
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _boxCoverController,
+                    label: 'Box Cover Details',
+                    icon: Icons.cases_outlined,
+                  ),
+                ],
+                if (_sectionSelected['Inner'] == true) ...[
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _innerController,
+                    label: 'Inner Details',
+                    icon: Icons.table_rows,
+                  ),
+                ],
+                if (_sectionSelected['Bottom'] == true) ...[
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _bottomController,
+                    label: 'Bottom Details',
+                    icon: Icons.align_vertical_bottom,
+                  ),
+                ],
+                if (_sectionSelected['Die'] == true) ...[
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _dieController,
+                    label: 'Die Details',
+                    icon: Icons.cut,
+                  ),
+                ],
+                if (_sectionSelected['Others'] == true) ...[
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    controller: _otherController,
+                    label: 'Other Details',
+                    icon: Icons.more_horiz,
+                  ),
+                ],
+              ],
+            ),
             const SizedBox(height: 20),
-
 
             // Sales Person
             _buildSection(
@@ -950,126 +969,126 @@ _buildSection(
             ),
             const SizedBox(height: 20),
 
-            // Partial Dispatch
-            _buildSection(
-              title: 'Partially Dispatch of Quantity (if any)',
-              icon: Icons.local_shipping_outlined,
-              children: [
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _partialDispatches.length,
-                  itemBuilder: (context, index) {
-                    final dispatch = _partialDispatches[index];
-                    final nameController =
-                        dispatch['nameController'] as TextEditingController;
-                    final qtyController =
-                        dispatch['qtyController'] as TextEditingController;
-                    final dateController =
-                        dispatch['dateController'] as TextEditingController;
+            // // Partial Dispatch
+            // _buildSection(
+            //   title: 'Partially Dispatch of Quantity (if any)',
+            //   icon: Icons.local_shipping_outlined,
+            //   children: [
+            //     ListView.builder(
+            //       shrinkWrap: true,
+            //       physics: const NeverScrollableScrollPhysics(),
+            //       itemCount: _partialDispatches.length,
+            //       itemBuilder: (context, index) {
+            //         final dispatch = _partialDispatches[index];
+            //         final nameController =
+            //             dispatch['nameController'] as TextEditingController;
+            //         final qtyController =
+            //             dispatch['qtyController'] as TextEditingController;
+            //         final dateController =
+            //             dispatch['dateController'] as TextEditingController;
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange.shade200),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Dispatch ${index + 1}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.orange,
-                                  ),
-                                ),
-                              ),
-                              if (_partialDispatches.length > 1)
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.delete,
-                                    color: Colors.red,
-                                  ),
-                                  onPressed: () =>
-                                      _removePartialDispatch(index),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            controller: nameController,
-                            label: 'Dispatch Name',
-                            icon: Icons.person_outline,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            controller: qtyController,
-                            label: 'Dispatch Quantity',
-                            icon: Icons.confirmation_number_outlined,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: dateController,
-                            readOnly: true,
-                            decoration: InputDecoration(
-                              labelText: 'Dispatch Date',
-                              prefixIcon: const Icon(
-                                Icons.calendar_today,
-                                color: Color(0xFF169a8d),
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            onTap: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: DateTime.now(),
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime(2035),
-                              );
-                              if (picked != null) {
-                                dateController.text =
-                                    '${picked.day}/${picked.month}/${picked.year}';
-                                dispatch['selectedDate'] = picked;
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _addPartialDispatch,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Another Dispatch'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.orange,
-                    side: const BorderSide(color: Colors.orange),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+            //         return Container(
+            //           margin: const EdgeInsets.only(bottom: 16),
+            //           padding: const EdgeInsets.all(16),
+            //           decoration: BoxDecoration(
+            //             color: Colors.orange[50],
+            //             borderRadius: BorderRadius.circular(12),
+            //             border: Border.all(color: Colors.orange.shade200),
+            //           ),
+            //           child: Column(
+            //             crossAxisAlignment: CrossAxisAlignment.start,
+            //             children: [
+            //               Row(
+            //                 children: [
+            //                   Expanded(
+            //                     child: Text(
+            //                       'Dispatch ${index + 1}',
+            //                       style: const TextStyle(
+            //                         fontWeight: FontWeight.bold,
+            //                         fontSize: 16,
+            //                         color: Colors.orange,
+            //                       ),
+            //                     ),
+            //                   ),
+            //                   if (_partialDispatches.length > 1)
+            //                     IconButton(
+            //                       icon: const Icon(
+            //                         Icons.delete,
+            //                         color: Colors.red,
+            //                       ),
+            //                       onPressed: () =>
+            //                           _removePartialDispatch(index),
+            //                     ),
+            //                 ],
+            //               ),
+            //               const SizedBox(height: 12),
+            //               _buildTextField(
+            //                 controller: nameController,
+            //                 label: 'Dispatch Name',
+            //                 icon: Icons.person_outline,
+            //               ),
+            //               const SizedBox(height: 12),
+            //               _buildTextField(
+            //                 controller: qtyController,
+            //                 label: 'Dispatch Quantity',
+            //                 icon: Icons.confirmation_number_outlined,
+            //                 keyboardType: TextInputType.number,
+            //                 inputFormatters: [
+            //                   FilteringTextInputFormatter.digitsOnly,
+            //                 ],
+            //               ),
+            //               const SizedBox(height: 12),
+            //               TextFormField(
+            //                 controller: dateController,
+            //                 readOnly: true,
+            //                 decoration: InputDecoration(
+            //                   labelText: 'Dispatch Date',
+            //                   prefixIcon: const Icon(
+            //                     Icons.calendar_today,
+            //                     color: Color(0xFF169a8d),
+            //                   ),
+            //                   border: OutlineInputBorder(
+            //                     borderRadius: BorderRadius.circular(12),
+            //                   ),
+            //                   filled: true,
+            //                   fillColor: Colors.white,
+            //                 ),
+            //                 onTap: () async {
+            //                   final picked = await showDatePicker(
+            //                     context: context,
+            //                     initialDate: DateTime.now(),
+            //                     firstDate: DateTime(2020),
+            //                     lastDate: DateTime(2035),
+            //                   );
+            //                   if (picked != null) {
+            //                     dateController.text =
+            //                         '${picked.day}/${picked.month}/${picked.year}';
+            //                     dispatch['selectedDate'] = picked;
+            //                   }
+            //                 },
+            //               ),
+            //             ],
+            //           ),
+            //         );
+            //       },
+            //     ),
+            //     const SizedBox(height: 12),
+            //     OutlinedButton.icon(
+            //       onPressed: _addPartialDispatch,
+            //       icon: const Icon(Icons.add),
+            //       label: const Text('Add Another Dispatch'),
+            //       style: OutlinedButton.styleFrom(
+            //         foregroundColor: Colors.orange,
+            //         side: const BorderSide(color: Colors.orange),
+            //         shape: RoundedRectangleBorder(
+            //           borderRadius: BorderRadius.circular(12),
+            //         ),
+            //         padding: const EdgeInsets.symmetric(vertical: 12),
+            //       ),
+            //     ),
+            //   ],
+            // ),
+            // const SizedBox(height: 20),
 
             // Date & Priority
             _buildSection(
@@ -1184,43 +1203,6 @@ _buildSection(
                   ],
                 ),
                 const SizedBox(height: 16),
-                Wrap(
-                  spacing: 10,
-                  children: ['Low', 'Medium', 'High', 'Urgent'].map((p) {
-                    final selected = _priority == p;
-                    final color = p == 'Low'
-                        ? Colors.green
-                        : p == 'Medium'
-                        ? Colors.blue
-                        : p == 'High'
-                        ? Colors.orange
-                        : Colors.red;
-                    return GestureDetector(
-                      onTap: () => setState(() => _priority = p),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: selected ? color : Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: selected ? color : const Color(0xFFE0E0E0),
-                            width: selected ? 2 : 1,
-                          ),
-                        ),
-                        child: Text(
-                          p,
-                          style: TextStyle(
-                            color: selected ? Colors.white : Colors.black87,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -1234,7 +1216,7 @@ _buildSection(
                   controller: _notesController,
                   label: 'Notes (Optional)',
                   icon: Icons.notes,
-                  maxLines: 4,
+                  maxLines: 1,
                 ),
               ],
             ),
@@ -1433,14 +1415,13 @@ _buildSection(
     _locationController.dispose();
     _notesController.dispose();
     _otherSalesPersonController.dispose();
-
     for (var product in _products) {
       (product['nameController'] as TextEditingController).dispose();
       (product['quantityController'] as TextEditingController).dispose();
       (product['sizeController'] as TextEditingController).dispose();
+      (product['priceController'] as TextEditingController).dispose();
       (product['remarkController'] as TextEditingController).dispose(); // ✅
     }
-
     for (var dispatch in _partialDispatches) {
       (dispatch['nameController'] as TextEditingController).dispose();
       (dispatch['qtyController'] as TextEditingController).dispose();

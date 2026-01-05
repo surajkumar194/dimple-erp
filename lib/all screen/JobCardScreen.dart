@@ -87,7 +87,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
   // Core fields
   final _jobNoController = TextEditingController();
   final _customerController = TextEditingController();
-  final _sizeController = TextEditingController();
+  final _locationController = TextEditingController();
 
   // Section controllers
   final _trayController = TextEditingController();
@@ -95,13 +95,13 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
   final _boxCoverController = TextEditingController();
   final _innerController = TextEditingController();
   final _bottomController = TextEditingController();
-   final _dieController = TextEditingController();
-   final _otherController = TextEditingController();
+  final _dieController = TextEditingController();
+  final _otherController = TextEditingController();
 
   final _extraInstructionController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now();
-  String _priority = 'Low';
+  String _priority = 'High';
   bool _isSaving = false;
   String? _selectedSalesPerson;
   String? _customSalesPerson;
@@ -155,7 +155,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
     'Inner': false,
     'Bottom': false,
     'Die': false,
-    'Others': false
+    'Others': false,
   };
 
   final ImagePicker _picker = ImagePicker();
@@ -310,17 +310,20 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
           .collection('meta')
           .doc('jobCardCounter');
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        DocumentSnapshot snap = await transaction.get(counterRef);
-        int newNo = 1;
+      DocumentSnapshot snap = await counterRef.get();
 
-        if (snap.exists) {
-          newNo = (snap['last'] as int? ?? 0) + 1;
+      int newNo = 1;
+
+      if (snap.exists && snap.data() != null) {
+        final data = snap.data() as Map<String, dynamic>;
+        if (data.containsKey('last') && data['last'] is int) {
+          newNo = data['last'] + 1;
         }
+      }
 
-        transaction.set(counterRef, {'last': newNo}, SetOptions(merge: true));
-        jobNo = 'DPL$newNo';
-      });
+      await counterRef.set({'last': newNo}, SetOptions(merge: true));
+
+      jobNo = 'DPL$newNo';
 
       // 🔥 Process products with images
       List<Map<String, dynamic>> productsData = [];
@@ -337,8 +340,8 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
         List<String> imageUrls = [];
         for (final image in images) {
           final ref = FirebaseStorage.instance.ref().child(
-                'job_cards/$jobNo/product_$i/${DateTime.now().millisecondsSinceEpoch}.jpg',
-              );
+            'job_cards/$jobNo/product_$i/${DateTime.now().millisecondsSinceEpoch}.jpg',
+          );
 
           if (kIsWeb) {
             final bytes = await image.readAsBytes();
@@ -355,7 +358,8 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
         // Add product data
         productsData.add({
           'name': nameController.text.trim(),
-          'quantity': quantityController.text.trim(),
+          'quantity':
+              int.tryParse(quantityController.text.trim()) ?? 0, // ✅ INT
           'images': imageUrls,
         });
       }
@@ -363,10 +367,10 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
       // 🔥 Process partial dispatches
       List<Map<String, dynamic>> partialDispatchesData = [];
       for (var dispatch in _partialDispatches) {
-        final name =
-            (dispatch['nameController'] as TextEditingController).text.trim();
-        final qty =
-            (dispatch['qtyController'] as TextEditingController).text.trim();
+        final name = (dispatch['nameController'] as TextEditingController).text
+            .trim();
+        final qty = (dispatch['qtyController'] as TextEditingController).text
+            .trim();
         final dateStr = (dispatch['dateController'] as TextEditingController)
             .text
             .trim();
@@ -377,47 +381,52 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
             'name': name,
             'quantity': qty,
             'date': dateStr,
-            'timestamp': dispatch['selectedDate'],
+            'timestamp': dispatch['selectedDate'] != null
+                ? Timestamp.fromDate(dispatch['selectedDate'])
+                : null,
           });
         }
       }
 
       final Map<String, dynamic> sections = {};
+
       if (_sectionSelected['Tray'] == true) {
-        sections['tray'] = _trayController.text;
+        sections['tray'] = _trayController.text.trim();
       }
       if (_sectionSelected['Salophin'] == true) {
-        sections['salophin'] = _salophinController.text;
+        sections['salophin'] = _salophinController.text.trim();
       }
       if (_sectionSelected['Box Cover'] == true) {
-        sections['boxCover'] = _boxCoverController.text;
+        sections['boxCover'] = _boxCoverController.text.trim();
       }
       if (_sectionSelected['Inner'] == true) {
-        sections['inner'] = _innerController.text;
+        sections['inner'] = _innerController.text.trim();
       }
       if (_sectionSelected['Bottom'] == true) {
-        sections['bottom'] = _bottomController.text;
+        sections['bottom'] = _bottomController.text.trim();
       }
-        if (_sectionSelected['die'] == true) {
-        sections['die'] = _dieController.text;
+      if (_sectionSelected['Die'] == true) {
+        sections['die'] = _dieController.text.trim();
       }
-        if (_sectionSelected['other'] == true) {
-        sections['other'] = _otherController.text;
+      if (_sectionSelected['Others'] == true) {
+        sections['other'] = _otherController.text.trim();
       }
 
       await FirebaseFirestore.instance.collection('jobCards').doc(jobNo).set({
         'jobNo': jobNo,
-        'date': _selectedDate,
+        
+        'date': Timestamp.fromDate(_selectedDate),
         'priority': _priority,
         'customer': _customerController.text.trim(),
         'salesPerson': _selectedSalesPerson == 'Others'
-            ? _customSalesPerson
-            : _selectedSalesPerson,
+            ? (_customSalesPerson ?? '')
+            : (_selectedSalesPerson ?? ''),
         'products': productsData,
-        'size': _sizeController.text.trim(),
+        'location': _locationController.text.trim(),
         'sections': sections,
         'extraInstruction': _extraInstructionController.text.trim(),
-        'partialDispatches': partialDispatchesData, // 🔥 Save partial dispatches
+        'partialDispatches':
+            partialDispatchesData, // 🔥 Save partial dispatches
         'status': 'Pending',
         'createdAt': FieldValue.serverTimestamp(),
         'source': 'manual',
@@ -525,8 +534,8 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               ),
               const SizedBox(height: 16),
               _buildTextField(
-                controller: _sizeController,
-                label: 'Size',
+                controller: _locationController,
+                label: 'Location',
                 icon: Icons.straighten,
               ),
             ],
@@ -813,8 +822,9 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide:
-                                  const BorderSide(color: Color(0xFFE0E0E0)),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFE0E0E0),
+                              ),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -925,8 +935,8 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
                   final color = p == 'Low'
                       ? Colors.green
                       : p == 'High'
-                          ? Colors.orange
-                          : Colors.red;
+                      ? Colors.orange
+                      : Colors.red;
                   return GestureDetector(
                     onTap: () => setState(() => _priority = p),
                     child: Container(
@@ -999,8 +1009,9 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
                             k,
                             style: TextStyle(
                               color: sel ? Colors.white : Colors.black87,
-                              fontWeight:
-                                  sel ? FontWeight.w600 : FontWeight.w500,
+                              fontWeight: sel
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
                             ),
                           ),
                         ],
@@ -1053,7 +1064,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               icon: Icons.align_vertical_bottom,
             ),
           ],
-             if (_sectionSelected['Die'] == true) ...[
+          if (_sectionSelected['Die'] == true) ...[
             const SizedBox(height: 16),
             _buildTextField(
               controller: _dieController,
@@ -1061,7 +1072,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               icon: Icons.align_vertical_bottom,
             ),
           ],
-      if (_sectionSelected['Other'] == true) ...[
+          if (_sectionSelected['Others'] == true) ...[
             const SizedBox(height: 16),
             _buildTextField(
               controller: _otherController,
@@ -1239,7 +1250,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
   void dispose() {
     _jobNoController.dispose();
     _customerController.dispose();
-    _sizeController.dispose();
+    _locationController.dispose();
     _trayController.dispose();
     _salophinController.dispose();
     _boxCoverController.dispose();

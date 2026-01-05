@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,68 +24,56 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // ================= LOGIN FUNCTION =================
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+  setState(() => _isLoading = true);
 
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+  try {
+    // 🔐 Firebase Auth
+    await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
 
-      // ✅ Save login time
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt(
-        'loginTime',
-        DateTime.now().millisecondsSinceEpoch,
-      );
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final prefs = await SharedPreferences.getInstance();
 
-      if (!mounted) return;
+    // ⏱ session time
+    await prefs.setInt(
+      'loginTime',
+      DateTime.now().millisecondsSinceEpoch,
+    );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
+    // 🔥 FETCH USER FROM FIRESTORE
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
 
-      _showSnackBar("Login successful!");
+    final data = doc.data()!;
+    final role = data['role'] ?? 'user';
+    final permissions = Map<String, dynamic>.from(
+      data['permissions'] ?? {},
+    );
 
-    } on FirebaseAuthException catch (e) {
-      String errorMessage = "Login failed. Please try again.";
+    // ✅ SAVE LOCALLY
+    await prefs.setString('role', role);
+    await prefs.setString('permissions', jsonEncode(permissions));
 
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = "No account found with this email.";
-          break;
-        case 'wrong-password':
-          errorMessage = "Incorrect password. Please try again.";
-          break;
-        case 'invalid-email':
-          errorMessage = "Invalid email address.";
-          break;
-        case 'user-disabled':
-          errorMessage = "This account has been disabled.";
-          break;
-        case 'too-many-requests':
-          errorMessage =
-              "Too many attempts. Please try again later.";
-          break;
-        default:
-          errorMessage = e.message ?? errorMessage;
-      }
+    if (!mounted) return;
 
-      _passwordController.clear();
-      _showSnackBar(errorMessage, isError: true);
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MainScreen()),
+    );
 
-    } catch (e) {
-      _showSnackBar(
-        "Something went wrong. Please try again.",
-        isError: true,
-      );
-    }
-
-    if (mounted) setState(() => _isLoading = false);
+    _showSnackBar("Login successful!");
+  } catch (e) {
+    _showSnackBar(e.toString(), isError: true);
   }
+
+  if (mounted) setState(() => _isLoading = false);
+}
 
   // ================= SNACKBAR =================
   void _showSnackBar(String message, {bool isError = false}) {

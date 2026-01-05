@@ -1,129 +1,250 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sizer/sizer.dart';
 
-class MasterScreen extends StatelessWidget {
-  const MasterScreen({super.key});
+class MasterDashboardScreen extends StatefulWidget {
+  const MasterDashboardScreen({super.key});
+
+  @override
+  State<MasterDashboardScreen> createState() => _MasterDashboardScreenState();
+}
+
+class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Future<int> _getCount(String collection) async {
+    final snap = await _firestore.collection(collection).get();
+    return snap.docs.length;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      appBar: AppBar(
-        title: const Text(
-          'Master Control Panel',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.deepPurple,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
-          children: [
-            _masterTile(
-              context,
-              title: 'Departments',
-              icon: Icons.apartment,
-              color: Colors.blue,
-              onTap: () {
-                // Department Master Screen
-              },
-            ),
-            _masterTile(
-              context,
-              title: 'Sub Departments',
-              icon: Icons.account_tree,
-              color: Colors.teal,
-              onTap: () {
-                // Sub-department master
-              },
-            ),
-            _masterTile(
-              context,
-              title: 'Quality Check',
-              icon: Icons.verified,
-              color: Colors.orange,
-              onTap: () {
-                // Quality check master
-              },
-            ),
-            _masterTile(
-              context,
-              title: 'MOM',
-              icon: Icons.meeting_room,
-              color: Colors.indigo,
-              onTap: () {
-                // MOM master
-              },
-            ),
-            _masterTile(
-              context,
-              title: 'Dispatch',
-              icon: Icons.local_shipping,
-              color: Colors.green,
-              onTap: () {
-                // Dispatch master
-              },
-            ),
-            _masterTile(
-              context,
-              title: 'Users / Roles',
-              icon: Icons.people,
-              color: Colors.red,
-              onTap: () {
-                // User roles master
-              },
-            ),
-          ],
+      backgroundColor: Colors.grey[100],
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _header(),
+              const SizedBox(height: 32),
+
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  int crossAxisCount = constraints.maxWidth > 1200
+                      ? 4
+                      : constraints.maxWidth > 800
+                          ? 3
+                          : 2;
+
+                  return GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: 24,
+                    mainAxisSpacing: 24,
+                    childAspectRatio: 1,
+                    children: [
+                      _masterCard(
+                        title: "Departments",
+                        subtitle: "Manage departments",
+                        icon: Icons.apartment,
+                        gradient: [Colors.blue, Colors.blueAccent],
+                        collection: "departments",
+                        onTap: () {},
+                      ),
+
+                      _masterCard(
+                        title: "Sub Departments",
+                        subtitle: "Department hierarchy",
+                        icon: Icons.account_tree,
+                        gradient: [Colors.teal, Colors.tealAccent],
+                        collection: "subDepartments",
+                        onTap: () {},
+                      ),
+
+                      _masterCard(
+                        title: "Quality Check",
+                        subtitle: "QC parameters",
+                        icon: Icons.verified,
+                        gradient: [Colors.orange, Colors.deepOrangeAccent],
+                        collection: "qualityCheck",
+                        onTap: () {},
+                      ),
+
+                      _masterCard(
+                        title: "MOM",
+                        subtitle: "Meeting records",
+                        icon: Icons.meeting_room,
+                        gradient: [Colors.indigo, Colors.indigoAccent],
+                        collection: "mom",
+                        onTap: () {},
+                      ),
+
+                      _masterCard(
+                        title: "Dispatch",
+                        subtitle: "Dispatch masters",
+                        icon: Icons.local_shipping,
+                        gradient: [Colors.green, Colors.greenAccent],
+                        collection: "dispatchedOrders",
+                        onTap: () {},
+                      ),
+
+                      _masterCard(
+                        title: "Users / Roles",
+                        subtitle: "User access control",
+                        icon: Icons.people,
+                        gradient: [Colors.red, Colors.redAccent],
+                        collection: "users",
+                        onTap: () {},
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _masterTile(
-    BuildContext context, {
+  // ================= HEADER =================
+  Widget _header() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.deepPurple, Colors.blue],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                "Master Control 👋",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                "Manage master data",
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+          Icon(Icons.dashboard_customize,
+              size: 50, color: Colors.white),
+        ],
+      ),
+    );
+  }
+
+  // ================= MASTER CARD =================
+  Widget _masterCard({
     required String title,
+    required String subtitle,
     required IconData icon,
-    required Color color,
+    required List<Color> gradient,
+    required String collection,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [color.withOpacity(0.9), color.withOpacity(0.6)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.4),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+    return FutureBuilder<int>(
+      future: _getCount(collection),
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+
+        return GestureDetector(
+          onTap: onTap,
+          child: Card(
+            elevation: 8,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 46, color: Colors.white),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: gradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, size: 22.sp, color: Colors.white),
+
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          "Total: $count",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+
+                      CircleAvatar(
+                        radius: 15.sp,
+                        backgroundColor: Colors.white,
+                        child: Icon(
+                          Icons.arrow_forward,
+                          size: 17.sp,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

@@ -514,53 +514,136 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                   ),
                 ],
               )
-            else
-              // Edit Delivery Option for Delivered Orders
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [Colors.orange.shade600, Colors.deepOrange.shade600]),
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [BoxShadow(color: Colors.orange.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
-                      ),
-                      child: ElevatedButton.icon(
-                        onPressed: () => _openEditDeliveryDialog(context, docId, dispatchedOrder),
-                        icon: const Icon(Icons.edit, color: Colors.white),
-                        label: const Text('Edit Delivery', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [Colors.purple.shade600, Colors.deepPurple.shade600]),
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [BoxShadow(color: Colors.purple.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
-                      ),
-                      child: ElevatedButton.icon(
-                        onPressed: () => _generatePDF(context, docId, dispatchedOrder),
-                        icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-                        label: const Text('View PDF', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+         else
+// Edit Delivery Option for Delivered Orders
+Row(
+  children: [
+    // Edit Delivery
+    Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.orange.shade600, Colors.deepOrange.shade600],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.orange.withOpacity(0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: () =>
+              _openEditDeliveryDialog(context, docId, dispatchedOrder),
+          icon: const Icon(Icons.edit, color: Colors.white),
+          label: const Text(
+            'Edit Delivery',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+      ),
+    ),
+
+    const SizedBox(width: 10),
+
+    // ✏️ Edit PDF (NEW)
+    Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.blueGrey.shade600, Colors.blueGrey.shade800],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blueGrey.withOpacity(0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: () =>
+              _openEditPDF(context, docId, dispatchedOrder),
+          icon: const Icon(Icons.edit_document, color: Colors.white),
+          label: const Text(
+            'Edit PDF',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+      ),
+    ),
+
+    const SizedBox(width: 10),
+
+    // View PDF
+    Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.purple.shade600, Colors.deepPurple.shade600],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.purple.withOpacity(0.4),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: () =>
+              _generatePDF(context, docId, dispatchedOrder),
+          icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+          label: const Text(
+            'View PDF',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ],
+),
+
           ],
         ),
       ),
@@ -607,6 +690,22 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
       ),
     );
   }
+void _openEditPDF(
+  BuildContext context,
+  String docId,
+  Map<String, dynamic> dispatchedOrder,
+) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => DeliveryProcessScreen(
+        orderId: docId,
+        orderData: dispatchedOrder,
+        isEdit: true, // 👈 Edit mode
+      ),
+    ),
+  );
+}
 
   void _openEditDeliveryDialog(BuildContext context, String orderId, Map<String, dynamic> orderData) {
     Navigator.push(

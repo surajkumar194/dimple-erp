@@ -70,9 +70,11 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
 
       for (var product in products) {
         jobCardProducts.add({
-          'name': product['productName'] ?? '',
-          'quantity': product['quantity']?.toString() ?? '0',
+          'productName': product['productName'] ?? '',
+          'quantity': product['quantity'] ?? 0,
           'size': product['size'] ?? '',
+            'price': product['price'] ?? 0, // ✅ ADD
+          'remarks': product['remarks'] ?? '',
           'images': List<String>.from(product['images'] ?? []),
         });
       }
@@ -93,7 +95,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
         'jobNo': jobNo,
         'date': order['orderDate'] ?? DateTime.now(),
         'priority': order['priority'] ?? 'Medium',
-        'customer': order['customerName'] ?? '',
+        'customerName': order['customerName'] ?? '',
         'salesPerson': order['salesPerson'] ?? '',
         'products': jobCardProducts,
         'size': products.isNotEmpty ? products[0]['size'] ?? '' : '',
@@ -112,9 +114,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
               children: [
                 Icon(Icons.check_circle_outline, color: Colors.white),
                 SizedBox(width: 12),
-                Expanded(
-                  child: Text('Job Card created successfully!'),
-                ),
+                Expanded(child: Text('Job Card created successfully!')),
               ],
             ),
             backgroundColor: Colors.green.shade600,
@@ -147,7 +147,10 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
     }
   }
 
-  void _openEditAndCreateJobCard(String orderId, Map<String, dynamic> orderData) async {
+  void _openEditAndCreateJobCard(
+    String orderId,
+    Map<String, dynamic> orderData,
+  ) async {
     // Navigate to edit screen
     await Navigator.push(
       context,
@@ -156,7 +159,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
             EditSalesOrderScreen(orderId: orderId, orderData: orderData),
       ),
     );
-    
+
     // After returning from edit screen, check if we should create job card
     final jobCardExists = await _checkIfJobCardExists(orderId);
     if (!jobCardExists && mounted) {
@@ -164,7 +167,9 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Row(
             children: [
               Container(
@@ -173,7 +178,10 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                   color: Colors.teal.shade50,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(Icons.assignment_outlined, color: Colors.teal.shade600),
+                child: Icon(
+                  Icons.assignment_outlined,
+                  color: Colors.teal.shade600,
+                ),
               ),
               const SizedBox(width: 12),
               const Text('Create Job Card?'),
@@ -345,7 +353,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                   final customer = (data['customerName'] ?? '')
                       .toString()
                       .toLowerCase();
-                  final productMatch = (data['products'] as List?)?.any(
+                  final productMatch =
+                      (data['products'] as List?)?.any(
                         (p) => (p['productName'] ?? '')
                             .toString()
                             .toLowerCase()
@@ -417,9 +426,9 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                             ],
                           ),
                           child: Theme(
-                            data: Theme.of(context).copyWith(
-                              dividerColor: Colors.transparent,
-                            ),
+                            data: Theme.of(
+                              context,
+                            ).copyWith(dividerColor: Colors.transparent),
                             child: ExpansionTile(
                               tilePadding: const EdgeInsets.symmetric(
                                 horizontal: 20,
@@ -552,11 +561,13 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                         color: _getPriorityColor(priority),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: priority.toLowerCase() == 'high'
+                                          color:
+                                              priority.toLowerCase() == 'high'
                                               ? Colors.red.shade200
-                                              : priority.toLowerCase() == 'medium'
-                                                  ? Colors.orange.shade200
-                                                  : Colors.green.shade200,
+                                              : priority.toLowerCase() ==
+                                                    'medium'
+                                              ? Colors.orange.shade200
+                                              : Colors.green.shade200,
                                         ),
                                       ),
                                       child: Row(
@@ -565,11 +576,13 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                           Icon(
                                             Icons.flag,
                                             size: 12,
-                                            color: priority.toLowerCase() == 'high'
+                                            color:
+                                                priority.toLowerCase() == 'high'
                                                 ? Colors.red.shade600
-                                                : priority.toLowerCase() == 'medium'
-                                                    ? Colors.orange.shade600
-                                                    : Colors.green.shade600,
+                                                : priority.toLowerCase() ==
+                                                      'medium'
+                                                ? Colors.orange.shade600
+                                                : Colors.green.shade600,
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
@@ -577,11 +590,14 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                             style: TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
-                                              color: priority.toLowerCase() == 'high'
+                                              color:
+                                                  priority.toLowerCase() ==
+                                                      'high'
                                                   ? Colors.red.shade600
-                                                  : priority.toLowerCase() == 'medium'
-                                                      ? Colors.orange.shade600
-                                                      : Colors.green.shade600,
+                                                  : priority.toLowerCase() ==
+                                                        'medium'
+                                                  ? Colors.orange.shade600
+                                                  : Colors.green.shade600,
                                             ),
                                           ),
                                         ],
@@ -598,7 +614,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
@@ -619,59 +636,76 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                         ],
                                       ),
                                       const SizedBox(height: 12),
-                                      ...products.map((p) => Padding(
-                                        padding: const EdgeInsets.only(bottom: 8),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 6,
-                                              height: 6,
-                                              decoration: BoxDecoration(
-                                                color: Colors.teal.shade400,
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: RichText(
-                                                overflow: TextOverflow.ellipsis,
-                                                text: TextSpan(
-                                                  children: [
-                                                    TextSpan(
-                                                      text: p['productName'] ?? 'Product',
-                                                      style: TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight: FontWeight.bold,
-                                                        color: Colors.teal.shade700,
-                                                      ),
-                                                    ),
-                                                    TextSpan(
-                                                      text: '  •  Qty: ${p['quantity'] ?? '-'}',
-                                                      style: TextStyle(
-                                                        fontSize: 15,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: Colors.deepOrange.shade600,
-                                                      ),
-                                                    ),
-                                                  ],
+                                      ...products.map(
+                                        (p) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 6,
+                                                height: 6,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.teal.shade400,
+                                                  shape: BoxShape.circle,
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: RichText(
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  text: TextSpan(
+                                                    children: [
+                                                      TextSpan(
+                                                        text:
+                                                            p['productName'] ??
+                                                            'Product',
+                                                        style: TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: Colors
+                                                              .teal
+                                                              .shade700,
+                                                        ),
+                                                      ),
+                                                      TextSpan(
+                                                        text:
+                                                            '  •  Qty: ${p['quantity'] ?? '-'}',
+                                                        style: TextStyle(
+                                                          fontSize: 15,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Colors
+                                                              .deepOrange
+                                                              .shade600,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      )),
+                                      ),
                                     ],
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                
+
                                 // Single button for Edit & Create Job Card
                                 SizedBox(
                                   width: double.infinity,
                                   child: ElevatedButton.icon(
                                     onPressed: _isLoading
                                         ? null
-                                        : () => _openEditAndCreateJobCard(doc.id, data),
+                                        : () => _openEditAndCreateJobCard(
+                                            doc.id,
+                                            data,
+                                          ),
                                     icon: _isLoading
                                         ? const SizedBox(
                                             width: 18,

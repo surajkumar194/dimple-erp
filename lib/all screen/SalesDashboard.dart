@@ -1,10 +1,9 @@
-import 'package:dimple_erp/all%20screen/CustomerAllOrderScreen.dart';
-import 'package:dimple_erp/all%20screen/DeliverySchedulingScreen.dart';
-import 'package:dimple_erp/PRODUCTION/MachineFormScreen.dart';
-import 'package:dimple_erp/all%20screen/OrderBookingScreen.dart';
-import 'package:dimple_erp/all%20screen/JobCardScreen.dart';
-import 'package:dimple_erp/all%20screen/IssueInventoryScreen.dart'; // 👈 new import
-import 'package:dimple_erp/all%20screen/ProductionTrackingScreen.dart';
+import 'package:dimple_erp/all screen/CustomerAllOrderScreen.dart';
+import 'package:dimple_erp/all screen/DeliverySchedulingScreen.dart';
+import 'package:dimple_erp/all screen/OrderBookingScreen.dart';
+import 'package:dimple_erp/all screen/JobCardScreen.dart';
+import 'package:dimple_erp/all screen/IssueInventoryScreen.dart';
+import 'package:dimple_erp/all screen/ProductionTrackingScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
@@ -15,79 +14,21 @@ class SalesDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Card
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFE91E63), Color(0xFFF06292)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFE91E63).withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Sales Dashboard 👋",
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        "Manage all orders and delivery efficiently",
-                        style: TextStyle(
-                          fontSize: 13.sp,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Image.asset("assets/dpl.png", scale: 3.5),
-
-                  // Container(
-                  //   padding: const EdgeInsets.all(20),
-                  //   decoration: BoxDecoration(
-                  //     color: Colors.white.withOpacity(0.2),
-                  //     shape: BoxShape.circle,
-                  //   ),
-                  //   child:
-                  //       const Icon(Icons.trending_up, color: Colors.white, size: 40),
-                  // ),
-                ],
-              ),
-            ),
+            _header(),
             const SizedBox(height: 32),
 
-            // Dashboard cards grid
             LayoutBuilder(
               builder: (context, constraints) {
                 int crossAxisCount = constraints.maxWidth > 1200
                     ? 4
                     : constraints.maxWidth > 800
-                    ? 3
-                    : 2;
+                        ? 3
+                        : 2;
 
                 return GridView.count(
                   shrinkWrap: true,
@@ -95,17 +36,13 @@ class SalesDashboard extends StatelessWidget {
                   crossAxisCount: crossAxisCount,
                   crossAxisSpacing: 24,
                   mainAxisSpacing: 24,
-                  childAspectRatio: 1.0,
+                  childAspectRatio: 1,
                   children: [
-                    _buildDashboardCard(
-                      context,
+                    _dashboardCard(
                       title: "Tracking",
-                      subtitle: "Monitor and manage deliveries efficiently",
-                      icon: Icons.auto_graph_sharp,
-                      gradientColors: [
-                        const Color.fromARGB(255, 231, 121, 104)!,
-                        const Color.fromARGB(255, 231, 121, 104)!,
-                      ],
+                      subtitle: "Monitor production & delivery status",
+                      icon: Icons.auto_graph,
+                      gradient: [Colors.red[400]!, Colors.red[300]!],
                       onTap: () {
                         Navigator.push(
                           context,
@@ -115,15 +52,11 @@ class SalesDashboard extends StatelessWidget {
                         );
                       },
                     ),
-                    _buildDashboardCard(
-                      context,
+                    _dashboardCard(
                       title: "Order Booking",
-                      subtitle: "Create and manage new orders",
+                      subtitle: "Create and manage orders",
                       icon: Icons.book_online,
-                      gradientColors: [
-                        Colors.indigo[600]!,
-                        Colors.indigo[400]!,
-                      ],
+                      gradient: [Colors.indigo[600]!, Colors.indigo[400]!],
                       onTap: () {
                         Navigator.push(
                           context,
@@ -133,12 +66,11 @@ class SalesDashboard extends StatelessWidget {
                         );
                       },
                     ),
-                    _buildDashboardCard(
-                      context,
-                      title: "Customer All Orders",
-                      subtitle: "View and track customer orders",
+                    _dashboardCard(
+                      title: "Customer Orders",
+                      subtitle: "View all customer orders",
                       icon: Icons.list_alt,
-                      gradientColors: [Colors.teal[600]!, Colors.teal[400]!],
+                      gradient: [Colors.teal[600]!, Colors.teal[400]!],
                       onTap: () {
                         Navigator.push(
                           context,
@@ -148,14 +80,13 @@ class SalesDashboard extends StatelessWidget {
                         );
                       },
                     ),
-                    _buildDashboardCard(
-                      context,
+                    _dashboardCard(
                       title: "Job Card",
-                      subtitle: "Create and manage production job cards",
+                      subtitle: "Manage production job cards",
                       icon: Icons.assignment,
-                      gradientColors: [
+                      gradient: [
                         Colors.deepPurple[600]!,
-                        Colors.deepPurple[400]!,
+                        Colors.deepPurple[400]!
                       ],
                       onTap: () {
                         Navigator.push(
@@ -166,14 +97,11 @@ class SalesDashboard extends StatelessWidget {
                         );
                       },
                     ),
-
-                    // ✅ New Added Card — Issue Inventory
-                    _buildDashboardCard(
-                      context,
+                    _dashboardCard(
                       title: "Issue Inventory",
-                      subtitle: "Fetch JDF data and manage stock issue",
+                      subtitle: "Issue raw material from stock",
                       icon: Icons.inventory_2_outlined,
-                      gradientColors: [Colors.pink[600]!, Colors.pink[400]!],
+                      gradient: [Colors.pink[600]!, Colors.pink[400]!],
                       onTap: () {
                         Navigator.push(
                           context,
@@ -183,44 +111,21 @@ class SalesDashboard extends StatelessWidget {
                         );
                       },
                     ),
-
-                    _buildDashboardCard(
-                      context,
-                      title: "Delivery Scheduling",
-                      subtitle: "Plan and manage deliveries",
+                    _dashboardCard(
+                      title: "Delivery Schedule",
+                      subtitle: "Plan & manage deliveries",
                       icon: Icons.local_shipping,
-                      gradientColors: [
-                        Colors.orange[600]!,
-                        Colors.orange[400]!,
-                      ],
+                      gradient: [Colors.orange[600]!, Colors.orange[400]!],
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const DeliveryManagementScreen(),
+                            builder: (_) =>
+                                const DeliveryManagementScreen(),
                           ),
                         );
                       },
                     ),
-
-                    // _buildDashboardCard(
-                    //   context,
-                    //   title: "Production",
-                    //   subtitle: "Plan and manage production",
-                    //   icon: Icons.local_shipping,
-                    //   gradientColors: [
-                    //     Colors.orange[600]!,
-                    //     Colors.orange[400]!,
-                    //   ],
-                    //   onTap: () {
-                    //     Navigator.push(
-                    //       context,
-                    //       MaterialPageRoute(
-                    //         builder: (_) => const MachineProductionScreen(),
-                    //       ),
-                    //     );
-                    //   },
-                    // ),
                   ],
                 );
               },
@@ -231,98 +136,106 @@ class SalesDashboard extends StatelessWidget {
     );
   }
 
-  Widget _buildDashboardCard(
-    BuildContext context, {
+  // ================= HEADER =================
+  Widget _header() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.pink[700]!, Colors.purple[600]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                "Sales Dashboard 👋",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                "Manage orders, production & delivery",
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+          Image.asset("assets/dpl.png", scale: 3.5),
+        ],
+      ),
+    );
+  }
+
+  // ================= DASHBOARD CARD =================
+  Widget _dashboardCard({
     required String title,
     required String subtitle,
     required IconData icon,
-    required List<Color> gradientColors,
+    required List<Color> gradient,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Card(
         elevation: 8,
-        shadowColor: gradientColors.first.withOpacity(0.3),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: gradientColors,
+              colors: gradient,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(24),
           ),
-          child: Stack(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Positioned(
-                right: -20,
-                top: -20,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    shape: BoxShape.circle,
+              Icon(icon, size: 22.sp, color: Colors.white),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
+                  Text(
+                    subtitle,
+                    style:
+                        TextStyle(color: Colors.white.withOpacity(0.9)),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(icon, size: 40, color: Colors.white),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  CircleAvatar(
+                    radius: 15.sp,
+                    backgroundColor: Colors.white,
+                    child: Icon(
+                      Icons.arrow_forward,
+                      size: 17.sp,
+                      color: Colors.black,
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white.withOpacity(0.9),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.arrow_forward,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),

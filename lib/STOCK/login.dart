@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dimple_erp/all%20screen/MainScreen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,20 +18,55 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  Future<void> _saveUserRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("User not logged in");
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (!doc.exists) {
+      throw Exception("User role not found in Firestore");
+    }
+
+    final role = doc['role'];
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('role', role);
+  }
+
   Future<void> login() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
+
     try {
+      // 🔐 Firebase Login
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: emailCtrl.text.trim(),
         password: passCtrl.text,
       );
-      // TODO: navigate after login
+
+      // ✅ Save user role
+      await _saveUserRole();
+
+      // ✅ Save login time (session)
+      final prefs = await SharedPreferences.getInstance();
+      prefs.setInt('loginTime', DateTime.now().millisecondsSinceEpoch);
+
+      // ✅ Go to MainScreen
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+      );
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Login failed: ${e.toString()}'),
+          content: Text(e.toString()),
           backgroundColor: Colors.red,
         ),
       );
@@ -47,7 +85,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // subtle bg
       backgroundColor: const Color(0xFFEFEFEF),
       body: Container(
         width: double.infinity,
@@ -83,46 +120,23 @@ class _LoginPageState extends State<LoginPage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // LOGO
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Image.asset(
-                                  'assets/1.jpg',      // <- apna logo path
-                                  height: 72,
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
-                              // Title
+                              Image.asset('assets/1.jpg', height: 72),
+                              const SizedBox(height: 12),
                               Text(
-                                'Dimple Packaging ',
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.indigo.shade800,
-                                    ),
+                                'Dimple Packaging',
+                                style: Theme.of(context).textTheme.titleLarge,
                               ),
                               const SizedBox(height: 20),
 
                               // EMAIL
                               TextFormField(
                                 controller: emailCtrl,
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.next,
-                                decoration: InputDecoration(
+                                decoration: const InputDecoration(
                                   labelText: 'Email',
-                                  hintText: 'you@example.com',
-                                  prefixIcon: const Icon(Icons.email_outlined),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white,
+                                  prefixIcon: Icon(Icons.email),
                                 ),
-                                validator: (value) {
-                                  if (value?.isEmpty ?? true) return 'Email is required';
-                                  final re = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$');
-                                  if (!re.hasMatch(value!.trim())) return 'Enter a valid email';
-                                  return null;
-                                },
+                                validator: (v) =>
+                                    v!.isEmpty ? 'Email required' : null,
                               ),
                               const SizedBox(height: 16),
 
@@ -130,32 +144,22 @@ class _LoginPageState extends State<LoginPage> {
                               TextFormField(
                                 controller: passCtrl,
                                 obscureText: _obscurePassword,
-                                textInputAction: TextInputAction.done,
-                                onFieldSubmitted: (_) => login(),
                                 decoration: InputDecoration(
                                   labelText: 'Password',
-                                  prefixIcon: const Icon(Icons.lock_outline),
+                                  prefixIcon: const Icon(Icons.lock),
                                   suffixIcon: IconButton(
                                     icon: Icon(_obscurePassword
                                         ? Icons.visibility
                                         : Icons.visibility_off),
-                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                    onPressed: () => setState(
+                                      () => _obscurePassword = !_obscurePassword,
+                                    ),
                                   ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white,
                                 ),
-                                validator: (value) {
-                                  if (value?.isEmpty ?? true) return 'Password is required';
-                                  if (value!.length < 6) {
-                                    return 'Password must be at least 6 characters';
-                                  }
-                                  return null;
-                                },
+                                validator: (v) =>
+                                    v!.length < 6 ? 'Min 6 characters' : null,
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 24),
 
                               // LOGIN BUTTON
                               SizedBox(
@@ -163,37 +167,11 @@ class _LoginPageState extends State<LoginPage> {
                                 height: 48,
                                 child: ElevatedButton(
                                   onPressed: _isLoading ? null : login,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.indigo,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
                                   child: _isLoading
-                                      ? const SizedBox(
-                                          height: 22,
-                                          width: 22,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : const Text('Login', style: TextStyle(fontSize: 16)),
+                                      ? const CircularProgressIndicator(color: Colors.white)
+                                      : const Text('Login'),
                                 ),
                               ),
-
-                              const SizedBox(height: 12),
-
-                              // SUPPORT (optional)
-                              const SizedBox(height: 6),
-                              const Text(
-                                'Need help?',
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              const SizedBox(height: 2),
-                              const SelectableText('info@dimplepackaging.com'),
-                              const SelectableText('(+91) 9815700857'),
                             ],
                           ),
                         ),

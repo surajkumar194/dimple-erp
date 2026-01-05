@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'dart:html' as html;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -275,7 +273,7 @@ Future<void> _loadCurrentUserDept() async {
                     final productIndex = entry.key;
                     final p = entry.value;
 
-                    final productName = p['name'] ?? 'N/A';
+final productName = p['productName'] ?? 'N/A';
                     final qty = p['quantity']?.toString() ?? '0';
                     final images = p['images'] as List<dynamic>? ?? [];
 
@@ -604,7 +602,8 @@ Widget _buildDepartmentTile({
   required String lastDispatchedDept,
 }) {
   // 🔥 YAHI PE SET HOTA HAI PERMISSION
-  final bool canEdit = currentUserDept == deptName;
+final bool canEdit =
+    currentUserDept == deptName || currentUserDept == 'admin';
 
   return GestureDetector(
     onTap: canEdit
@@ -1201,11 +1200,11 @@ Widget _buildDepartmentTile({
         } catch (_) {}
       }
 
-      productsWithImages.add({
-        'name': product['name'] ?? 'N/A',
-        'quantity': product['quantity'] ?? '0',
-        'pdfImages': pdfImages,
-      });
+    productsWithImages.add({
+  'name': product['productName'] ?? 'N/A', // ✅ FIX
+  'quantity': product['quantity'] ?? '0',
+  'pdfImages': pdfImages,
+});
     }
 
     int totalQuantity = 0;
