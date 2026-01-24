@@ -22,7 +22,7 @@ class _JobCardScreenState extends State<JobCardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
@@ -47,7 +47,7 @@ class _JobCardScreenState extends State<JobCardScreen>
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
-          indicatorWeight: 3,
+          indicatorWeight: 2,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           labelStyle: const TextStyle(
@@ -55,7 +55,7 @@ class _JobCardScreenState extends State<JobCardScreen>
             fontSize: 15,
           ),
           tabs: const [
-            Tab(icon: Icon(Icons.add_box), text: 'Create Job Card'),
+          //  Tab(icon: Icon(Icons.add_box), text: 'Create Job Card'),
             Tab(icon: Icon(Icons.shopping_cart), text: 'From Sales Order'),
             Tab(icon: Icon(Icons.history), text: 'History'),
           ],
@@ -64,7 +64,7 @@ class _JobCardScreenState extends State<JobCardScreen>
       body: TabBarView(
         controller: _tabController,
         children: const [
-          CreateJobCardTab(),
+          //CreateJobCardTab(),
           SelectSalesOrderTab(),
           JobCardHistoryTab(),
         ],

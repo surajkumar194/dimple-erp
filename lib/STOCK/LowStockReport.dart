@@ -10,7 +10,12 @@ class LowStockReport extends StatefulWidget {
 
 class _LowStockReportState extends State<LowStockReport> {
   String selectedFilter = 'All';
-  final List<String> filterOptions = ['All', 'Critical (≤2)', 'Low (≤5)', 'Medium (≤10)'];
+  final List<String> filterOptions = [
+    'All',
+    'Critical (≤2)',
+    'Low (≤5)',
+    'Medium (≤10)',
+  ];
   int lowStockThreshold = 5;
 
   @override
@@ -153,15 +158,30 @@ class _LowStockReportState extends State<LowStockReport> {
               future: _getStockStatistics(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const SizedBox.shrink();
-                
+
                 final stats = snapshot.data!;
                 return Row(
                   children: [
-                    _buildStatCard('Critical Items', '${stats['critical']}', Icons.error_outline, true),
+                    _buildStatCard(
+                      'Critical Items',
+                      '${stats['critical']}',
+                      Icons.error_outline,
+                      true,
+                    ),
                     const SizedBox(width: 16),
-                    _buildStatCard('Low Stock', '${stats['low']}', Icons.warning_amber_outlined, false),
+                    _buildStatCard(
+                      'Low Stock',
+                      '${stats['low']}',
+                      Icons.warning_amber_outlined,
+                      false,
+                    ),
                     const SizedBox(width: 16),
-                    _buildStatCard('Total Items', '${stats['total']}', Icons.inventory_2_outlined, false),
+                    _buildStatCard(
+                      'Total Items',
+                      '${stats['total']}',
+                      Icons.inventory_2_outlined,
+                      false,
+                    ),
                   ],
                 );
               },
@@ -172,25 +192,32 @@ class _LowStockReportState extends State<LowStockReport> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, bool isCritical) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    bool isCritical,
+  ) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isCritical ? Colors.red.withOpacity(0.15) : Colors.white.withOpacity(0.15),
+          color: isCritical
+              ? Colors.red.withOpacity(0.15)
+              : Colors.white.withOpacity(0.15),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isCritical 
-              ? Colors.red.withOpacity(0.3) 
-              : Colors.white.withOpacity(0.2)
+            color: isCritical
+                ? Colors.red.withOpacity(0.3)
+                : Colors.white.withOpacity(0.2),
           ),
         ),
         child: Row(
           children: [
             Icon(
-              icon, 
-              color: isCritical ? Colors.red.shade100 : Colors.white, 
-              size: 20
+              icon,
+              color: isCritical ? Colors.red.shade100 : Colors.white,
+              size: 20,
             ),
             const SizedBox(width: 12),
             Column(
@@ -252,10 +279,7 @@ class _LowStockReportState extends State<LowStockReport> {
               const Spacer(),
               Text(
                 'Threshold: ≤$lowStockThreshold',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF64748B),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
               ),
             ],
           ),
@@ -287,7 +311,12 @@ class _LowStockReportState extends State<LowStockReport> {
     );
   }
 
-  Widget _buildLowStockList(BuildContext context, bool isDesktop, bool isTablet, bool isMobile) {
+  Widget _buildLowStockList(
+    BuildContext context,
+    bool isDesktop,
+    bool isTablet,
+    bool isMobile,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -344,7 +373,9 @@ class _LowStockReportState extends State<LowStockReport> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFFF6B35),
+                          ),
                         ),
                         SizedBox(height: 16),
                         Text(
@@ -364,7 +395,11 @@ class _LowStockReportState extends State<LowStockReport> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.check_circle_outline, size: 64, color: Color(0xFF10B981)),
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 64,
+                          color: Color(0xFF10B981),
+                        ),
                         SizedBox(height: 16),
                         Text(
                           'All items are well stocked!',
@@ -398,7 +433,9 @@ class _LowStockReportState extends State<LowStockReport> {
                           colors: [Color(0xFFFEF3C7), Color(0xFFFDE047)],
                         ),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFEAB308).withOpacity(0.3)),
+                        border: Border.all(
+                          color: const Color(0xFFEAB308).withOpacity(0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -408,7 +445,11 @@ class _LowStockReportState extends State<LowStockReport> {
                               color: const Color(0xFFEAB308),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.warning_amber, color: Colors.white, size: 20),
+                            child: const Icon(
+                              Icons.warning_amber,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -426,7 +467,9 @@ class _LowStockReportState extends State<LowStockReport> {
                                 Text(
                                   'Consider restocking soon to avoid stockouts',
                                   style: TextStyle(
-                                    color: const Color(0xFF92400E).withOpacity(0.8),
+                                    color: const Color(
+                                      0xFF92400E,
+                                    ).withOpacity(0.8),
                                     fontSize: 12,
                                   ),
                                 ),
@@ -441,13 +484,16 @@ class _LowStockReportState extends State<LowStockReport> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: lowStockItems.length,
-                    separatorBuilder: (context, index) => const Divider(
-                      height: 1,
-                      color: Color(0xFFF1F5F9),
-                    ),
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
                     itemBuilder: (context, index) {
                       final item = lowStockItems[index];
-                      return _buildStockItemTile(item, isDesktop, isTablet, isMobile);
+                      return _buildStockItemTile(
+                        item,
+                        isDesktop,
+                        isTablet,
+                        isMobile,
+                      );
                     },
                   ),
                 ],
@@ -459,20 +505,25 @@ class _LowStockReportState extends State<LowStockReport> {
     );
   }
 
-  Widget _buildStockItemTile(StockItem item, bool isDesktop, bool isTablet, bool isMobile) {
+  Widget _buildStockItemTile(
+    StockItem item,
+    bool isDesktop,
+    bool isTablet,
+    bool isMobile,
+  ) {
     final isCritical = item.quantity <= 2;
     final isLow = item.quantity <= 5;
-    
-    Color statusColor = isCritical 
-      ? const Color(0xFFDC2626) 
-      : isLow 
-        ? const Color(0xFFEAB308) 
+
+    Color statusColor = isCritical
+        ? const Color(0xFFDC2626)
+        : isLow
+        ? const Color(0xFFEAB308)
         : const Color(0xFFFF6B35);
-        
-    String statusText = isCritical 
-      ? 'CRITICAL' 
-      : isLow 
-        ? 'LOW' 
+
+    String statusText = isCritical
+        ? 'CRITICAL'
+        : isLow
+        ? 'LOW'
         : 'MEDIUM';
 
     return Container(
@@ -485,8 +536,8 @@ class _LowStockReportState extends State<LowStockReport> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: isCritical
-                  ? [const Color(0xFFDC2626), const Color(0xFFB91C1C)]
-                  : [statusColor, statusColor.withOpacity(0.8)],
+                    ? [const Color(0xFFDC2626), const Color(0xFFB91C1C)]
+                    : [statusColor, statusColor.withOpacity(0.8)],
               ),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
@@ -551,10 +602,16 @@ class _LowStockReportState extends State<LowStockReport> {
           Column(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [statusColor.withOpacity(0.1), statusColor.withOpacity(0.2)],
+                    colors: [
+                      statusColor.withOpacity(0.1),
+                      statusColor.withOpacity(0.2),
+                    ],
                   ),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: statusColor.withOpacity(0.3)),
@@ -605,7 +662,9 @@ class _LowStockReportState extends State<LowStockReport> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Items with stock equal to or below this threshold will be flagged as low stock.'),
+            const Text(
+              'Items with stock equal to or below this threshold will be flagged as low stock.',
+            ),
             const SizedBox(height: 16),
             Slider(
               value: lowStockThreshold.toDouble(),
@@ -644,7 +703,9 @@ class _LowStockReportState extends State<LowStockReport> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Restock Items'),
-        content: const Text('This feature will allow you to quickly restock low inventory items. Implementation coming soon!'),
+        content: const Text(
+          'This feature will allow you to quickly restock low inventory items. Implementation coming soon!',
+        ),
         actions: [
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
@@ -658,42 +719,50 @@ class _LowStockReportState extends State<LowStockReport> {
   Future<Map<String, dynamic>> _getStockStatistics() async {
     final lowStockItems = await _getLowStockItems();
     final critical = lowStockItems.where((item) => item.value <= 2).length;
-    final low = lowStockItems.where((item) => item.value <= 5 && item.value > 2).length;
-    
-    return {
-      'critical': critical,
-      'low': low,
-      'total': lowStockItems.length,
-    };
+    final low = lowStockItems
+        .where((item) => item.value <= 5 && item.value > 2)
+        .length;
+
+    return {'critical': critical, 'low': low, 'total': lowStockItems.length};
   }
 
   Future<List<StockItem>> _getFilteredLowStockItems() async {
     final lowStockItems = await _getLowStockItems();
-    
+
     List<MapEntry<String, int>> filteredItems;
-    
+
     switch (selectedFilter) {
       case 'Critical (≤2)':
         filteredItems = lowStockItems.where((item) => item.value <= 2).toList();
         break;
       case 'Low (≤5)':
-        filteredItems = lowStockItems.where((item) => item.value <= 5 && item.value > 2).toList();
+        filteredItems = lowStockItems
+            .where((item) => item.value <= 5 && item.value > 2)
+            .toList();
         break;
       case 'Medium (≤10)':
-        filteredItems = lowStockItems.where((item) => item.value <= 10 && item.value > 5).toList();
+        filteredItems = lowStockItems
+            .where((item) => item.value <= 10 && item.value > 5)
+            .toList();
         break;
       default:
-        filteredItems = lowStockItems.where((item) => item.value <= lowStockThreshold).toList();
+        filteredItems = lowStockItems
+            .where((item) => item.value <= lowStockThreshold)
+            .toList();
     }
 
-    return filteredItems.map((entry) => StockItem(
-      productName: entry.key,
-      quantity: entry.value,
-    )).toList()..sort((a, b) => a.quantity.compareTo(b.quantity));
+    return filteredItems
+        .map(
+          (entry) => StockItem(productName: entry.key, quantity: entry.value),
+        )
+        .toList()
+      ..sort((a, b) => a.quantity.compareTo(b.quantity));
   }
 
   Future<List<MapEntry<String, int>>> _getLowStockItems() async {
-    final stockSnapshot = await FirebaseFirestore.instance.collection('stock').get();
+    final stockSnapshot = await FirebaseFirestore.instance
+        .collection('stock')
+        .get();
     final Map<String, int> currentStock = {};
 
     for (final doc in stockSnapshot.docs) {
@@ -702,7 +771,8 @@ class _LowStockReportState extends State<LowStockReport> {
       final qty = data['qty'] as int;
       final type = data['type'] as String;
 
-      currentStock[product] = (currentStock[product] ?? 0) + (type == 'IN' ? qty : -qty);
+      currentStock[product] =
+          (currentStock[product] ?? 0) + (type == 'IN' ? qty : -qty);
     }
 
     return currentStock.entries.where((entry) => entry.value <= 20).toList();
@@ -713,8 +783,5 @@ class StockItem {
   final String productName;
   final int quantity;
 
-  StockItem({
-    required this.productName,
-    required this.quantity,
-  });
+  StockItem({required this.productName, required this.quantity});
 }

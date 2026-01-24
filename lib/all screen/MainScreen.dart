@@ -1,37 +1,30 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:dimple_erp/AdminDashboard/admin.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sizer/sizer.dart';
-
-// SCREENS
 import 'package:dimple_erp/ready stock/DashboardScreen.dart';
 import 'package:dimple_erp/all screen/SalesDashboard.dart';
 import 'package:dimple_erp/PRODUCTION/DashboardScreen.dart';
 import 'package:dimple_erp/all screen/PurchaseOrderScreen.dart';
 import 'package:dimple_erp/all screen/QualityCheckScreen.dart';
 import 'package:dimple_erp/all screen/MOMScreen.dart';
-import 'package:dimple_erp/all screen/master_screen.dart';
 import 'package:dimple_erp/ready stock/LoginScreen.dart';
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
-
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
-
 class _MainScreenState extends State<MainScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   TabController? _tabController;
-  Timer? _sessionTimer;
 
   String _role = '';
   Map<String, dynamic> _permissions = {};
   bool _loading = true;
 
-  static const int sessionDurationMinutes = 60;
 
   // ================= INIT =================
   @override
@@ -39,11 +32,7 @@ class _MainScreenState extends State<MainScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadUserData();
-    _checkSession();
-    _sessionTimer = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) => _checkSession(),
-    );
+   
   }
 
   // ================= LOAD ROLE + PERMISSIONS =================
@@ -105,58 +94,33 @@ class _MainScreenState extends State<MainScreen>
       if (_permissions['purchase'] == true) PurchaseOrderScreen(),
       if (_permissions['quality'] == true) QualityCheckScreen(),
       if (_permissions['mom'] == true) MinutesOfMeetingScreen(),
-      if (_permissions['master'] == true) MasterDashboardScreen(),
+      if (_permissions['master'] == true) AdminDashboardScreen(),
     ];
   }
 
-  // ================= SESSION CHECK =================
-  Future<void> _checkSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final loginTime = prefs.getInt('loginTime');
+  
 
-    if (loginTime == null) {
-      _logout();
-      return;
-    }
+ // ================= LOGOUT =================
+Future<void> _logout() async {
+  await FirebaseAuth.instance.signOut();
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.clear();
 
-    final currentTime = DateTime.now().millisecondsSinceEpoch;
-    final elapsedMinutes = (currentTime - loginTime) / (1000 * 60);
+  if (!mounted) return;
 
-    if (elapsedMinutes >= sessionDurationMinutes) {
-      _logout(sessionExpired: true);
-    }
-  }
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(builder: (_) => const LoginScreen()),
+    (_) => false,
+  );
+}
 
-  // ================= LOGOUT =================
-  Future<void> _logout({bool sessionExpired = false}) async {
-    await FirebaseAuth.instance.signOut();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-
-    if (!mounted) return;
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (_) => false,
-    );
-
-    if (sessionExpired) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Session expired. Please login again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 
   // ================= DISPOSE =================
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tabController?.dispose();
-    _sessionTimer?.cancel();
     super.dispose();
   }
 

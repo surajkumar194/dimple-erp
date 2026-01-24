@@ -98,7 +98,6 @@ class _QualityInspectionScreenState extends State<QualityInspectionScreen> {
                       'inspector': inspectorController.text.trim(),
                       'result': result,
                       'remarks': remarksController.text.trim(),
-                      // Use server timestamps so ordering is consistent across clients
                       'inspectionDate': FieldValue.serverTimestamp(),
                       'createdAt': FieldValue.serverTimestamp(),
                     });
@@ -124,7 +123,6 @@ class _QualityInspectionScreenState extends State<QualityInspectionScreen> {
       ),
     );
 
-    // Controllers are local to the dialog; no need to dispose manually here.
   }
 
   String _formatTimestamp(Timestamp? ts) {

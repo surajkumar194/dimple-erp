@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -38,11 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final prefs = await SharedPreferences.getInstance();
 
-    // ⏱ session time
-    await prefs.setInt(
-      'loginTime',
-      DateTime.now().millisecondsSinceEpoch,
-    );
+  
 
     // 🔥 FETCH USER FROM FIRESTORE
     final doc = await FirebaseFirestore.instance
@@ -258,7 +253,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
 
                             SizedBox(height: 3.h),
-
                             Text(
                               "Dimple Packaging Pvt. Ltd.",
                               style: TextStyle(
@@ -269,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             SizedBox(height: 1.h),
                             Text(
-                              "© 2025 All Rights Reserved",
+                              "© 2026 All Rights Reserved",
                               style: TextStyle(
                                 fontSize: 11.sp,
                                 color: Colors.grey.shade500,
@@ -289,7 +283,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ================= DISPOSE =================
   @override
   void dispose() {
     _emailController.dispose();

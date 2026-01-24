@@ -176,11 +176,8 @@ class _ProductListState extends State<ProductList> {
             ],
           ),
           SizedBox(height: 24),
-          
-          // Search & Filter Row
-          Row(
+                    Row(
             children: [
-              // Search Field
               Expanded(
                 flex: 3,
                 child: Container(
@@ -253,7 +250,6 @@ class _ProductListState extends State<ProductList> {
     );
   }
 
-  // ================= HELPERS =================
   void _clearForm() {
     skuCtrl.clear();
     designNoCtrl.clear();
@@ -282,7 +278,6 @@ class _ProductListState extends State<ProductList> {
     );
   }
 
-  // ================= CREATE / UPDATE =================
   Future<void> addProduct() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -385,7 +380,6 @@ class _ProductListState extends State<ProductList> {
     }
   }
 
-  // ================= IMAGE =================
   Future<void> _pickAndUploadImage() async {
     try {
       final XFile? picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
@@ -514,7 +508,6 @@ class _ProductListState extends State<ProductList> {
     );
   }
 
-  // ================= IMPORT (with import-stage selection) =================
   Future<void> previewAndImportExcel({bool alsoUploadToStorage = false}) async {
     final res = await FilePicker.platform.pickFiles(withData: true, allowMultiple: false, type: FileType.custom, allowedExtensions: ['xlsx', 'xls']);
     if (res == null || res.files.isEmpty) return;
@@ -593,8 +586,7 @@ class _ProductListState extends State<ProductList> {
         return;
       }
 
-      // ---------- NEW: Ask user how to assign Stage ----------
-      // Options: Use Excel Stage (if present) OR Override with specific Stage
+
       String importChoice = 'use_excel'; // 'use_excel' or 'override'
       String overrideStage = _stages.first;
 
@@ -664,7 +656,6 @@ class _ProductListState extends State<ProductList> {
           row['stage'] = overrideStage;
         }
       } else {
-        // use_excel: ensure blank stages default to Production (already set above)
         for (final row in parsed) {
           if ((row['stage'] ?? '').toString().trim().isEmpty) row['stage'] = 'Production';
         }

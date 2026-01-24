@@ -1,6 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dimple_erp/all%20screen/EditSalesOrderScreen.dart';
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'package:sizer/sizer.dart';
 
 class SelectSalesOrderTab extends StatefulWidget {
   const SelectSalesOrderTab({super.key});
@@ -19,6 +25,363 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
         .limit(1)
         .get();
     return snapshot.docs.isNotEmpty;
+  }
+
+  // Helper method to load network images for PDF
+  Future<pw.ImageProvider?> _loadNetworkImage(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        return pw.MemoryImage(response.bodyBytes);
+      }
+    } catch (e) {
+      print('Error loading image: $e');
+    }
+    return null;
+  }
+
+  Future<String?> _getJobNoFromOrder(String orderId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('jobCards')
+        .where('linkedOrderId', isEqualTo: orderId)
+        .limit(1)
+        .get();
+
+    if (snap.docs.isNotEmpty) {
+      return snap.docs.first.data()['jobNo'];
+    }
+    return null;
+  }
+
+
+  Future<void> _generateAllProductsPDF(
+    String orderId,
+    Map<String, dynamic> orderData,
+  ) async {
+    final pdf = pw.Document();
+    final jobNo = await _getJobNoFromOrder(orderId) ?? 'N/A'; // ✅ ADD THIS
+    final notes = orderData['notes'] ?? '';
+    final pageWidth = PdfPageFormat.a4.availableWidth;
+
+    // Auto decide columns
+    int columns = pageWidth > 400 ? 3 : 2;
+
+    final imageSize = (pageWidth - ((columns - 1) * 10)) / columns;
+    final products = orderData['products'] as List? ?? [];
+    final orderDate =
+        (orderData['orderDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final deliveryDate =
+        (orderData['deliveryDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final customerName = orderData['customerName'] ?? '';
+    final companyName = orderData['companyName'] ?? '';
+
+    final salesPerson = orderData['salesPerson'] ?? '';
+
+    for (int i = 0; i < products.length; i++) {
+      final product = products[i];
+
+      final dplNo = product['dplNo'] ?? '$jobNo-${i + 1}'; // ✅ CORRECT PLACE
+
+      final sections = product['sections'] as Map<String, dynamic>? ?? {};
+        final extraSections = product['customExtraSections'] as List? ?? [];
+
+     final trayDetail = sections['trayDetail'] ?? sections['tray'] ?? '';
+final salophinDetail = sections['salophinDetail'] ?? sections['salophin'] ?? '';
+final boxCoverDetail = sections['boxCoverDetail'] ?? sections['boxCover'] ?? '';
+final innerDetail = sections['innerDetail'] ?? sections['inner'] ?? '';
+final bottomDetail = sections['bottomDetail'] ?? sections['bottom'] ?? '';
+final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
+
+      final images = product['images'] as List? ?? [];
+
+      // Load all images first
+      List<pw.ImageProvider> loadedImages = [];
+      for (final url in images) {
+        if (url is String && url.isNotEmpty) {
+          final img = await _loadNetworkImage(url);
+          if (img != null) loadedImages.add(img);
+        }
+      }
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4.copyWith(
+            marginTop: 1,
+            marginBottom: 5,
+            marginLeft: 1,
+            marginRight: 1,
+          ),
+          build: (context) {
+            return pw.Container(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: <pw.Widget>[
+                  pw.Text(
+                    'All Rights Reserved Dimple Packaging Pvt. Ltd.',
+                    style: pw.TextStyle(fontSize: 8, color: PdfColors.green),
+                  ),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'Job No: $jobNo',
+                            style: pw.TextStyle(
+                              fontSize: 14,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.Text(
+                            'DPL: $dplNo', // 🔥 CLEAR IDENTIFICATION
+                            style: pw.TextStyle(
+                              fontSize: 12,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.Text(
+                            "Order Location: ${orderData['unit'] ?? 'N/A'}",
+                            style: pw.TextStyle(
+                              fontSize: 14,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text(
+                            'DATE - ${DateFormat('dd-MM-yyyy').format(orderDate)}',
+                            style: const pw.TextStyle(fontSize: 10),
+                          ),
+                          pw.SizedBox(height: 4),
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: pw.BoxDecoration(
+                              color: PdfColors.grey300,
+                              borderRadius: pw.BorderRadius.circular(4),
+                            ),
+                            child: pw.Column(
+                              children: [
+                                pw.Text(
+                                  'DATE OF SUPPLY',
+                                  style: pw.TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                                pw.Text(
+                                  DateFormat('dd-MM-yyyy').format(deliveryDate),
+                                  style: const pw.TextStyle(fontSize: 10),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  pw.SizedBox(height: 5),
+
+                  // Customer Name Header
+                  pw.Container(
+                    width: double.infinity,
+                    padding: const pw.EdgeInsets.all(8),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.grey300,
+                      borderRadius: pw.BorderRadius.circular(4),
+                    ),
+                    child: pw.Center(
+                      child: pw.Text(
+                        companyName.toString().trim().isNotEmpty
+                            ? '$customerName ($companyName)'
+                            : customerName,
+                        style: pw.TextStyle(
+                          fontSize: 14,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(height: 1),
+
+                  // Product Details Table
+                  pw.Table(
+                    border: pw.TableBorder.all(color: PdfColors.grey600),
+                    children: [
+                      _buildPdfRow('Product', product['productName'] ?? ''),
+                      _buildPdfRow(
+                        'Category',
+                        product['productCategory'] ?? '',
+                      ),
+                      _buildPdfRow(
+                        'Dimensions (L×H×W)',
+                        '${product['length'] ?? ''} × ${product['height'] ?? ''} × ${product['width'] ?? ''}',
+                      ),
+                      _buildPdfRow(
+                        'Qnty / Remark',
+                        '${product['quantity'] ?? ''}  |  ${product['remarks'] ?? ''}',
+                      ),
+                      _buildPdfRow('Assign Person', ''),
+                       if (trayDetail.toString().trim().isNotEmpty)
+      _buildPdfRow('Tray', trayDetail),
+
+    if (salophinDetail.toString().trim().isNotEmpty)
+      _buildPdfRow('Salophin', salophinDetail),
+
+    if (boxCoverDetail.toString().trim().isNotEmpty)
+      _buildPdfRow('Box Cover', boxCoverDetail),
+
+    if (innerDetail.toString().trim().isNotEmpty)
+      _buildPdfRow('Inner', innerDetail),
+
+    if (bottomDetail.toString().trim().isNotEmpty)
+      _buildPdfRow('Bottom', bottomDetail),
+
+    if (dieDetail.toString().trim().isNotEmpty)
+      _buildPdfRow('Die', dieDetail),
+
+    // ===== CUSTOM EXTRA =====
+    if (extraSections.isNotEmpty)
+      ...extraSections
+          .map<pw.TableRow?>((sec) {
+            final detail = sec['detail'] ?? sec['details'] ?? '';
+            if (detail.toString().trim().isEmpty) return null;
+
+            return _buildPdfRow(
+              sec['title'] ?? 'Extra',
+              detail,
+            );
+          })
+          .whereType<pw.TableRow>()
+          .toList(),
+
+
+
+                      _buildPdfRow('Conerned Person', salesPerson),
+                    ],
+                  ),
+                  if (notes.toString().trim().isNotEmpty) ...[
+                    pw.SizedBox(height: 1),
+                    pw.Container(
+                      width: double.infinity,
+                      padding: const pw.EdgeInsets.all(2),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.white,
+                        //   borderRadius: pw.BorderRadius.circular(6),
+                        border: pw.Border.all(color: PdfColors.grey300),
+                      ),
+                      child: pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text(
+                            'Additional Notes:',
+                            style: pw.TextStyle(
+                              fontSize: 12,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.SizedBox(height: 0.1),
+                          pw.Text(
+                            notes,
+                            style: const pw.TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  pw.SizedBox(height: 3),
+
+                  if (loadedImages.isNotEmpty)
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'Product Images:',
+                            style: pw.TextStyle(
+                              fontSize: 10,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.SizedBox(height: 4),
+
+                          // 🔥 Images take remaining space
+                          pw.Expanded(
+                            child: pw.GridView(
+                              crossAxisCount: loadedImages.length == 1
+                                  ? 1
+                                  : loadedImages.length <= 4
+                                  ? 2
+                                  : 3,
+                              mainAxisSpacing: 8,
+                              crossAxisSpacing: 8,
+                              childAspectRatio: 1,
+                              children: loadedImages.map((img) {
+                                return pw.Image(img, fit: pw.BoxFit.contain);
+                              }).toList(),
+                            ),
+                          ),
+
+                          pw.SizedBox(height: 4),
+
+                          // ✅ Footer safely at bottom
+                          pw.Center(
+                            child: pw.Text(
+                              'All Rights Reserved Dimple Packaging Pvt. Ltd.',
+                              style: pw.TextStyle(
+                                fontSize: 8,
+                                color: PdfColors.grey600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+  }
+
+  bool _hasExtraInstructions(Map<String, dynamic> sections) {
+    return sections['otherDetail']?.toString().trim().isNotEmpty == true;
+  }
+
+  String _getExtraInstructions(Map<String, dynamic> sections) {
+    return '${sections['otherDetail']}'
+        '  |  Qty: ${sections['otherQty'] ?? ''}'
+        '  |  Price: ${sections['otherPrice'] ?? ''}';
+  }
+
+  pw.TableRow _buildPdfRow(String label, String value) {
+    return pw.TableRow(
+      children: [
+        pw.Container(
+          padding: const pw.EdgeInsets.all(8),
+          color: PdfColors.grey200,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(8),
+          child: pw.Text(value, style: const pw.TextStyle(fontSize: 10)),
+        ),
+      ],
+    );
   }
 
   Future<void> _generateJobCardFromOrder(
@@ -64,22 +427,29 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
         jobNo = 'DPL$next';
       });
 
-      // ✅ Extract all products with their details
       List products = order['products'] ?? [];
       List<Map<String, dynamic>> jobCardProducts = [];
 
-      for (var product in products) {
+      for (int i = 0; i < products.length; i++) {
+        final product = products[i];
+
         jobCardProducts.add({
-          'productName': product['productName'] ?? '',
+          'dplIndex': i + 1, // 🔥 THIS IS KEY
+          'dplNo': '$jobNo-${i + 1}', // optional but recommended
+          'productName': product['productName'] ?? '', // ✅ ADD THIS
+          'productCategory': product['productCategory'] ?? '',
+          'length': product['length'] ?? '',
+          'height': product['height'] ?? '',
+          'width': product['width'] ?? '',
           'quantity': product['quantity'] ?? 0,
-          'size': product['size'] ?? '',
-            'price': product['price'] ?? 0, // ✅ ADD
+          'price': product['price'] ?? 0,
           'remarks': product['remarks'] ?? '',
           'images': List<String>.from(product['images'] ?? []),
+          'sections': product['sections'] ?? {},
+          'customExtraSections': product['customExtraSections'] ?? [],
         });
       }
 
-      // ✅ Process partial dispatches
       List<Map<String, dynamic>> partialDispatchesData = [];
       final partialDispatches = order['partialDispatches'] as List? ?? [];
       for (var dispatch in partialDispatches) {
@@ -98,7 +468,6 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
         'customerName': order['customerName'] ?? '',
         'salesPerson': order['salesPerson'] ?? '',
         'products': jobCardProducts,
-        'size': products.isNotEmpty ? products[0]['size'] ?? '' : '',
         'partialDispatches': partialDispatchesData,
         'extraInstruction': order['notes'] ?? '',
         'status': 'Pending',
@@ -151,7 +520,6 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
     String orderId,
     Map<String, dynamic> orderData,
   ) async {
-    // Navigate to edit screen
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -160,10 +528,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
       ),
     );
 
-    // After returning from edit screen, check if we should create job card
     final jobCardExists = await _checkIfJobCardExists(orderId);
     if (!jobCardExists && mounted) {
-      // Ask user if they want to create job card now
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -199,7 +565,6 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                // Fetch updated order data
                 final updatedDoc = await FirebaseFirestore.instance
                     .collection('orders')
                     .doc(orderId)
@@ -266,7 +631,6 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
       ),
       child: Column(
         children: [
-          // Enhanced Search Bar
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -321,7 +685,6 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
             ),
           ),
 
-          // Orders List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -476,7 +839,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          'Sales: ${data['salesPerson'] ?? 'Unknown'}',
+                                          'Sales Person: ${data['salesPerson'] ?? 'Unknown'}',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w500,
                                             fontSize: 15,
@@ -485,7 +848,22 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                       ],
                                     ),
                                   ),
-                                  if (jobCardExists)
+                                  if (jobCardExists) ...[
+                                    // PDF Button
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.picture_as_pdf,
+                                        color: Colors.red,
+                                        size: 16.sp,
+                                      ),
+                                      onPressed: () =>
+                                          _generateAllProductsPDF(doc.id, data),
+                                      tooltip: 'Generate PDF',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    ),
+                                    SizedBox(width: 0.2.w),
+                                    // Job Card Badge
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 10,
@@ -507,26 +885,27 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                           ),
                                         ],
                                       ),
-                                      child: const Row(
+                                      child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Icon(
                                             Icons.check_circle,
                                             color: Colors.white,
-                                            size: 12,
+                                            size: 12.sp,
                                           ),
-                                          SizedBox(width: 4),
+                                          SizedBox(width: 0.2.w),
                                           Text(
                                             'Job Card',
                                             style: TextStyle(
                                               color: Colors.white,
-                                              fontSize: 10,
+                                              fontSize: 9.sp,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
+                                  ],
                                 ],
                               ),
                               subtitle: Padding(
@@ -660,8 +1039,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                                     children: [
                                                       TextSpan(
                                                         text:
-                                                            p['productName'] ??
-                                                            'Product',
+                                                            '${p['productName'] ?? 'Product'}   ${p['productCategory'] ?? ''}',
+
                                                         style: TextStyle(
                                                           fontSize: 16,
                                                           fontWeight:
@@ -696,7 +1075,6 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                 ),
                                 const SizedBox(height: 16),
 
-                                // Single button for Edit & Create Job Card
                                 SizedBox(
                                   width: double.infinity,
                                   child: ElevatedButton.icon(

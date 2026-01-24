@@ -5,7 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:sizer/sizer.dart'; // ✅ Add this line
+import 'package:sizer/sizer.dart';
 
 class CustomerAllOrderScreen extends StatefulWidget {
   const CustomerAllOrderScreen({super.key});
@@ -19,6 +19,42 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
   String searchQuery = '';
   String filterStatus = 'All';
   late AnimationController _animationController;
+  String selectedDateFilter = 'All';
+  String selectedUnitFilter = 'All';
+
+  final List<String> dateFilters = [
+    'All',
+    'Today',
+    'Last 2 Days',
+    'Last 7 Days',
+  ];
+
+  final List<String> unitFilters = [
+    'All',
+    'Unit 1',
+    'Unit 2',
+    'Meena Bazar',
+    'College Road',
+  ];
+  bool _matchDateFilter(DateTime orderDate) {
+    final now = DateTime.now();
+
+    if (selectedDateFilter == 'Today') {
+      return orderDate.year == now.year &&
+          orderDate.month == now.month &&
+          orderDate.day == now.day;
+    }
+
+    if (selectedDateFilter == 'Last 2 Days') {
+      return orderDate.isAfter(now.subtract(const Duration(days: 2)));
+    }
+
+    if (selectedDateFilter == 'Last 7 Days') {
+      return orderDate.isAfter(now.subtract(const Duration(days: 7)));
+    }
+
+    return true; // All
+  }
 
   @override
   void initState() {
@@ -76,17 +112,14 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
     DateTime orderDate = (order['orderDate'] as Timestamp).toDate();
     DateTime deliveryDate = (order['deliveryDate'] as Timestamp).toDate();
     String status = order['status'] ?? 'Pending';
-    double subtotal = 0;
+    final double subtotal = (order['totalAmount'] ?? 0).toDouble();
 
-    for (var p in products) {
-      final qty = double.tryParse(p['quantity']?.toString() ?? '0') ?? 0;
-      final price = double.tryParse(p['price']?.toString() ?? '0') ?? 0;
-      subtotal += qty * price;
-    }
+    final double gstPercent = (order['gstPercent'] ?? 0).toDouble();
 
-    double gstPercent = (order['gstPercent'] ?? 0).toDouble();
-    double gstAmount = subtotal * gstPercent / 100;
-    double totalAmount = (order['grandTotal'] ?? (subtotal + gstAmount))
+    final double gstAmount =
+        (order['gstAmount'] ?? (subtotal * gstPercent / 100)).toDouble();
+
+    final double totalAmount = (order['grandTotal'] ?? (subtotal + gstAmount))
         .toDouble();
 
     // ✅ Build the PDF
@@ -137,7 +170,7 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
             pw.Divider(thickness: 1),
             pw.Center(
               child: pw.Text(
-                'SALES ORDER / Proforma Invoice',
+                'SALES ORDER',
                 style: pw.TextStyle(
                   fontSize: 22,
                   fontWeight: pw.FontWeight.bold,
@@ -145,6 +178,11 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                 ),
               ),
             ),
+            pw.Text(
+              'Sales Order: ${order['salesOrderNo'] ?? orderId}',
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+            ),
+
             pw.SizedBox(height: 10),
             pw.Container(
               padding: const pw.EdgeInsets.all(15),
@@ -220,10 +258,10 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                             'Order Location',
                             order['unit'] ?? 'N/A',
                           ),
-                          _buildPdfRow(
-                            'Product Category',
-                            order['productCategory'] ?? 'N/A',
-                          ),
+                          // _buildPdfRow(
+                          //   'Product Category',
+                          //   order['productCategory'] ?? 'N/A',
+                          // ),
                         ],
                       ),
                     ),
@@ -233,7 +271,6 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
             ),
 
             pw.SizedBox(height: 10),
-            // ---------------- PRODUCTS ----------------
             pw.Text(
               'PRODUCT DETAILS',
               style: pw.TextStyle(
@@ -283,7 +320,6 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                       _buildTableCell(
                         'Rs ${(double.tryParse(p['price']?.toString() ?? '0') ?? 0).toStringAsFixed(2)}',
                       ),
-                      // IMAGE COLUMN
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(4),
                         child: imgs.isNotEmpty
@@ -292,9 +328,9 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                                 runSpacing: 4,
                                 children: imgs.map((img) {
                                   return pw.Container(
-                                    width: 65,
-                                    height: 65,
-                                      padding: const pw.EdgeInsets.all(4),
+                                    width: 100,
+                                    height: 100,
+                                    padding: const pw.EdgeInsets.all(4),
 
                                     decoration: pw.BoxDecoration(
                                       border: pw.Border.all(
@@ -302,14 +338,16 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                                         width: 0.5,
                                       ),
                                     ),
-                                    child: pw.Image(img, fit: pw.BoxFit.contain),
+                                    child: pw.Image(
+                                      img,
+                                      fit: pw.BoxFit.contain,
+                                    ),
                                   );
                                 }).toList(),
                               )
                             : pw.Text('—', textAlign: pw.TextAlign.center),
                       ),
 
-                      // ✅ REMARKS COLUMN
                       _buildTableCell(
                         (p['remarks'] != null &&
                                 p['remarks'].toString().isNotEmpty)
@@ -414,9 +452,9 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
             pw.SizedBox(height: 20),
             pw.Center(
               child: pw.Text(
-                'Thank you for your business!',
+                'All Rights Reserved Dimple Packaging Pvt. Ltd.',
                 style: pw.TextStyle(
-                  fontSize: 12,
+                  fontSize: 9.sp,
                   fontStyle: pw.FontStyle.italic,
                   color: PdfColors.grey700,
                 ),
@@ -470,16 +508,17 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
         slivers: [
           // App Bar with Gradient
           SliverAppBar(
-            expandedHeight: 200,
+            expandedHeight: 20,
             floating: false,
             pinned: true,
             backgroundColor: const Color(0xFF1976D2),
             flexibleSpace: FlexibleSpaceBar(
-              title: const Text(
+              title: Text(
                 'All Orders',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
+                  fontSize: 14.sp,
                 ),
               ),
               background: Container(
@@ -522,10 +561,9 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
             ),
           ),
 
-          // Search & Filter Section
           SliverToBoxAdapter(
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
@@ -542,7 +580,7 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                   Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFFF5F7FA),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFE0E0E0)),
                     ),
                     child: TextField(
@@ -568,8 +606,8 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                             : null,
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
+                          horizontal: 14,
+                          vertical: 12,
                         ),
                       ),
                       onChanged: (value) {
@@ -579,28 +617,99 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                       },
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 7),
 
-                  // Status Filter Chips
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildFilterChip('All', Icons.list_alt, null),
-                        _buildFilterChip('Pending', Icons.pending, Colors.blue),
-                        _buildFilterChip(
-                          'Processing',
-                          Icons.sync,
-                          Colors.orange,
+                  Row(
+                    children: [
+                      // 🔹 UNIT DROPDOWN
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          height: 42,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: selectedUnitFilter,
+                              isExpanded: true,
+                              icon: const Icon(Icons.keyboard_arrow_down),
+                              items: unitFilters.map((u) {
+                                return DropdownMenuItem(
+                                  value: u,
+                                  child: Text(u),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() => selectedUnitFilter = value!);
+                              },
+                            ),
+                          ),
                         ),
-                        _buildFilterChip(
-                          'Completed',
-                          Icons.check_circle,
-                          Colors.green,
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      // 🔹 DATE DROPDOWN
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          height: 42,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: selectedDateFilter,
+                              isExpanded: true,
+                              icon: const Icon(Icons.keyboard_arrow_down),
+                              items: dateFilters.map((d) {
+                                return DropdownMenuItem(
+                                  value: d,
+                                  child: Text(d),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() => selectedDateFilter = value!);
+                              },
+                            ),
+                          ),
                         ),
-                        _buildFilterChip('Cancelled', Icons.cancel, Colors.red),
-                      ],
-                    ),
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      // 🔹 CLEAR FILTER
+                      Container(
+                        height: 42,
+                        width: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            size: 18,
+                            color: Colors.red,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              selectedUnitFilter = 'All';
+                              selectedDateFilter = 'All';
+                              filterStatus = 'All';
+                            });
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -688,13 +797,19 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                 }
 
                 var orders = snapshot.data!.docs.where((doc) {
-                  var data = doc.data() as Map<String, dynamic>;
-                  String customerName =
-                      data['customerName']?.toString().toLowerCase() ?? '';
-                  List products = data['products'] ?? [];
-                  String status = data['status']?.toString() ?? 'Pending';
+                  final data = doc.data() as Map<String, dynamic>;
 
-                  bool matchesSearch =
+                  final customerName =
+                      data['customerName']?.toString().toLowerCase() ?? '';
+                  final List products = data['products'] ?? [];
+                  final String status = data['status'] ?? 'Pending';
+                  final String unit = data['unit'] ?? '';
+
+                  final DateTime orderDate = (data['orderDate'] as Timestamp)
+                      .toDate();
+
+                  // 🔍 SEARCH
+                  final matchesSearch =
                       customerName.contains(searchQuery) ||
                       products.any(
                         (p) =>
@@ -704,10 +819,21 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                             false,
                       );
 
-                  bool matchesFilter =
+                  // 🔹 STATUS
+                  final matchesStatus =
                       filterStatus == 'All' || status == filterStatus;
 
-                  return matchesSearch && matchesFilter;
+                  // 🔹 DATE
+                  final matchesDate = _matchDateFilter(orderDate);
+
+                  // 🔹 UNIT
+                  final matchesUnit =
+                      selectedUnitFilter == 'All' || unit == selectedUnitFilter;
+
+                  return matchesSearch &&
+                      matchesStatus &&
+                      matchesDate &&
+                      matchesUnit;
                 }).toList();
 
                 if (orders.isEmpty) {
@@ -879,6 +1005,15 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
+                            order['salesOrderNo'] ?? orderId,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blueGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
                             order['customerName'] ?? 'N/A',
                             style: const TextStyle(
                               fontSize: 18,
@@ -910,14 +1045,24 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(statusIcon, size: 16, color: statusColor),
-                          const SizedBox(width: 6),
+                          // PDF Button in Card
+                          InkWell(
+                            onTap: () => _generatePDF(context, order, orderId),
+                            child: Icon(
+                              Icons.picture_as_pdf,
+                              color: Colors.red,
+                              size: 16.sp,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(statusIcon, size: 11.sp, color: statusColor),
+                          SizedBox(width: 0.2.w),
                           Text(
                             status,
                             style: TextStyle(
                               color: statusColor,
                               fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                              fontSize: 10.sp,
                             ),
                           ),
                         ],
@@ -926,7 +1071,7 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                   ],
                 ),
 
-                const SizedBox(height: 16),
+                SizedBox(height: 1.h),
 
                 // Sales Person
                 if (order['salesPerson'] != null)
@@ -1136,23 +1281,6 @@ class _CustomerAllOrderScreenState extends State<CustomerAllOrderScreen>
                               color: Colors.white,
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // PDF Button in Card
-                          InkWell(
-                            onTap: () => _generatePDF(context, order, orderId),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.picture_as_pdf,
-                                color: Colors.white,
-                                size: 20,
-                              ),
                             ),
                           ),
                         ],

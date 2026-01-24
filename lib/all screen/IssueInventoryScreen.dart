@@ -7,7 +7,9 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+
 import 'package:printing/printing.dart';
+import 'package:sizer/sizer.dart';
 
 class IssueInventoryScreen extends StatefulWidget {
   const IssueInventoryScreen({super.key});
@@ -19,8 +21,8 @@ class IssueInventoryScreen extends StatefulWidget {
 class _IssueInventoryScreenState extends State<IssueInventoryScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _searchController = TextEditingController();
-String? currentUserDept;
-bool isUserLoaded = false;
+  String? currentUserDept;
+  bool isUserLoaded = false;
   bool _isLoading = false;
   List<Map<String, dynamic>> jobCards = [];
   List<Map<String, dynamic>> filteredCards = [];
@@ -64,13 +66,13 @@ bool isUserLoaded = false;
     'Dispatch': const Color(0xFF00695C), // Dark Teal
   };
 
-@override
-void initState() {
-  super.initState();
-  _loadCurrentUserDept(); // 🔥 YAHI SET HOTA HAI
-  _loadJobCards();
-  _searchController.addListener(_applyFilters);
-}
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentUserDept(); // 🔥 YAHI SET HOTA HAI
+    _loadJobCards();
+    _searchController.addListener(_applyFilters);
+  }
 
   @override
   void dispose() {
@@ -78,23 +80,23 @@ void initState() {
     super.dispose();
   }
 
-Future<void> _loadCurrentUserDept() async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;
+  Future<void> _loadCurrentUserDept() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-  final doc = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(user.uid)
-      .get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
 
-  if (doc.exists) {
-    currentUserDept = doc['department'];
+    if (doc.exists) {
+      currentUserDept = doc['department'];
+    }
+
+    setState(() {
+      isUserLoaded = true;
+    });
   }
-
-  setState(() {
-    isUserLoaded = true;
-  });
-}
 
   Widget _buildSubDepartmentTile({
     required String title,
@@ -166,9 +168,9 @@ Future<void> _loadCurrentUserDept() async {
 
   Widget _buildJobCard(Map<String, dynamic> job) {
     final jobNo = job['jobNo'] ?? '';
-    final customer = job['customer'] ?? 'N/A';
+    final customer = job['customerName'] ?? job['customer'] ?? 'N/A';
     final salesPerson = job['salesPerson'] ?? 'N/A';
-    final size = job['size'] ?? 'N/A';
+    //final size = job['size'] ?? 'N/A';
 
     final orderDate = job['createdAt'] is Timestamp
         ? DateFormat(
@@ -239,7 +241,7 @@ Future<void> _loadCurrentUserDept() async {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _rowText('Sales Person', salesPerson),
-              _rowText('Size', size),
+              // _rowText('Size', size),
               _rowText('Total Quantity', '$totalQuantity pcs'),
               _rowText('Order Date', orderDate),
             ],
@@ -273,7 +275,7 @@ Future<void> _loadCurrentUserDept() async {
                     final productIndex = entry.key;
                     final p = entry.value;
 
-final productName = p['productName'] ?? 'N/A';
+                    final productName = p['productName'] ?? 'N/A';
                     final qty = p['quantity']?.toString() ?? '0';
                     final images = p['images'] as List<dynamic>? ?? [];
 
@@ -590,154 +592,156 @@ final productName = p['productName'] ?? 'N/A';
     );
   }
 
-Widget _buildDepartmentTile({
-  required int index,
-  required String deptName,
-  required Color deptColor,
-  required bool isCompleted,
-  required String jobId,
-  required String currentQty,
-  required String totalQty,
-  required String currentRemark,
-  required String lastDispatchedDept,
-}) {
-  // 🔥 YAHI PE SET HOTA HAI PERMISSION
-final bool canEdit =
-    currentUserDept == deptName || currentUserDept == 'admin';
+  Widget _buildDepartmentTile({
+    required int index,
+    required String deptName,
+    required Color deptColor,
+    required bool isCompleted,
+    required String jobId,
+    required String currentQty,
+    required String totalQty,
+    required String currentRemark,
+    required String lastDispatchedDept,
+  }) {
+    // 🔥 YAHI PE SET HOTA HAI PERMISSION
+    final bool canEdit =
+        currentUserDept == deptName || currentUserDept == 'admin';
 
-  return GestureDetector(
-    onTap: canEdit
-        ? () => _showDepartmentDialog(
+    return GestureDetector(
+      onTap: canEdit
+          ? () => _showDepartmentDialog(
               jobId,
               deptName,
               currentQty,
               totalQty,
               currentRemark,
             )
-        : () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('⛔ You are not allowed to edit this department'),
-                backgroundColor: Colors.red,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          },
-    child: Opacity(
-      opacity: canEdit ? 1.0 : 0.4, // 🔥 GREY EFFECT
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isCompleted ? deptColor.withOpacity(0.15) : Colors.white,
-          border: Border.all(color: deptColor, width: isCompleted ? 2 : 1.5),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: isCompleted
-              ? [
-                  BoxShadow(
-                    color: deptColor.withOpacity(0.3),
-                    blurRadius: 8,
-                    spreadRadius: 2,
+          : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    '⛔ You are not allowed to edit this department',
                   ),
-                ]
-              : [],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [deptColor, deptColor.withOpacity(0.7)],
+                  backgroundColor: Colors.red,
+                  duration: Duration(seconds: 2),
                 ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  index.toString(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+              );
+            },
+      child: Opacity(
+        opacity: canEdit ? 1.0 : 0.4, // 🔥 GREY EFFECT
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isCompleted ? deptColor.withOpacity(0.15) : Colors.white,
+            border: Border.all(color: deptColor, width: isCompleted ? 2 : 1.5),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: isCompleted
+                ? [
+                    BoxShadow(
+                      color: deptColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : [],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [deptColor, deptColor.withOpacity(0.7)],
                   ),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    deptName,
-                    style: TextStyle(
+                child: Center(
+                  child: Text(
+                    index.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: deptColor,
-                      decoration:
-                          isCompleted ? TextDecoration.lineThrough : null,
                     ),
                   ),
-                  if (currentRemark.isNotEmpty)
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      'Remark: $currentRemark',
+                      deptName,
                       style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: deptColor,
+                        decoration: isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                     ),
-                  Text(
-                    'Qty: $currentQty / $totalQty pcs',
+                    if (currentRemark.isNotEmpty)
+                      Text(
+                        'Remark: $currentRemark',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    Text(
+                      'Qty: $currentQty / $totalQty pcs',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isCompleted)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade600,
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: const Icon(
+                    Icons.check_circle,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Pending',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange.shade700,
                     ),
                   ),
-                ],
-              ),
-            ),
-            if (isCompleted)
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade600,
-                  borderRadius: BorderRadius.circular(50),
                 ),
-                child: const Icon(
-                  Icons.check_circle,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  'Pending',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange.shade700,
-                  ),
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   void _showDepartmentDialog(
     String jobId,
@@ -1200,11 +1204,11 @@ final bool canEdit =
         } catch (_) {}
       }
 
-    productsWithImages.add({
-  'name': product['productName'] ?? 'N/A', // ✅ FIX
-  'quantity': product['quantity'] ?? '0',
-  'pdfImages': pdfImages,
-});
+      productsWithImages.add({
+        'name': product['productName'] ?? 'N/A', // ✅ FIX
+        'quantity': product['quantity'] ?? '0',
+        'pdfImages': pdfImages,
+      });
     }
 
     int totalQuantity = 0;
@@ -1279,7 +1283,8 @@ final bool canEdit =
               children: [
                 _pdfRow('Job No', jobNo),
                 _pdfRow('Order Date', '${date.day}/${date.month}/${date.year}'),
-                _pdfRow('Customer', job['customer'] ?? 'N/A'),
+                _pdfRow('customerName', job['customerName'] ?? 'N/A'),
+
                 _pdfRow('Sales Person', job['salesPerson'] ?? 'N/A'),
                 _pdfRow('Size', job['size'] ?? 'N/A'),
                 _pdfRow('Total Quantity', totalQuantity.toString()),
@@ -1420,8 +1425,9 @@ final bool canEdit =
           pw.Divider(),
           pw.Center(
             child: pw.Text(
-              'Printed on ${DateFormat('dd MMM yyyy HH:mm').format(DateTime.now())}',
-              style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+              'All Rights Reserved Dimple Packaging Pvt. Ltd.',
+            //  'Printed on ${DateFormat('dd MMM yyyy HH:mm').format(DateTime.now())}',
+              style: pw.TextStyle(fontSize: 12.sp, color: PdfColors.grey700),
             ),
           ),
         ],

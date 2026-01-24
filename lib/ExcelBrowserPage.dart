@@ -7,8 +7,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
-const String kStorageFolder = 'EXCEL/';            // case-sensitive
-const int kMaxExcelBytes  = 20 * 1024 * 1024;      // 20 MB cap
+const String kStorageFolder = 'EXCEL/'; // case-sensitive
+const int kMaxExcelBytes = 20 * 1024 * 1024; // 20 MB cap
 
 class ExcelBrowserPage extends StatefulWidget {
   const ExcelBrowserPage({super.key});
@@ -58,10 +58,11 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
       final ref = FirebaseStorage.instance.ref(kStorageFolder);
       final ListResult result = await ref.listAll();
 
-      final files = result.items
-          .where((r) => r.name.toLowerCase().endsWith('.xlsx'))
-          .toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
+      final files =
+          result.items
+              .where((r) => r.name.toLowerCase().endsWith('.xlsx'))
+              .toList()
+            ..sort((a, b) => a.name.compareTo(b.name));
 
       setState(() => _files = files);
     } on FirebaseException catch (e, st) {
@@ -98,8 +99,7 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
       setState(() {
         _sheetNames = sheets;
         _selectedSheet = sheets.first;
-        _rows = excel.tables[_selectedSheet]!
-            .rows
+        _rows = excel.tables[_selectedSheet]!.rows
             .map((r) => r.map((c) => c?.value).toList())
             .toList();
       });
@@ -151,20 +151,20 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Excel Browser')),
-        body: Center(child: Text(_error!, style: const TextStyle(color: Colors.red))),
+        body: Center(
+          child: Text(_error!, style: const TextStyle(color: Colors.red)),
+        ),
       );
     }
     if (!_initDone) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Excel Browser (Firebase Storage)'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadFiles)
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadFiles),
         ],
       ),
       body: Row(
@@ -177,8 +177,10 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   alignment: Alignment.centerLeft,
-                  child: Text('Files in "$kStorageFolder"',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(
+                    'Files in "$kStorageFolder"',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 const Divider(height: 1),
                 Expanded(
@@ -212,20 +214,31 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
               children: [
                 if (_selectedFilePath != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     child: Row(
                       children: [
-                        Text(_selectedFilePath!,
-                            style: Theme.of(context).textTheme.titleSmall),
+                        Text(
+                          _selectedFilePath!,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
                         const Spacer(),
                         if (_sheetNames.isNotEmpty)
                           DropdownButton<String>(
                             value: _selectedSheet,
                             hint: const Text('Select sheet'),
                             items: _sheetNames
-                                .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                                .map(
+                                  (s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(s),
+                                  ),
+                                )
                                 .toList(),
-                            onChanged: (v) => v != null ? _changeSheet(v) : null,
+                            onChanged: (v) =>
+                                v != null ? _changeSheet(v) : null,
                           ),
                       ],
                     ),
@@ -235,8 +248,10 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
                       : _rows.isEmpty
-                          ? const Center(child: Text('Select an Excel file to preview'))
-                          : _ExcelTable(rows: _rows),
+                      ? const Center(
+                          child: Text('Select an Excel file to preview'),
+                        )
+                      : _ExcelTable(rows: _rows),
                 ),
               ],
             ),
@@ -263,9 +278,11 @@ class _ExcelTable extends StatelessWidget {
     }
 
     final hasHeader =
-        normalized.isNotEmpty && normalized.first.any((e) => e.trim().isNotEmpty);
-    final headers =
-        hasHeader ? normalized.first : List.generate(colCount, (i) => 'Col ${i + 1}');
+        normalized.isNotEmpty &&
+        normalized.first.any((e) => e.trim().isNotEmpty);
+    final headers = hasHeader
+        ? normalized.first
+        : List.generate(colCount, (i) => 'Col ${i + 1}');
     final dataRows = hasHeader ? normalized.skip(1).toList() : normalized;
 
     return Scrollbar(
@@ -275,14 +292,18 @@ class _ExcelTable extends StatelessWidget {
           child: DataTable(
             columns: List.generate(
               colCount,
-              (i) => DataColumn(label: Text(i < headers.length ? headers[i] : ''))),
+              (i) =>
+                  DataColumn(label: Text(i < headers.length ? headers[i] : '')),
+            ),
             rows: dataRows
-                .map((r) => DataRow(
-                      cells: List.generate(
-                        colCount,
-                        (i) => DataCell(Text(i < r.length ? r[i] : '')),
-                      ),
-                    ))
+                .map(
+                  (r) => DataRow(
+                    cells: List.generate(
+                      colCount,
+                      (i) => DataCell(Text(i < r.length ? r[i] : '')),
+                    ),
+                  ),
+                )
                 .toList(),
             headingRowHeight: 42,
             dataRowMinHeight: 38,

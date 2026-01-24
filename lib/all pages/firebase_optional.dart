@@ -7,9 +7,9 @@ class DefaultFirebaseOptions {
     if (kIsWeb) {
       return web;
     }
-    // if (defaultTargetPlatform == TargetPlatform.android) {
-    //   return android;
-    // }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return android;
+    }
 
     throw UnsupportedError(
       'DefaultFirebaseOptions are configured only for Android and Web. '
@@ -17,12 +17,12 @@ class DefaultFirebaseOptions {
     );
   }
 
-  // static const FirebaseOptions android = FirebaseOptions(
-  //   apiKey: 'AIzaSyAddo5ZBFwmGDVm27igPtWEbuVJw7jvdLE',
-  //   appId: '1:884602219793:android:c450aec47fd77fd479b0b0',
-  //   messagingSenderId: '884602219793',
-  //   projectId: 'dimple-erp',
-  // );
+  static const FirebaseOptions android = FirebaseOptions(
+  apiKey: "AIzaSyCad4utyQ612FprvBZLPfHTB6j6afht76g",
+  appId: "1:746844572775:web:418e56e71f4873bff118c2",
+  messagingSenderId: "746844572775",
+    projectId: 'pushnotification-f5b52',
+  );
 
   static const FirebaseOptions web = FirebaseOptions(
   apiKey: "AIzaSyCad4utyQ612FprvBZLPfHTB6j6afht76g",

@@ -1,9 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-/// ===========================================================
-/// CATEGORIES PAGE (Derived from products.collection)
-/// ===========================================================
+
 class CategoriesPage extends StatefulWidget {
   const CategoriesPage({super.key});
 
@@ -17,10 +15,9 @@ class _CategoriesPageState extends State<CategoriesPage> {
   @override
   void initState() {
     super.initState();
-    // Products se categories nikaalenge (unique)
     _productsStream = FirebaseFirestore.instance
         .collection('products')
-        .orderBy('category') // client-side unique banayenge
+        .orderBy('category') 
         .snapshots();
   }
 
@@ -200,9 +197,6 @@ class _CategoriesPageState extends State<CategoriesPage> {
   }
 }
 
-/// ===========================================================
-/// UOM PAGE (Add / List / Delete)
-/// ===========================================================
 class UOMPage extends StatefulWidget {
   const UOMPage({super.key});
 
@@ -580,9 +574,6 @@ class _UOMPageState extends State<UOMPage> {
   }
 }
 
-/// ===========================================================
-/// Small reusable empty-state icon
-/// ===========================================================
 class _EmptyIcon extends StatelessWidget {
   final IconData icon;
   const _EmptyIcon({required this.icon});

@@ -64,7 +64,6 @@ class _StockOutPageState extends State<StockOutPage> {
         return;
       }
 
-      // Transactional update (handles race safely)
       final stockColl = FirebaseFirestore.instance.collection('stock');
       await FirebaseFirestore.instance.runTransaction((tx) async {
         final snap = await tx.get(prodRef);

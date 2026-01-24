@@ -12,6 +12,7 @@ class SalesDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: SingleChildScrollView(
@@ -111,6 +112,39 @@ class SalesDashboard extends StatelessWidget {
                         );
                       },
                     ),
+//                     _dashboardCard(
+//   title: "MIGRATE ORDERS",
+//   subtitle: "Run once only (DPL numbering)",
+//   icon: Icons.warning_amber,
+//   gradient: [Colors.black, Colors.grey],
+//   onTap: () async {
+//     final confirm = await showDialog<bool>(
+//       context: context,
+//       builder: (_) => AlertDialog(
+//         title: const Text('Run Migration?'),
+//         content: const Text(
+//           '⚠️ This should be run ONLY ONCE.\nDo you want to continue?',
+//         ),
+//         actions: [
+//           TextButton(
+//             onPressed: () => Navigator.pop(context, false),
+//             child: const Text('Cancel'),
+//           ),
+//           ElevatedButton(
+//             onPressed: () => Navigator.pop(context, true),
+//             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+//             child: const Text('RUN'),
+//           ),
+//         ],
+//       ),
+//     );
+
+//     if (confirm == true) {
+//       await migrateOldOrdersToDPL(context);
+//     }
+//   },
+// ),
+
                     _dashboardCard(
                       title: "Delivery Schedule",
                       subtitle: "Plan & manage deliveries",

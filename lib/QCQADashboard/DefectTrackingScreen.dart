@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// defect_tracking_screen.dart
 class DefectTrackingScreen extends StatefulWidget {
   const DefectTrackingScreen({super.key});
 
@@ -107,7 +106,6 @@ class _DefectTrackingScreenState extends State<DefectTrackingScreen> {
                   return;
                 }
 
-                // Validate quantity
                 final quantity = int.tryParse(quantityController.text);
                 if (quantity == null || quantity <= 0) {
                   ScaffoldMessenger.of(context).showSnackBar(

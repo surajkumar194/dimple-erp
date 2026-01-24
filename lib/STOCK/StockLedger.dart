@@ -13,8 +13,6 @@ class _StockLedgerState extends State<StockLedger> with TickerProviderStateMixin
   String selectedTypeFilter = 'ALL';
   late AnimationController _filterAnimationController;
   late Animation<double> _filterAnimation;
-
-  // Professional Color Scheme for Ledger
   static const Color primaryColor = Color(0xFF6366F1);
   static const Color secondaryColor = Color(0xFF8B5CF6);
   static const Color inColor = Color(0xFF10B981);

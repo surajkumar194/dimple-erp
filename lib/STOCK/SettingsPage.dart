@@ -79,7 +79,6 @@ class SettingsPage extends StatelessWidget {
                     ),
                   ),
 
-                  // Settings Content
                   Column(
                     children: [
                       // Master Data Section

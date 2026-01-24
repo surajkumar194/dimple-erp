@@ -65,7 +65,7 @@ class _StockInPageState extends State<StockInPage> {
 
         tx.set(stockColl.doc(), {
           'productId': prodRef.id,
-          'product': name,       // keeping name for readability
+          'product': name,     
           'category': category,
           'qty': qty,
           'type': 'IN',
@@ -447,7 +447,6 @@ class _StockInPageState extends State<StockInPage> {
     );
   }
 
-  // ---------------- Recent list ----------------
   Widget _buildRecentStockList() {
     return Container(
       decoration: BoxDecoration(

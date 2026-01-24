@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "746844572775",
+    "firebase_url": "https://pushnotification-f5b52-default-rtdb.firebaseio.com",
+    "project_id": "pushnotification-f5b52",
+    "storage_bucket": "pushnotification-f5b52.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:746844572775:android:f1f0aed44e63f9fcf118c2",
+        "android_client_info": {
+          "package_name": "com.example.erp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBsJJ2rO9A18-8jX1SsIP-gk1vqto9RqI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

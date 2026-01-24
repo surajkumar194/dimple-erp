@@ -1,91 +1,137 @@
-import 'package:dimple_erp/AdminDashboard/UserManagementScreen.dart';
+import 'package:dimple_erp/AdminDashboard/MigrateOrdersScreen.dart';
 import 'package:flutter/material.dart';
-// import 'user_management_screen.dart';
-// import 'system_settings_screen.dart';
-// import 'backup_restore_screen.dart';
-// import 'activity_logs_screen.dart';
 
-class AdminDashboard extends StatelessWidget {
-  const AdminDashboard({super.key});
+class AdminCollectionsScreen extends StatelessWidget {
+  final List<Map<String, dynamic>> collections = [
+    {
+      'name': 'jobCards',
+      'icon': Icons.work_outline,
+      'description': 'Job cards and work records',
+      'color': Colors.blue.shade600,
+    },
+    {
+      'name': 'orders',
+      'icon': Icons.shopping_cart_outlined,
+      'description': 'Customer orders data',
+      'color': Colors.green.shade600,
+    },
+    {
+      'name': 'users',
+      'icon': Icons.people_outline,
+      'description': 'User accounts and profiles',
+      'color': Colors.purple.shade600,
+    },
+    {
+      'name': 'meta',
+      'icon': Icons.settings_outlined,
+      'description': 'Metadata and configuration',
+      'color': Colors.orange.shade600,
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF5F5F5),
-      child: Column(
-        children: [
-          _buildSubcategoryItem(
-            context,
-            'User Management',
-            Icons.people,
-            const Color(0xFF607D8B),
-            () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const UserManagementScreen()),
-              );
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          "Firestore Collections",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
+        ),
+        centerTitle: false,
+        elevation: 0,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              // Future: Add search functionality
             },
           ),
-          _buildSubcategoryItem(
-            context,
-            'System Settings',
-            Icons.settings,
-            const Color(0xFF607D8B),
-            () {
-              // Navigator.push(
-              //   context,
-              //   MaterialPageRoute(builder: (context) => const SystemSettingsScreen()),
-              // );
-            },
-          ),
-          _buildSubcategoryItem(
-            context,
-            'Backup & Restore',
-            Icons.backup,
-            const Color(0xFF607D8B),
-            () {
-              // Navigator.push(
-              //   context,
-              //   MaterialPageRoute(builder: (context) => const BackupRestoreScreen()),
-              // );
-            },
-          ),
-          _buildSubcategoryItem(
-            context,
-            'Activity Logs',
-            Icons.history,
-            const Color(0xFF607D8B),
-            () {
-              // Navigator.push(
-              //   context,
-              //   MaterialPageRoute(builder: (context) => const ActivityLogsScreen()),
-              // );
-            },
-          ),
+          const SizedBox(width: 8),
         ],
       ),
-    );
-  }
-
-  Widget _buildSubcategoryItem(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: ListTile(
-        leading: Icon(Icons.arrow_forward_ios, color: color, size: 20),
-        title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-        trailing: Icon(icon, color: color, size: 24),
-        onTap: onTap,
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: ListView.builder(
+          itemCount: collections.length,
+          itemBuilder: (context, index) {
+            final collection = collections[index];
+            return Card(
+              elevation: 4,
+              shadowColor: Colors.black.withOpacity(0.08),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              margin: const EdgeInsets.only(bottom: 16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdminDocumentsScreen(
+                        collection: collection['name'],
+                      ),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: collection['color'].withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          collection['icon'],
+                          size: 30,
+                          color: collection['color'],
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              collection['name'],
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              collection['description'],
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        color: Colors.grey.shade400,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

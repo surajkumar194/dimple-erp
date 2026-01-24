@@ -10,7 +10,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
-
   @override
   State<Dashboard> createState() => _DashboardState();
 }
@@ -19,7 +18,6 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late AnimationController _backgroundController;
 
-  // Low-stock threshold (change if needed)
   static const int kLowStockThreshold = 10;
 
   final List<DashboardItem> items = [
@@ -103,11 +101,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF667eea),
-              Color(0xFF764ba2),
-              Color(0xFF667eea),
-            ],
+            colors: [Color(0xFF667eea), Color(0xFF764ba2), Color(0xFF667eea)],
             stops: [0.0, 0.5, 1.0],
           ),
         ),
@@ -124,7 +118,11 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                       children: [
                         _buildWelcomeSection(context),
                         const SizedBox(height: 32),
-                        _buildStatsSectionRealtime(context, isDesktop, isTablet),
+                        _buildStatsSectionRealtime(
+                          context,
+                          isDesktop,
+                          isTablet,
+                        ),
                         const SizedBox(height: 32),
                         _buildDashboardGrid(context, isDesktop, isTablet),
                       ],
@@ -288,7 +286,10 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                   children: const [
                     Icon(Icons.person_outline, size: 20, color: Colors.grey),
                     SizedBox(width: 12),
-                    Text('Profile', style: TextStyle(fontWeight: FontWeight.w500)),
+                    Text(
+                      'Profile',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
                   ],
                 ),
               ),
@@ -298,7 +299,13 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                   children: const [
                     Icon(Icons.logout, size: 20, color: Colors.red),
                     SizedBox(width: 12),
-                    Text('Logout', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.red)),
+                    Text(
+                      'Logout',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Colors.red,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -310,10 +317,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                 color: const Color(0xFF667eea).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
-                Icons.person_outline,
-                color: Color(0xFF667eea),
-              ),
+              child: const Icon(Icons.person_outline, color: Color(0xFF667eea)),
             ),
           ),
         ),
@@ -323,9 +327,13 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
 
   Widget _buildWelcomeSection(BuildContext context) {
     return SlideTransition(
-      position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
-        CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
-      ),
+      position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+          .animate(
+            CurvedAnimation(
+              parent: _animationController,
+              curve: Curves.elasticOut,
+            ),
+          ),
       child: FadeTransition(
         opacity: _animationController,
         child: Column(
@@ -334,25 +342,25 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
             Text(
               'Welcome to Dashboard',
               style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 32,
-                    shadows: [
-                      Shadow(
-                        color: Colors.black.withOpacity(0.3),
-                        offset: const Offset(0, 2),
-                        blurRadius: 10,
-                      ),
-                    ],
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 32,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.3),
+                    offset: const Offset(0, 2),
+                    blurRadius: 10,
                   ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               'Manage your inventory and business operations efficiently',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white.withOpacity(0.9),
-                    fontWeight: FontWeight.w400,
-                  ),
+                color: Colors.white.withOpacity(0.9),
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ],
         ),
@@ -361,7 +369,11 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
   }
 
   // ===================== Realtime STATS Section (4 live metrics) =====================
-  Widget _buildStatsSectionRealtime(BuildContext context, bool isDesktop, bool isTablet) {
+  Widget _buildStatsSectionRealtime(
+    BuildContext context,
+    bool isDesktop,
+    bool isTablet,
+  ) {
     final crossAxisCount = isDesktop ? 4 : (isTablet ? 2 : 2);
 
     return StreamBuilder<QuerySnapshot>(
@@ -387,10 +399,38 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         }
 
         final cards = [
-          _StatData(value: snapshot.connectionState == ConnectionState.waiting ? '—' : '$totalProducts', label: 'Total Products', icon: Icons.inventory_2, color: Colors.blue),
-          _StatData(value: snapshot.connectionState == ConnectionState.waiting ? '—' : '$totalQty',      label: 'Total Qty (Available)', icon: Icons.warehouse, color: Colors.green),
-          _StatData(value: snapshot.connectionState == ConnectionState.waiting ? '—' : '$lowStock',      label: 'Low Stock Items (<$kLowStockThreshold)', icon: Icons.warning_amber, color: Colors.orange),
-          _StatData(value: snapshot.connectionState == ConnectionState.waiting ? '—' : '$outOfStock',    label: 'Out of Stock', icon: Icons.error_outline, color: Colors.purple),
+          _StatData(
+            value: snapshot.connectionState == ConnectionState.waiting
+                ? '—'
+                : '$totalProducts',
+            label: 'Total Products',
+            icon: Icons.inventory_2,
+            color: Colors.blue,
+          ),
+          _StatData(
+            value: snapshot.connectionState == ConnectionState.waiting
+                ? '—'
+                : '$totalQty',
+            label: 'Total Qty (Available)',
+            icon: Icons.warehouse,
+            color: Colors.green,
+          ),
+          _StatData(
+            value: snapshot.connectionState == ConnectionState.waiting
+                ? '—'
+                : '$lowStock',
+            label: 'Low Stock Items (<$kLowStockThreshold)',
+            icon: Icons.warning_amber,
+            color: Colors.orange,
+          ),
+          _StatData(
+            value: snapshot.connectionState == ConnectionState.waiting
+                ? '—'
+                : '$outOfStock',
+            label: 'Out of Stock',
+            icon: Icons.error_outline,
+            color: Colors.purple,
+          ),
         ];
 
         return AnimationLimiter(
@@ -412,9 +452,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
                 columnCount: crossAxisCount,
                 child: SlideAnimation(
                   verticalOffset: 50.0,
-                  child: FadeInAnimation(
-                    child: _buildStatCard(c),
-                  ),
+                  child: FadeInAnimation(child: _buildStatCard(c)),
                 ),
               );
             },
@@ -479,7 +517,11 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildDashboardGrid(BuildContext context, bool isDesktop, bool isTablet) {
+  Widget _buildDashboardGrid(
+    BuildContext context,
+    bool isDesktop,
+    bool isTablet,
+  ) {
     final crossAxisCount = isDesktop ? 3 : (isTablet ? 2 : 1);
 
     return AnimationLimiter(
@@ -500,9 +542,7 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
             columnCount: crossAxisCount,
             child: SlideAnimation(
               verticalOffset: 50.0,
-              child: FadeInAnimation(
-                child: _DashboardCard(item: items[index]),
-              ),
+              child: FadeInAnimation(child: _DashboardCard(item: items[index])),
             ),
           );
         },
@@ -518,7 +558,10 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         title: const Text('Notifications'),
         content: const Text('No new notifications'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
         ],
       ),
     );
@@ -532,7 +575,10 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         title: const Text('Profile'),
         content: const Text('Profile settings coming soon!'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
         ],
       ),
     );
@@ -546,7 +592,10 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
         title: const Text('Logout'),
         content: const Text('Are you sure you want to logout?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
@@ -554,7 +603,9 @@ class _DashboardState extends State<Dashboard> with TickerProviderStateMixin {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('Logout', style: TextStyle(color: Colors.white)),
           ),
@@ -570,7 +621,12 @@ class _StatData {
   final String label;
   final IconData icon;
   final Color color;
-  _StatData({required this.value, required this.label, required this.icon, required this.color});
+  _StatData({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
 }
 
 class _DashboardCard extends StatefulWidget {
@@ -623,7 +679,9 @@ class _DashboardCardState extends State<_DashboardCard>
                   color: Colors.white.withOpacity(0.95),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1 + 0.1 * _hoverController.value),
+                      color: Colors.black.withOpacity(
+                        0.1 + 0.1 * _hoverController.value,
+                      ),
                       blurRadius: 20 + 20 * _hoverController.value,
                       offset: Offset(0, 8 + 12 * _hoverController.value),
                     ),
@@ -660,7 +718,8 @@ class _DashboardCardState extends State<_DashboardCard>
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: widget.item.gradient.colors.first.withOpacity(0.3),
+                                  color: widget.item.gradient.colors.first
+                                      .withOpacity(0.3),
                                   blurRadius: 20,
                                   offset: const Offset(0, 8),
                                 ),
@@ -742,10 +801,15 @@ class DashboardItem {
   final String description;
   final Widget Function() page;
 
-  DashboardItem(this.title, this.icon, this.gradient, this.description, this.page);
+  DashboardItem(
+    this.title,
+    this.icon,
+    this.gradient,
+    this.description,
+    this.page,
+  );
 }
 
-// Animation helper stubs (so code runs without external package)
 class AnimationLimiter extends StatelessWidget {
   final Widget child;
   const AnimationLimiter({super.key, required this.child});
@@ -767,7 +831,11 @@ class AnimationConfiguration {
 class SlideAnimation extends StatelessWidget {
   final double verticalOffset;
   final Widget child;
-  const SlideAnimation({super.key, required this.verticalOffset, required this.child});
+  const SlideAnimation({
+    super.key,
+    required this.verticalOffset,
+    required this.child,
+  });
   @override
   Widget build(BuildContext context) => child;
 }

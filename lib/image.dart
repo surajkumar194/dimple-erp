@@ -27,9 +27,9 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
       setState(() => _imageBytes = bytes);
 
       // Firebase Storage reference
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('uploads/${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final storageRef = FirebaseStorage.instance.ref().child(
+        'uploads/${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
 
       // Upload file
       final uploadTask = await storageRef.putData(
@@ -45,14 +45,14 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
         _isUploading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ Image uploaded successfully!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('✅ Image uploaded successfully!')));
     } catch (e) {
       setState(() => _isUploading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('❌ Error: $e')));
     }
   }
 
@@ -71,10 +71,16 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
               else if (_downloadUrl != null)
                 Column(
                   children: [
-                    Image.network(_downloadUrl!, height: 200, fit: BoxFit.cover),
+                    Image.network(
+                      _downloadUrl!,
+                      height: 200,
+                      fit: BoxFit.cover,
+                    ),
                     const SizedBox(height: 10),
-                    Text("Image URL copied to Firebase!",
-                        style: const TextStyle(color: Colors.green))
+                    Text(
+                      "Image URL copied to Firebase!",
+                      style: const TextStyle(color: Colors.green),
+                    ),
                   ],
                 )
               else if (_imageBytes != null)
@@ -91,7 +97,9 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
                   backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 12),
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ],
