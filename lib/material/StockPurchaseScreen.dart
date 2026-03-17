@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class StockPurchaseScreen extends StatefulWidget {
-  const StockPurchaseScreen({Key? key}) : super(key: key);
+  const StockPurchaseScreen({super.key});
 
   @override
   State<StockPurchaseScreen> createState() => _StockPurchaseScreenState();
@@ -223,7 +223,7 @@ class _StockPurchaseScreenState extends State<StockPurchaseScreen> {
                     ),
                   ),
                 );
-              }).toList(),
+              }),
 
               const SizedBox(height: 20),
 

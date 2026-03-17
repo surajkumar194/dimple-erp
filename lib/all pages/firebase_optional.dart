@@ -17,12 +17,13 @@ class DefaultFirebaseOptions {
     );
   }
 
-  static const FirebaseOptions android = FirebaseOptions(
+static const FirebaseOptions android = FirebaseOptions(
   apiKey: "AIzaSyCad4utyQ612FprvBZLPfHTB6j6afht76g",
-  appId: "1:746844572775:web:418e56e71f4873bff118c2",
+  appId: "1:746844572775:android:f1f0aed44e63f9fcf118c2",
   messagingSenderId: "746844572775",
-    projectId: 'pushnotification-f5b52',
-  );
+  projectId: 'pushnotification-f5b52',
+  storageBucket: "pushnotification-f5b52.appspot.com",
+);
 
   static const FirebaseOptions web = FirebaseOptions(
   apiKey: "AIzaSyCad4utyQ612FprvBZLPfHTB6j6afht76g",

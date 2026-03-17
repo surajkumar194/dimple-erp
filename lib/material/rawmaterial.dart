@@ -6,7 +6,7 @@ import 'package:excel/excel.dart';
 import 'package:csv/csv.dart';
 
 class RawMaterialScreen extends StatefulWidget {
-  const RawMaterialScreen({Key? key}) : super(key: key);
+  const RawMaterialScreen({super.key});
 
   @override
   State<RawMaterialScreen> createState() => _RawMaterialScreenState();
@@ -63,7 +63,7 @@ class _RawMaterialScreenState extends State<RawMaterialScreen> {
 
   void _showAddEditDialog({String? docId, Map<String, dynamic>? existing}) {
     final isEdit = docId != null && existing != null;
-    final _formKey = GlobalKey<FormState>();
+    final formKey = GlobalKey<FormState>();
 
     final boardInchController = TextEditingController(text: _safeString(existing?['boardSizeInch']));
     final boardCmController = TextEditingController(text: _safeString(existing?['boardSizeCm']));
@@ -109,7 +109,7 @@ class _RawMaterialScreenState extends State<RawMaterialScreen> {
                 Flexible(
                   child: SingleChildScrollView(
                     child: Form(
-                      key: _formKey,
+                      key: formKey,
                       child: Column(
                         children: [
                           _buildTextField(boardInchController, 'BOARD SIZE INCH *', required: true),
@@ -185,7 +185,7 @@ class _RawMaterialScreenState extends State<RawMaterialScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: () async {
-                        if (_formKey.currentState!.validate()) {
+                        if (formKey.currentState!.validate()) {
                           final payload = {
                             'boardSizeInch': boardInchController.text.trim(),
                             'boardSizeCm': boardCmController.text.trim(),

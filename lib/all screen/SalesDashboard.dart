@@ -1,9 +1,10 @@
-import 'package:dimple_erp/all screen/CustomerAllOrderScreen.dart';
 import 'package:dimple_erp/all screen/DeliverySchedulingScreen.dart';
 import 'package:dimple_erp/all screen/OrderBookingScreen.dart';
-import 'package:dimple_erp/all screen/JobCardScreen.dart';
 import 'package:dimple_erp/all screen/IssueInventoryScreen.dart';
 import 'package:dimple_erp/all screen/ProductionTrackingScreen.dart';
+import 'package:dimple_erp/all%20screen/JobCardHistoryTab.dart' show JobCardHistoryTab;
+import 'package:dimple_erp/all%20screen/SelectSalesOrderTab.dart';
+import 'package:dimple_erp/extra.dart/PaymentCollectionScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
@@ -12,38 +13,48 @@ class SalesDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: const Color(0xFFF5F7FA),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _header(),
-            const SizedBox(height: 32),
+            const SizedBox(height: 30),
 
             LayoutBuilder(
               builder: (context, constraints) {
-                int crossAxisCount = constraints.maxWidth > 1200
-                    ? 4
-                    : constraints.maxWidth > 800
-                        ? 3
-                        : 2;
+                int crossAxisCount;
+                double childAspectRatio;
 
+                if (constraints.maxWidth < 600) {
+                  crossAxisCount = 2; // Mobile
+                  childAspectRatio = 0.75;
+                } else if (constraints.maxWidth < 1100) {
+                  crossAxisCount = 3; // Tablet
+                  childAspectRatio = 0.9;
+                } else {
+                  crossAxisCount = 4; // Web
+                  childAspectRatio = 1.1;
+                }
                 return GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 24,
-                  mainAxisSpacing: 24,
-                  childAspectRatio: 1,
+                  crossAxisSpacing: 28,
+                  mainAxisSpacing: 28,
+                  childAspectRatio: childAspectRatio,
                   children: [
                     _dashboardCard(
                       title: "Tracking",
                       subtitle: "Monitor production & delivery status",
                       icon: Icons.auto_graph,
-                      gradient: [Colors.red[400]!, Colors.red[300]!],
+                      gradient: [
+                        const Color(0xFFFF6B9D),
+                        const Color(0xFFFFA07A),
+                      ],
                       onTap: () {
                         Navigator.push(
                           context,
@@ -57,7 +68,10 @@ class SalesDashboard extends StatelessWidget {
                       title: "Order Booking",
                       subtitle: "Create and manage orders",
                       icon: Icons.book_online,
-                      gradient: [Colors.indigo[600]!, Colors.indigo[400]!],
+                      gradient: [
+                        const Color(0xFF667EEA),
+                        const Color(0xFF764BA2),
+                      ],
                       onTap: () {
                         Navigator.push(
                           context,
@@ -68,15 +82,18 @@ class SalesDashboard extends StatelessWidget {
                       },
                     ),
                     _dashboardCard(
-                      title: "Customer Orders",
+                      title: "All Sales Orders",
                       subtitle: "View all customer orders",
                       icon: Icons.list_alt,
-                      gradient: [Colors.teal[600]!, Colors.teal[400]!],
+                      gradient: [
+                        const Color(0xFF11998E),
+                        const Color(0xFF38EF7D),
+                      ],
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const CustomerAllOrderScreen(),
+                            builder: (_) => JobCardHistoryTab(),
                           ),
                         );
                       },
@@ -86,14 +103,14 @@ class SalesDashboard extends StatelessWidget {
                       subtitle: "Manage production job cards",
                       icon: Icons.assignment,
                       gradient: [
-                        Colors.deepPurple[600]!,
-                        Colors.deepPurple[400]!
+                        const Color(0xFF8E2DE2),
+                        const Color(0xFF4A00E0),
                       ],
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const JobCardScreen(),
+                            builder: (_) => SelectSalesOrderTab(),
                           ),
                         );
                       },
@@ -102,7 +119,10 @@ class SalesDashboard extends StatelessWidget {
                       title: "Issue Inventory",
                       subtitle: "Issue raw material from stock",
                       icon: Icons.inventory_2_outlined,
-                      gradient: [Colors.pink[600]!, Colors.pink[400]!],
+                      gradient: [
+                        const Color(0xFFEC008C),
+                        const Color(0xFFFC6767),
+                      ],
                       onTap: () {
                         Navigator.push(
                           context,
@@ -112,52 +132,42 @@ class SalesDashboard extends StatelessWidget {
                         );
                       },
                     ),
-//                     _dashboardCard(
-//   title: "MIGRATE ORDERS",
-//   subtitle: "Run once only (DPL numbering)",
-//   icon: Icons.warning_amber,
-//   gradient: [Colors.black, Colors.grey],
-//   onTap: () async {
-//     final confirm = await showDialog<bool>(
-//       context: context,
-//       builder: (_) => AlertDialog(
-//         title: const Text('Run Migration?'),
-//         content: const Text(
-//           '⚠️ This should be run ONLY ONCE.\nDo you want to continue?',
-//         ),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context, false),
-//             child: const Text('Cancel'),
-//           ),
-//           ElevatedButton(
-//             onPressed: () => Navigator.pop(context, true),
-//             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-//             child: const Text('RUN'),
-//           ),
-//         ],
-//       ),
-//     );
-
-//     if (confirm == true) {
-//       await migrateOldOrdersToDPL(context);
-//     }
-//   },
-// ),
-
                     _dashboardCard(
                       title: "Delivery Schedule",
                       subtitle: "Plan & manage deliveries",
                       icon: Icons.local_shipping,
-                      gradient: [Colors.orange[600]!, Colors.orange[400]!],
+                      gradient: [
+                        const Color(0xFFF46B45),
+                        const Color(0xFFEEA849),
+                      ],
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                const DeliveryManagementScreen(),
+                            builder: (_) => const DeliveryManagementScreen(),
                           ),
                         );
+                      },
+                    ),
+
+
+                      _dashboardCard(
+                      title: "payment Collection",
+                      subtitle: "Record customer payments",
+                      icon: Icons.local_shipping,
+                      gradient: [
+                        const Color(0xFFF46B45),
+                        const Color(0xFFEEA849),
+                      ],
+                      onTap: () {
+                      Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) => PaymentCollectionScreen(
+    
+    ),
+  ),
+);
                       },
                     ),
                   ],
@@ -173,33 +183,40 @@ class SalesDashboard extends StatelessWidget {
   // ================= HEADER =================
   Widget _header() {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.pink[700]!, Colors.purple[600]!],
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2575FC).withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children:  [
               Text(
-                "Sales Dashboard 👋",
+                "Sales Dashboard",
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 18.sp,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              SizedBox(height: 4),
+              SizedBox(height: 0.5.h),
               Text(
-                "Manage orders, production & delivery",
-                style: TextStyle(color: Colors.white70),
+                "Manage your sales orders",
+                style: TextStyle(fontSize: 14.sp,color: Colors.white70),
               ),
             ],
           ),
@@ -219,59 +236,98 @@ class SalesDashboard extends StatelessWidget {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Card(
-        elevation: 8,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: gradient,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: gradient[0].withOpacity(0.4),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
             ),
-            borderRadius: BorderRadius.circular(24),
+          ],
+        ),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 22.sp, color: Colors.white),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style:
-                        TextStyle(color: Colors.white.withOpacity(0.9)),
-                  ),
-                ],
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  CircleAvatar(
-                    radius: 15.sp,
-                    backgroundColor: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.25),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, size: 22.sp, color: Colors.white),
+                ),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 11.sp,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
                     child: Icon(
                       Icons.arrow_forward,
-                      size: 17.sp,
-                      color: Colors.black,
+                      size: 18,
+                      color: gradient[0],
                     ),
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

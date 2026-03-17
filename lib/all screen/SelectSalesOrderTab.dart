@@ -1,3 +1,4 @@
+import 'package:archive/archive.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dimple_erp/all%20screen/EditSalesOrderScreen.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,9 @@ import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:sizer/sizer.dart';
+import 'package:universal_html/html.dart' as html;
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class SelectSalesOrderTab extends StatefulWidget {
   const SelectSalesOrderTab({super.key});
@@ -17,6 +21,11 @@ class SelectSalesOrderTab extends StatefulWidget {
 class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
   String searchQuery = '';
   bool _isLoading = false;
+  DateTimeRange? _selectedDateRange;
+  String _selectedDateFilter = 'All';
+  String _selectedUnit = 'All';
+
+  // ─── All original functions unchanged ────────────────────────────────────────
 
   Future<bool> _checkIfJobCardExists(String orderId) async {
     final snapshot = await FirebaseFirestore.instance
@@ -27,7 +36,6 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
     return snapshot.docs.isNotEmpty;
   }
 
-  // Helper method to load network images for PDF
   Future<pw.ImageProvider?> _loadNetworkImage(String url) async {
     try {
       final response = await http.get(Uri.parse(url));
@@ -46,55 +54,83 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
         .where('linkedOrderId', isEqualTo: orderId)
         .limit(1)
         .get();
-
     if (snap.docs.isNotEmpty) {
-      return snap.docs.first.data()['jobNo'];
+      return snap.docs.first.id;
     }
     return null;
   }
 
+  List safeList(dynamic data) {
+    if (data is List) return data;
+    if (data is Map) return data.values.toList();
+    return [];
+  }
+
+  void downloadFileWeb(Uint8List bytes, String filename) {
+    final blob = html.Blob([bytes]);
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    final anchor = html.AnchorElement(href: url)
+      ..setAttribute("download", filename)
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
 
   Future<void> _generateAllProductsPDF(
     String orderId,
     Map<String, dynamic> orderData,
   ) async {
     final pdf = pw.Document();
-    final jobNo = await _getJobNoFromOrder(orderId) ?? 'N/A'; // ✅ ADD THIS
+    final jobNo = await _getJobNoFromOrder(orderId) ?? orderId;
     final notes = orderData['notes'] ?? '';
     final pageWidth = PdfPageFormat.a4.availableWidth;
-
-    // Auto decide columns
     int columns = pageWidth > 400 ? 3 : 2;
-
     final imageSize = (pageWidth - ((columns - 1) * 10)) / columns;
-    final products = orderData['products'] as List? ?? [];
+    final products = safeList(orderData['products']);
     final orderDate =
         (orderData['orderDate'] as Timestamp?)?.toDate() ?? DateTime.now();
     final deliveryDate =
         (orderData['deliveryDate'] as Timestamp?)?.toDate() ?? DateTime.now();
     final customerName = orderData['customerName'] ?? '';
     final companyName = orderData['companyName'] ?? '';
-
     final salesPerson = orderData['salesPerson'] ?? '';
-
     for (int i = 0; i < products.length; i++) {
       final product = products[i];
+      final dplNo = product['dplNo'] ?? '$jobNo-${i + 1}';
+      final rawSections = product['sections'];
+      final Map<String, dynamic> sections =
+          rawSections is Map<String, dynamic> ? rawSections : {};
 
-      final dplNo = product['dplNo'] ?? '$jobNo-${i + 1}'; // ✅ CORRECT PLACE
+      String getDetail(dynamic value) {
+        if (value == null) return '';
+        if (value is String) return value;
+        if (value is Map) {
+          return value['detail']?.toString() ??
+              value['details']?.toString() ??
+              value['value']?.toString() ??
+              '';
+        }
+        return value.toString();
+      }
 
-      final sections = product['sections'] as Map<String, dynamic>? ?? {};
-        final extraSections = product['customExtraSections'] as List? ?? [];
+      final trayDetail =
+          getDetail(sections['trayDetail']) + getDetail(sections['tray']);
+      final salophinDetail = getDetail(sections['salophinDetail']) +
+          getDetail(sections['salophin']);
+      final boxCoverDetail = getDetail(sections['boxCoverDetail']) +
+          getDetail(sections['boxCover']);
+      final innerDetail =
+          getDetail(sections['innerDetail']) + getDetail(sections['inner']);
+      final bottomDetail =
+          getDetail(sections['bottomDetail']) + getDetail(sections['bottom']);
+      final dieDetail =
+          getDetail(sections['dieDetail']) + getDetail(sections['die']);
+      final otherDetail =
+          getDetail(sections['otherDetail']) + getDetail(sections['other']);
+      final extraSections = product['customExtraSections'] is List
+          ? product['customExtraSections']
+          : [];
+      final images = product['images'] is List ? product['images'] : [];
 
-     final trayDetail = sections['trayDetail'] ?? sections['tray'] ?? '';
-final salophinDetail = sections['salophinDetail'] ?? sections['salophin'] ?? '';
-final boxCoverDetail = sections['boxCoverDetail'] ?? sections['boxCover'] ?? '';
-final innerDetail = sections['innerDetail'] ?? sections['inner'] ?? '';
-final bottomDetail = sections['bottomDetail'] ?? sections['bottom'] ?? '';
-final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
-
-      final images = product['images'] as List? ?? [];
-
-      // Load all images first
       List<pw.ImageProvider> loadedImages = [];
       for (final url in images) {
         if (url is String && url.isNotEmpty) {
@@ -117,8 +153,13 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: <pw.Widget>[
                   pw.Text(
-                    'All Rights Reserved Dimple Packaging Pvt. Ltd.',
-                    style: pw.TextStyle(fontSize: 8, color: PdfColors.green),
+                    'All Rights Reserved © Dimple Packaging Pvt. Ltd.',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.yellow700,
+                    ),
+                    textAlign: pw.TextAlign.center,
                   ),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -126,59 +167,45 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
+                          pw.Text('Job No: $jobNo',
+                              style: pw.TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: pw.FontWeight.bold)),
+                          pw.Text('DPL: $dplNo',
+                              style: pw.TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: pw.FontWeight.bold)),
                           pw.Text(
-                            'Job No: $jobNo',
-                            style: pw.TextStyle(
-                              fontSize: 14,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                          pw.Text(
-                            'DPL: $dplNo', // 🔥 CLEAR IDENTIFICATION
-                            style: pw.TextStyle(
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                          pw.Text(
-                            "Order Location: ${orderData['unit'] ?? 'N/A'}",
-                            style: pw.TextStyle(
-                              fontSize: 14,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
+                              "Order Location: ${orderData['unit'] ?? 'N/A'}",
+                              style: pw.TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: pw.FontWeight.bold)),
                         ],
                       ),
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.end,
                         children: [
                           pw.Text(
-                            'DATE - ${DateFormat('dd-MM-yyyy').format(orderDate)}',
-                            style: const pw.TextStyle(fontSize: 10),
-                          ),
+                              'DATE - ${DateFormat('dd-MM-yyyy').format(orderDate)}',
+                              style: const pw.TextStyle(fontSize: 10)),
                           pw.SizedBox(height: 4),
                           pw.Container(
                             padding: const pw.EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
+                                horizontal: 8, vertical: 4),
                             decoration: pw.BoxDecoration(
                               color: PdfColors.grey300,
                               borderRadius: pw.BorderRadius.circular(4),
                             ),
                             child: pw.Column(
                               children: [
+                                pw.Text('DATE OF SUPPLY',
+                                    style: pw.TextStyle(
+                                        fontSize: 8,
+                                        fontWeight: pw.FontWeight.bold)),
                                 pw.Text(
-                                  'DATE OF SUPPLY',
-                                  style: pw.TextStyle(
-                                    fontSize: 8,
-                                    fontWeight: pw.FontWeight.bold,
-                                  ),
-                                ),
-                                pw.Text(
-                                  DateFormat('dd-MM-yyyy').format(deliveryDate),
-                                  style: const pw.TextStyle(fontSize: 10),
-                                ),
+                                    DateFormat('dd-MM-yyyy')
+                                        .format(deliveryDate),
+                                    style: const pw.TextStyle(fontSize: 10)),
                               ],
                             ),
                           ),
@@ -187,8 +214,6 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
                     ],
                   ),
                   pw.SizedBox(height: 5),
-
-                  // Customer Name Header
                   pw.Container(
                     width: double.infinity,
                     padding: const pw.EdgeInsets.all(8),
@@ -202,67 +227,42 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
                             ? '$customerName ($companyName)'
                             : customerName,
                         style: pw.TextStyle(
-                          fontSize: 14,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
+                            fontSize: 14, fontWeight: pw.FontWeight.bold),
                       ),
                     ),
                   ),
                   pw.SizedBox(height: 1),
-
-                  // Product Details Table
                   pw.Table(
                     border: pw.TableBorder.all(color: PdfColors.grey600),
                     children: [
                       _buildPdfRow('Product', product['productName'] ?? ''),
-                      _buildPdfRow(
-                        'Category',
-                        product['productCategory'] ?? '',
-                      ),
-                      _buildPdfRow(
-                        'Dimensions (L×H×W)',
-                        '${product['length'] ?? ''} × ${product['height'] ?? ''} × ${product['width'] ?? ''}',
-                      ),
-                      _buildPdfRow(
-                        'Qnty / Remark',
-                        '${product['quantity'] ?? ''}  |  ${product['remarks'] ?? ''}',
-                      ),
+                      _buildPdfRow('Category', product['productCategory'] ?? ''),
+                      _buildPdfRow('Dimensions (L×H×W)',
+                          '${product['length'] ?? ''} × ${product['height'] ?? ''} × ${product['width'] ?? ''}'),
+                      _buildPdfRow('Quantity', '${product['quantity'] ?? ''}'),
+                      if ((product['remarks'] ?? '').toString().trim().isNotEmpty)
+                        _buildPdfRow('Remark', product['remarks']),
                       _buildPdfRow('Assign Person', ''),
-                       if (trayDetail.toString().trim().isNotEmpty)
-      _buildPdfRow('Tray', trayDetail),
-
-    if (salophinDetail.toString().trim().isNotEmpty)
-      _buildPdfRow('Salophin', salophinDetail),
-
-    if (boxCoverDetail.toString().trim().isNotEmpty)
-      _buildPdfRow('Box Cover', boxCoverDetail),
-
-    if (innerDetail.toString().trim().isNotEmpty)
-      _buildPdfRow('Inner', innerDetail),
-
-    if (bottomDetail.toString().trim().isNotEmpty)
-      _buildPdfRow('Bottom', bottomDetail),
-
-    if (dieDetail.toString().trim().isNotEmpty)
-      _buildPdfRow('Die', dieDetail),
-
-    // ===== CUSTOM EXTRA =====
-    if (extraSections.isNotEmpty)
-      ...extraSections
-          .map<pw.TableRow?>((sec) {
-            final detail = sec['detail'] ?? sec['details'] ?? '';
-            if (detail.toString().trim().isEmpty) return null;
-
-            return _buildPdfRow(
-              sec['title'] ?? 'Extra',
-              detail,
-            );
-          })
-          .whereType<pw.TableRow>()
-          .toList(),
-
-
-
+                      if (trayDetail.toString().trim().isNotEmpty)
+                        _buildPdfRow('Tray', trayDetail),
+                      if (salophinDetail.toString().trim().isNotEmpty)
+                        _buildPdfRow('Salophin', salophinDetail),
+                      if (boxCoverDetail.toString().trim().isNotEmpty)
+                        _buildPdfRow('Box Cover', boxCoverDetail),
+                      if (innerDetail.toString().trim().isNotEmpty)
+                        _buildPdfRow('Inner', innerDetail),
+                      if (bottomDetail.toString().trim().isNotEmpty)
+                        _buildPdfRow('Bottom', bottomDetail),
+                      if (dieDetail.toString().trim().isNotEmpty)
+                        _buildPdfRow('Die', dieDetail),
+                      if (otherDetail.toString().trim().isNotEmpty)
+                        _buildPdfRow('Other', otherDetail.toString()),
+                      if (extraSections.isNotEmpty)
+                        ...extraSections.map<pw.TableRow?>((sec) {
+                          final detail = sec['detail'] ?? sec['details'] ?? '';
+                          if (detail.toString().trim().isEmpty) return null;
+                          return _buildPdfRow(sec['title'] ?? 'Extra', detail);
+                        }).whereType<pw.TableRow>(),
                       _buildPdfRow('Conerned Person', salesPerson),
                     ],
                   ),
@@ -273,74 +273,49 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
                       padding: const pw.EdgeInsets.all(2),
                       decoration: pw.BoxDecoration(
                         color: PdfColors.white,
-                        //   borderRadius: pw.BorderRadius.circular(6),
                         border: pw.Border.all(color: PdfColors.grey300),
                       ),
                       child: pw.Row(
                         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                         children: [
-                          pw.Text(
-                            'Additional Notes:',
-                            style: pw.TextStyle(
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
+                          pw.Text('Additional Notes:',
+                              style: pw.TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: pw.FontWeight.bold)),
                           pw.SizedBox(height: 0.1),
-                          pw.Text(
-                            notes,
-                            style: const pw.TextStyle(fontSize: 11),
-                          ),
+                          pw.Text(notes,
+                              style: const pw.TextStyle(fontSize: 11)),
                         ],
                       ),
                     ),
                   ],
-
                   pw.SizedBox(height: 3),
-
                   if (loadedImages.isNotEmpty)
                     pw.Expanded(
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text(
-                            'Product Images:',
-                            style: pw.TextStyle(
-                              fontSize: 10,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
+                          pw.Text('Product Images:',
+                              style: pw.TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: pw.FontWeight.bold)),
                           pw.SizedBox(height: 4),
-
-                          // 🔥 Images take remaining space
                           pw.Expanded(
                             child: pw.GridView(
-                              crossAxisCount: loadedImages.length == 1
-                                  ? 1
-                                  : loadedImages.length <= 4
-                                  ? 2
-                                  : 3,
+                              crossAxisCount:
+                                  loadedImages.length <= 3
+                                      ? loadedImages.length
+                                      : 3,
                               mainAxisSpacing: 8,
                               crossAxisSpacing: 8,
-                              childAspectRatio: 1,
-                              children: loadedImages.map((img) {
-                                return pw.Image(img, fit: pw.BoxFit.contain);
-                              }).toList(),
+                              childAspectRatio: 1.2,
+                              children: loadedImages
+                                  .map((img) =>
+                                      pw.Image(img, fit: pw.BoxFit.contain))
+                                  .toList(),
                             ),
                           ),
-
                           pw.SizedBox(height: 4),
-
-                          // ✅ Footer safely at bottom
-                          pw.Center(
-                            child: pw.Text(
-                              'All Rights Reserved Dimple Packaging Pvt. Ltd.',
-                              style: pw.TextStyle(
-                                fontSize: 8,
-                                color: PdfColors.grey600,
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -351,8 +326,301 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
         ),
       );
     }
-
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+  }
+
+  Future<void> _generateAllProductsJPG(
+    String orderId,
+    Map<String, dynamic> orderData,
+  ) async {
+    _showLoadingDialog();
+    try {
+      final pdf = pw.Document();
+      final jobNo = await _getJobNoFromOrder(orderId) ?? orderId;
+      final notes = orderData['notes'] ?? '';
+      final products = safeList(orderData['products']);
+      final orderDate =
+          (orderData['orderDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+      final deliveryDate =
+          (orderData['deliveryDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+      final customerName = orderData['customerName'] ?? '';
+      final companyName = orderData['companyName'] ?? '';
+      final salesPerson = orderData['salesPerson'] ?? '';
+
+      for (int i = 0; i < products.length; i++) {
+        final product = products[i];
+        final dplNo = product['dplNo'] ?? '$jobNo-${i + 1}';
+        final rawSections = product['sections'];
+        final Map<String, dynamic> sections =
+            rawSections is Map<String, dynamic> ? rawSections : {};
+
+        String getDetail(dynamic value) {
+          if (value == null) return '';
+          if (value is String) return value;
+          if (value is Map) {
+            return value['detail']?.toString() ??
+                value['details']?.toString() ??
+                value['value']?.toString() ??
+                '';
+          }
+          return value.toString();
+        }
+
+        final trayDetail =
+            getDetail(sections['trayDetail']) + getDetail(sections['tray']);
+        final salophinDetail = getDetail(sections['salophinDetail']) +
+            getDetail(sections['salophin']);
+        final boxCoverDetail = getDetail(sections['boxCoverDetail']) +
+            getDetail(sections['boxCover']);
+        final innerDetail =
+            getDetail(sections['innerDetail']) + getDetail(sections['inner']);
+        final bottomDetail =
+            getDetail(sections['bottomDetail']) + getDetail(sections['bottom']);
+        final dieDetail =
+            getDetail(sections['dieDetail']) + getDetail(sections['die']);
+        final otherDetail =
+            getDetail(sections['otherDetail']) + getDetail(sections['other']);
+        final extraSections = product['customExtraSections'] is List
+            ? product['customExtraSections']
+            : [];
+        final images = product['images'] is List ? product['images'] : [];
+
+        List<pw.ImageProvider> loadedImages = [];
+        for (final url in images) {
+          if (url is String && url.isNotEmpty) {
+            final img = await _loadNetworkImage(url);
+            if (img != null) loadedImages.add(img);
+          }
+        }
+
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.a4.copyWith(
+              marginLeft: 8,
+              marginRight: 8,
+              marginTop: 8,
+              marginBottom: 8,
+            ),
+            build: (context) {
+              return pw.Container(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    pw.Text(
+                      'All Rights Reserved © Dimple Packaging Pvt. Ltd.',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.yellow700,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('Job No: $jobNo',
+                                style: pw.TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.Text('DPL: $dplNo',
+                                style: pw.TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.Text(
+                                "Order Location: ${orderData['unit'] ?? 'N/A'}",
+                                style: pw.TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: pw.FontWeight.bold)),
+                          ],
+                        ),
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.end,
+                          children: [
+                            pw.Text(
+                                'DATE - ${DateFormat('dd-MM-yyyy').format(orderDate)}',
+                                style: const pw.TextStyle(fontSize: 10)),
+                            pw.SizedBox(height: 4),
+                            pw.Container(
+                              padding: const pw.EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: pw.BoxDecoration(
+                                color: PdfColors.grey300,
+                                borderRadius: pw.BorderRadius.circular(4),
+                              ),
+                              child: pw.Column(
+                                children: [
+                                  pw.Text('DATE OF SUPPLY',
+                                      style: pw.TextStyle(
+                                          fontSize: 8,
+                                          fontWeight: pw.FontWeight.bold)),
+                                  pw.Text(
+                                      DateFormat('dd-MM-yyyy')
+                                          .format(deliveryDate),
+                                      style: const pw.TextStyle(fontSize: 10)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 5),
+                    pw.Container(
+                      width: double.infinity,
+                      padding: const pw.EdgeInsets.all(8),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.grey300,
+                        borderRadius: pw.BorderRadius.circular(4),
+                      ),
+                      child: pw.Center(
+                        child: pw.Text(
+                          companyName.toString().trim().isNotEmpty
+                              ? '$customerName ($companyName)'
+                              : customerName,
+                          style: pw.TextStyle(
+                              fontSize: 14, fontWeight: pw.FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    pw.SizedBox(height: 1),
+                    pw.Table(
+                      border: pw.TableBorder.all(color: PdfColors.grey600),
+                      children: [
+                        _buildPdfRow('Product', product['productName'] ?? ''),
+                        _buildPdfRow(
+                            'Category', product['productCategory'] ?? ''),
+                        _buildPdfRow('Dimensions (L×H×W)',
+                            '${product['length'] ?? ''} × ${product['height'] ?? ''} × ${product['width'] ?? ''}'),
+                        _buildPdfRow(
+                            'Quantity', '${product['quantity'] ?? ''}'),
+                        if ((product['remarks'] ?? '')
+                            .toString()
+                            .trim()
+                            .isNotEmpty)
+                          _buildPdfRow('Remark', product['remarks']),
+                        _buildPdfRow('Assign Person', ''),
+                        if (trayDetail.toString().trim().isNotEmpty)
+                          _buildPdfRow('Tray', trayDetail),
+                        if (salophinDetail.toString().trim().isNotEmpty)
+                          _buildPdfRow('Salophin', salophinDetail),
+                        if (boxCoverDetail.toString().trim().isNotEmpty)
+                          _buildPdfRow('Box Cover', boxCoverDetail),
+                        if (innerDetail.toString().trim().isNotEmpty)
+                          _buildPdfRow('Inner', innerDetail),
+                        if (bottomDetail.toString().trim().isNotEmpty)
+                          _buildPdfRow('Bottom', bottomDetail),
+                        if (dieDetail.toString().trim().isNotEmpty)
+                          _buildPdfRow('Die', dieDetail),
+                        if (otherDetail.toString().trim().isNotEmpty)
+                          _buildPdfRow('Other', otherDetail.toString()),
+                        if (extraSections.isNotEmpty)
+                          ...extraSections.map<pw.TableRow?>((sec) {
+                            final detail =
+                                sec['detail'] ?? sec['details'] ?? '';
+                            if (detail.toString().trim().isEmpty) return null;
+                            return _buildPdfRow(
+                                sec['title'] ?? 'Extra', detail);
+                          }).whereType<pw.TableRow>(),
+                        _buildPdfRow('Conerned Person', salesPerson),
+                      ],
+                    ),
+                    if (notes.toString().trim().isNotEmpty) ...[
+                      pw.SizedBox(height: 1),
+                      pw.Container(
+                        width: double.infinity,
+                        padding: const pw.EdgeInsets.all(2),
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.white,
+                          border: pw.Border.all(color: PdfColors.grey300),
+                        ),
+                        child: pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('Additional Notes:',
+                                style: pw.TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.SizedBox(height: 0.1),
+                            pw.Text(notes,
+                                style: const pw.TextStyle(fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ],
+                    pw.SizedBox(height: 3),
+                    if (loadedImages.isNotEmpty)
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('Product Images:',
+                                style: pw.TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.SizedBox(height: 6),
+                            pw.Expanded(
+                              child: pw.GridView(
+                                crossAxisCount:
+                                    loadedImages.length <= 3
+                                        ? loadedImages.length
+                                        : 3,
+                                mainAxisSpacing: 8,
+                                crossAxisSpacing: 8,
+                                childAspectRatio: 1.2,
+                                children: loadedImages
+                                    .map((img) =>
+                                        pw.Image(img, fit: pw.BoxFit.contain))
+                                    .toList(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      }
+
+      final pdfBytes = await pdf.save();
+      final images = await Printing.raster(pdfBytes, dpi: 150).toList();
+
+      if (kIsWeb) {
+        final archive = Archive();
+        int page = 1;
+        for (final img in images) {
+          final pngBytes = await img.toPng();
+          archive.addFile(ArchiveFile(
+            'JobCard_${orderId}_Page$page.png',
+            pngBytes.length,
+            pngBytes,
+          ));
+          page++;
+        }
+        final zipData = ZipEncoder().encode(archive)!;
+        downloadFileWeb(
+            Uint8List.fromList(zipData), 'JobCard_$orderId.zip');
+      } else {
+        int page = 1;
+        for (final img in images) {
+          final pngBytes = await img.toPng();
+          await Printing.sharePdf(
+            bytes: pngBytes,
+            filename: 'JobCard_${orderId}_Page$page.png',
+          );
+          page++;
+        }
+      }
+    } catch (e) {
+      print(e);
+    } finally {
+      _hideLoadingDialog();
+    }
   }
 
   bool _hasExtraInstructions(Map<String, dynamic> sections) {
@@ -365,20 +633,51 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
         '  |  Price: ${sections['otherPrice'] ?? ''}';
   }
 
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.white,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 20),
+              const Expanded(
+                child: Text(
+                  "Generating images… Please wait",
+                  style:
+                      TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _hideLoadingDialog() {
+    if (Navigator.canPop(context)) Navigator.pop(context);
+  }
+
   pw.TableRow _buildPdfRow(String label, String value) {
     return pw.TableRow(
       children: [
         pw.Container(
           padding: const pw.EdgeInsets.all(8),
           color: PdfColors.grey200,
-          child: pw.Text(
-            label,
-            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-          ),
+          child: pw.Text(label,
+              style: pw.TextStyle(
+                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
         ),
         pw.Container(
           padding: const pw.EdgeInsets.all(8),
-          child: pw.Text(value, style: const pw.TextStyle(fontSize: 10)),
+          child: pw.Text(value, style: const pw.TextStyle(fontSize: 8)),
         ),
       ],
     );
@@ -391,24 +690,30 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
     final alreadyExists = await _checkIfJobCardExists(orderId);
     if (alreadyExists) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text('Job Card already created for this Sales Order!'),
-                ),
-              ],
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.info_outline,
+                  color: Colors.white, size: 20),
             ),
-            backgroundColor: Colors.orange.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Job Card already created for this Sales Order!',
+                  style:
+                      TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
             ),
-          ),
-        );
+          ]),
+          backgroundColor: const Color(0xFFFF9800),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          margin: const EdgeInsets.all(16),
+          elevation: 8,
+        ));
       }
       return;
     }
@@ -427,16 +732,14 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
         jobNo = 'DPL$next';
       });
 
-      List products = order['products'] ?? [];
+      List products = safeList(order['products']);
       List<Map<String, dynamic>> jobCardProducts = [];
-
       for (int i = 0; i < products.length; i++) {
         final product = products[i];
-
         jobCardProducts.add({
-          'dplIndex': i + 1, // 🔥 THIS IS KEY
-          'dplNo': '$jobNo-${i + 1}', // optional but recommended
-          'productName': product['productName'] ?? '', // ✅ ADD THIS
+          'dplIndex': i + 1,
+          'dplNo': '$jobNo-${i + 1}',
+          'productName': product['productName'] ?? '',
           'productCategory': product['productCategory'] ?? '',
           'length': product['length'] ?? '',
           'height': product['height'] ?? '',
@@ -461,7 +764,10 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
         });
       }
 
-      await FirebaseFirestore.instance.collection('jobCards').doc(jobNo).set({
+      await FirebaseFirestore.instance
+          .collection('jobCards')
+          .doc(jobNo)
+          .set({
         'jobNo': jobNo,
         'date': order['orderDate'] ?? DateTime.now(),
         'priority': order['priority'] ?? 'Medium',
@@ -473,44 +779,62 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
         'status': 'Pending',
         'createdAt': FieldValue.serverTimestamp(),
         'source': 'sales_order',
+        'deliveryDate': order['deliveryDate'],
+        'unit': order['unit'],
         'linkedOrderId': orderId,
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(child: Text('Job Card created successfully!')),
-              ],
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.check_circle,
+                  color: Colors.white, size: 20),
             ),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Job Card created successfully!',
+                  style:
+                      TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
             ),
-          ),
-        );
+          ]),
+          backgroundColor: const Color(0xFF4CAF50),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          margin: const EdgeInsets.all(16),
+          elevation: 8,
+        ));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Error: $e')),
-            ],
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8)),
+            child:
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
           ),
-          backgroundColor: Colors.red.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text('Error: $e',
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w500)),
           ),
-        ),
-      );
+        ]),
+        backgroundColor: const Color(0xFFF44336),
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
+        elevation: 8,
+      ));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -534,33 +858,45 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
         context: context,
         builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.teal.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.assignment_outlined,
-                  color: Colors.teal.shade600,
-                ),
+              borderRadius: BorderRadius.circular(24)),
+          backgroundColor: Colors.white,
+          title: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                    colors: [Colors.blue.shade400, Colors.blue.shade600]),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.blue.shade200,
+                      blurRadius: 8,
+                      offset: const Offset(0, 4))
+                ],
               ),
-              const SizedBox(width: 12),
-              const Text('Create Job Card?'),
-            ],
-          ),
+              child: const Icon(Icons.assignment_outlined,
+                  color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Text('Create Job Card?',
+                  style: TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold)),
+            ),
+          ]),
           content: const Text(
             'Would you like to create a Job Card from this updated Sales Order?',
-            style: TextStyle(fontSize: 16),
+            style: TextStyle(fontSize: 16, color: Color(0xFF555555)),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Not Now'),
+              style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 12)),
+              child: Text('Not Now',
+                  style: TextStyle(
+                      fontSize: 15, color: Colors.grey.shade700)),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -577,13 +913,17 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal.shade600,
+                backgroundColor: const Color(0xFF2196F3),
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 12),
+                elevation: 4,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                    borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Create Job Card'),
+              child: const Text('Create Job Card',
+                  style: TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -594,547 +934,1008 @@ final dieDetail = sections['dieDetail'] ?? sections['die'] ?? '';
   Color _getStatusColor(String? status) {
     switch (status?.toLowerCase()) {
       case 'completed':
-        return Colors.green.shade600;
+        return const Color(0xFF4CAF50);
       case 'pending':
-        return Colors.orange.shade600;
+        return const Color(0xFFFF9800);
       case 'processing':
-        return Colors.blue.shade600;
+        return const Color(0xFF2196F3);
       case 'cancelled':
-        return Colors.red.shade600;
+        return const Color(0xFFF44336);
       default:
-        return Colors.grey.shade600;
+        return const Color(0xFF9E9E9E);
     }
   }
 
   Color _getPriorityColor(String? priority) {
     switch (priority?.toLowerCase()) {
       case 'high':
-        return Colors.red.shade50;
+        return const Color(0xFFFFEBEE);
       case 'medium':
-        return Colors.orange.shade50;
+        return const Color(0xFFFFF3E0);
       case 'low':
-        return Colors.green.shade50;
+        return const Color(0xFFF1F8E9);
       default:
-        return Colors.grey.shade50;
+        return const Color(0xFFF5F5F5);
     }
   }
 
+  Color _getPriorityBorderColor(String? priority) {
+    switch (priority?.toLowerCase()) {
+      case 'high':
+        return const Color(0xFFEF5350);
+      case 'medium':
+        return const Color(0xFFFF9800);
+      case 'low':
+        return const Color(0xFF66BB6A);
+      default:
+        return const Color(0xFFBDBDBD);
+    }
+  }
+
+  // ─── Build ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.teal.shade50, Colors.white],
-        ),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
+    // Responsive: phone = width < 600
+    final bool isPhone = MediaQuery.of(context).size.width < 600;
+
+    return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: AppBar(
+          automaticallyImplyLeading: false,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          flexibleSpace: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.shade200,
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.teal.shade100.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.purple.shade600,
+                  Colors.blue.shade600,
+                  Colors.teal.shade600,
                 ],
-              ),
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search by customer or product...',
-                  hintStyle: TextStyle(color: Colors.grey.shade400),
-                  prefixIcon: Icon(
-                    Icons.search_rounded,
-                    color: Colors.teal.shade600,
-                    size: 24,
-                  ),
-                  suffixIcon: searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: Icon(Icons.clear, color: Colors.grey.shade400),
-                          onPressed: () => setState(() => searchQuery = ''),
-                        )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
-                  ),
-                ),
-                onChanged: (v) => setState(() => searchQuery = v.toLowerCase()),
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
           ),
-
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('orders')
-                  .orderBy('orderDate', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(color: Colors.teal.shade600),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Loading orders...',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  );
-                }
-
-                var orders = snapshot.data!.docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final customer = (data['customerName'] ?? '')
-                      .toString()
-                      .toLowerCase();
-                  final productMatch =
-                      (data['products'] as List?)?.any(
-                        (p) => (p['productName'] ?? '')
-                            .toString()
-                            .toLowerCase()
-                            .contains(searchQuery),
-                      ) ??
-                      false;
-                  return customer.contains(searchQuery) || productMatch;
-                }).toList();
-
-                if (orders.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 80,
-                          color: Colors.grey.shade300,
+                    child: const Icon(Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Image.asset('assets/dpl.png', height: 36),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Create Job Cards',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          color: Colors.white,
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          searchQuery.isEmpty
-                              ? 'No orders found'
-                              : 'No matching orders',
-                          style: TextStyle(
-                            fontSize: 18,
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Manage Job Cards from Sales Orders',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE3F2FD), Color(0xFFFFFFFF)],
+          ),
+        ),
+        child: Column(
+          children: [
+            // ── Search Bar ──────────────────────────────────────────────────
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                isPhone ? 12 : 16,
+                isPhone ? 10 : 12,
+                isPhone ? 12 : 16,
+                isPhone ? 8 : 10,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.shade100.withOpacity(0.5),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                      colors: [Colors.white, Colors.blue.shade50]),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.shade100.withOpacity(0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  style: TextStyle(fontSize: isPhone ? 14 : 15),
+                  decoration: InputDecoration(
+                    hintText: isPhone
+                        ? 'Search orders, customers...'
+                        : 'Search orders, customers, products...',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: isPhone ? 13 : 15,
+                    ),
+                    prefixIcon: Padding(
+                      padding: EdgeInsets.all(isPhone ? 10 : 12),
+                      child: Icon(Icons.search_rounded,
+                          color: Colors.blue.shade700,
+                          size: isPhone ? 22 : 26),
+                    ),
+                    suffixIcon: searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear_rounded,
+                                color: Colors.grey.shade400,
+                                size: isPhone ? 18 : 22),
+                            onPressed: () =>
+                                setState(() => searchQuery = ''),
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.transparent,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: isPhone ? 14 : 20,
+                      vertical: isPhone ? 13 : 18,
+                    ),
+                  ),
+                  onChanged: (v) =>
+                      setState(() => searchQuery = v.toLowerCase()),
+                ),
+              ),
+            ),
+
+            // ── Filters ─────────────────────────────────────────────────────
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                isPhone ? 12 : 20,
+                isPhone ? 8 : 12,
+                isPhone ? 12 : 20,
+                isPhone ? 10 : 20,
+              ),
+              child: Row(
+                children: [
+                  // Date Filter
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                            colors: [Colors.white, Colors.purple.shade50]),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                Colors.purple.shade100.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedDateFilter,
+                        isExpanded: true,
+                        isDense: isPhone,
+                        decoration: InputDecoration(
+                          labelText: isPhone ? '📅 Date' : '📅 Date Filter',
+                          labelStyle: TextStyle(
+                            color: Colors.purple.shade700,
                             fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade600,
+                            fontSize: isPhone ? 12 : 14,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: isPhone ? 10 : 16,
+                            vertical: isPhone ? 8 : 12,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          searchQuery.isEmpty
-                              ? 'Create your first sales order'
-                              : 'Try a different search term',
-                          style: TextStyle(color: Colors.grey.shade400),
+                        style: TextStyle(
+                          fontSize: isPhone ? 12 : 14,
+                          color: Colors.black87,
                         ),
-                      ],
+                        dropdownColor: Colors.white,
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'All', child: Text('All Time')),
+                          DropdownMenuItem(
+                              value: 'Day', child: Text('Today')),
+                          DropdownMenuItem(
+                              value: 'Week', child: Text('This Week')),
+                          DropdownMenuItem(
+                              value: 'Month', child: Text('This Month')),
+                          DropdownMenuItem(
+                              value: 'Custom', child: Text('Custom Range')),
+                        ],
+                        onChanged: (val) async {
+                          if (val == null) return;
+                          if (val == 'Custom') {
+                            final range = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                              builder: (context, child) => Theme(
+                                data: Theme.of(context).copyWith(
+                                  colorScheme: ColorScheme.light(
+                                    primary: Colors.purple.shade600,
+                                    onPrimary: Colors.white,
+                                  ),
+                                ),
+                                child: child!,
+                              ),
+                            );
+                            if (range == null) return;
+                            setState(() {
+                              _selectedDateFilter = val;
+                              _selectedDateRange = range;
+                            });
+                          } else {
+                            setState(() {
+                              _selectedDateFilter = val;
+                              _selectedDateRange = null;
+                            });
+                          }
+                        },
+                      ),
                     ),
-                  );
-                }
+                  ),
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: orders.length,
-                  itemBuilder: (context, i) {
-                    final doc = orders[i];
-                    final data = doc.data() as Map<String, dynamic>;
-                    final products = data['products'] as List? ?? [];
-                    final priority = data['priority'] ?? 'Medium';
-                    final status = data['status'] ?? 'Pending';
+                  SizedBox(width: isPhone ? 8 : 14),
 
-                    return FutureBuilder<bool>(
-                      future: _checkIfJobCardExists(doc.id),
-                      builder: (context, snapshot) {
-                        final jobCardExists = snapshot.data ?? false;
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.shade200,
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
+                  // Unit Filter
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                            colors: [Colors.white, Colors.orange.shade50]),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                Colors.orange.shade100.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
                           ),
-                          child: Theme(
-                            data: Theme.of(
-                              context,
-                            ).copyWith(dividerColor: Colors.transparent),
-                            child: ExpansionTile(
-                              tilePadding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 8,
+                        ],
+                      ),
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedUnit,
+                        isExpanded: true,
+                        isDense: isPhone,
+                        decoration: InputDecoration(
+                          labelText: isPhone ? '🏭 Unit' : '🏭 Unit Filter',
+                          labelStyle: TextStyle(
+                            color: Colors.orange.shade700,
+                            fontWeight: FontWeight.w600,
+                            fontSize: isPhone ? 12 : 14,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: isPhone ? 10 : 16,
+                            vertical: isPhone ? 8 : 12,
+                          ),
+                        ),
+                        style: TextStyle(
+                          fontSize: isPhone ? 12 : 14,
+                          color: Colors.black87,
+                        ),
+                        dropdownColor: Colors.white,
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'All', child: Text('All Units')),
+                          DropdownMenuItem(
+                              value: 'Unit 1', child: Text('Unit 1')),
+                          DropdownMenuItem(
+                              value: 'Unit 2', child: Text('Unit 2')),
+                          DropdownMenuItem(
+                              value: 'Meena Bazar',
+                              child: Text('Meena Bazar')),
+                          DropdownMenuItem(
+                              value: 'College Road',
+                              child: Text('College Road')),
+                        ],
+                        onChanged: (val) =>
+                            setState(() => _selectedUnit = val ?? 'All'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Orders List ──────────────────────────────────────────────────
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('orders')
+                    .orderBy('orderDate', descending: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                              color: Colors.blue.shade600, strokeWidth: 3),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Loading orders...',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  var orders = snapshot.data!.docs.where((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final customer = (data['customerName'] ?? '')
+                        .toString()
+                        .toLowerCase();
+                    final searchMatch = customer.contains(searchQuery);
+                    final unit = (data['unit'] ?? '').toString();
+                    final unitMatch =
+                        _selectedUnit == 'All' || unit == _selectedUnit;
+                    final Timestamp? ts = data['orderDate'];
+                    if (ts == null) return false;
+                    final orderDate = ts.toDate().toLocal();
+                    final now = DateTime.now();
+                    bool dateMatch = true;
+                    if (_selectedDateFilter == 'Day') {
+                      final start =
+                          DateTime(now.year, now.month, now.day);
+                      final end = start.add(const Duration(days: 1));
+                      dateMatch = orderDate.isAfter(
+                              start.subtract(
+                                  const Duration(milliseconds: 1))) &&
+                          orderDate.isBefore(end);
+                    } else if (_selectedDateFilter == 'Week') {
+                      final start = now
+                          .subtract(Duration(days: now.weekday - 1));
+                      final weekStart =
+                          DateTime(start.year, start.month, start.day);
+                      final weekEnd =
+                          weekStart.add(const Duration(days: 7));
+                      dateMatch = orderDate.isAfter(weekStart.subtract(
+                              const Duration(milliseconds: 1))) &&
+                          orderDate.isBefore(weekEnd);
+                    } else if (_selectedDateFilter == 'Month') {
+                      final monthStart =
+                          DateTime(now.year, now.month, 1);
+                      final monthEnd =
+                          DateTime(now.year, now.month + 1, 1);
+                      dateMatch = orderDate.isAfter(monthStart.subtract(
+                              const Duration(milliseconds: 1))) &&
+                          orderDate.isBefore(monthEnd);
+                    } else if (_selectedDateFilter == 'Custom' &&
+                        _selectedDateRange != null) {
+                      dateMatch = orderDate.isAfter(
+                              _selectedDateRange!.start.subtract(
+                                  const Duration(milliseconds: 1))) &&
+                          orderDate.isBefore(_selectedDateRange!.end
+                              .add(const Duration(days: 1)));
+                    }
+                    return searchMatch && unitMatch && dateMatch;
+                  }).toList();
+
+                  if (orders.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(isPhone ? 18 : 24),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.inbox_outlined,
+                                size: isPhone ? 60 : 80,
+                                color: Colors.blue.shade300),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            searchQuery.isEmpty
+                                ? 'No orders found'
+                                : 'No matching orders',
+                            style: TextStyle(
+                              fontSize: isPhone ? 18 : 22,
+                              fontWeight: FontWeight.bold,
+                              color: const Color.fromARGB(255, 247, 2, 2),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            searchQuery.isEmpty
+                                ? 'Create your first sales order'
+                                : 'Try adjusting your filters',
+                            style: TextStyle(
+                                fontSize: isPhone ? 13 : 15,
+                                color: Colors.grey.shade500),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: EdgeInsets.fromLTRB(
+                      isPhone ? 12 : 20,
+                      0,
+                      isPhone ? 12 : 20,
+                      isPhone ? 12 : 20,
+                    ),
+                    itemCount: orders.length,
+                    itemBuilder: (context, i) {
+                      final doc = orders[i];
+                      final data = doc.data() as Map<String, dynamic>;
+                      final products = safeList(data['products']);
+                      final priority = data['priority'] ?? 'Medium';
+                      final status = data['status'] ?? 'Pending';
+
+                      return FutureBuilder<bool>(
+                        future: _checkIfJobCardExists(doc.id),
+                        builder: (context, snapshot) {
+                          final jobCardExists = snapshot.data ?? false;
+
+                          return Container(
+                            margin: EdgeInsets.only(
+                                bottom: isPhone ? 14 : 20),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white,
+                                  Colors.blue.shade50.withOpacity(0.3),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                              childrenPadding: const EdgeInsets.all(20),
-                              leading: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.teal.shade400,
-                                      Colors.teal.shade600,
+                              borderRadius: BorderRadius.circular(
+                                  isPhone ? 18 : 24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.shade100
+                                      .withOpacity(0.6),
+                                  blurRadius: isPhone ? 12 : 20,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: Theme(
+                              data: Theme.of(context).copyWith(
+                                  dividerColor: Colors.transparent),
+                              child: ExpansionTile(
+                                tilePadding: EdgeInsets.symmetric(
+                                  horizontal: isPhone ? 14 : 20,
+                                  vertical: isPhone ? 8 : 12,
+                                ),
+                                childrenPadding:
+                                    EdgeInsets.all(isPhone ? 10 : 14),
+                                leading: Container(
+                                  padding: EdgeInsets.all(isPhone ? 8 : 10),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(colors: [
+                                      Colors.blue.shade400,
+                                      Colors.blue.shade700,
+                                    ]),
+                                    borderRadius: BorderRadius.circular(
+                                        isPhone ? 12 : 16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.blue.shade300,
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
                                     ],
                                   ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.teal.shade200,
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
+                                  child: Icon(
+                                    Icons.shopping_bag_rounded,
+                                    color: Colors.white,
+                                    size: isPhone ? 18 : 22,
+                                  ),
+                                ),
+                                title: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    // Customer name row
+                                    Text(
+                                      data['customerName'] ?? 'Unknown',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: isPhone ? 15 : 18,
+                                        color: const Color(0xFF1A1A1A),
+                                      ),
                                     ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.person_outline,
+                                            size: isPhone ? 12 : 14,
+                                            color: Colors.grey.shade600),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            data['salesPerson'] ??
+                                                'Unknown',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: isPhone ? 12 : 14,
+                                              color: Colors.grey.shade700,
+                                            ),
+                                            overflow:
+                                                TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    // PDF/JPG + JobCard badge — on phone: new row below
+                                    if (jobCardExists) ...[
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          // PDF + JPG buttons
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                colors: [
+                                                  Colors.red.shade400,
+                                                  Colors.red.shade700,
+                                                ],
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      10),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                    color: Colors
+                                                        .red.shade200,
+                                                    blurRadius: 6,
+                                                    offset: const Offset(
+                                                        0, 3))
+                                              ],
+                                            ),
+                                            child: Row(
+                                              mainAxisSize:
+                                                  MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(
+                                                      Icons
+                                                          .picture_as_pdf_rounded,
+                                                      color: Colors.white),
+                                                  iconSize:
+                                                      isPhone ? 18 : 22,
+                                                  onPressed: () =>
+                                                      _generateAllProductsPDF(
+                                                          doc.id, data),
+                                                  tooltip: 'Generate PDF',
+                                                  padding:
+                                                      EdgeInsets.all(
+                                                          isPhone ? 6 : 10),
+                                                  constraints:
+                                                      const BoxConstraints(),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(
+                                                      Icons.image_rounded,
+                                                      color: Colors
+                                                          .blueAccent),
+                                                  iconSize:
+                                                      isPhone ? 18 : 22,
+                                                  tooltip: 'Download JPG',
+                                                  onPressed: () =>
+                                                      _generateAllProductsJPG(
+                                                          doc.id, data),
+                                                  padding:
+                                                      EdgeInsets.all(
+                                                          isPhone ? 6 : 10),
+                                                  constraints:
+                                                      const BoxConstraints(),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          // Job Card badge
+                                          Flexible(
+                                            child: Container(
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal:
+                                                    isPhone ? 10 : 14,
+                                                vertical: isPhone ? 6 : 8,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    Colors.green.shade400,
+                                                    Colors.green.shade700,
+                                                  ],
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        20),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                      color: Colors
+                                                          .green.shade200,
+                                                      blurRadius: 6,
+                                                      offset: const Offset(
+                                                          0, 3))
+                                                ],
+                                              ),
+                                              child: Row(
+                                                mainAxisSize:
+                                                    MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                      Icons
+                                                          .check_circle_rounded,
+                                                      color: Colors.white,
+                                                      size: 14),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'Job Card',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize:
+                                                          isPhone ? 11 : 13,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ],
                                 ),
-                                child: const Icon(
-                                  Icons.shopping_bag_outlined,
-                                  color: Colors.white,
-                                  size: 24,
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Row(
+                                    children: [
+                                      // Status Badge
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: isPhone ? 10 : 12,
+                                          vertical: isPhone ? 4 : 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _getStatusColor(status),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: _getStatusColor(status)
+                                                  .withOpacity(0.4),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          status,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: isPhone ? 11 : 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Priority Badge
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: isPhone ? 10 : 12,
+                                          vertical: isPhone ? 4 : 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              _getPriorityColor(priority),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color:
+                                                _getPriorityBorderColor(
+                                                    priority),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.flag_rounded,
+                                                size: isPhone ? 12 : 14,
+                                                color:
+                                                    _getPriorityBorderColor(
+                                                        priority)),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              priority,
+                                              style: TextStyle(
+                                                fontSize: isPhone ? 11 : 12,
+                                                fontWeight: FontWeight.bold,
+                                                color:
+                                                    _getPriorityBorderColor(
+                                                        priority),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              title: Row(
                                 children: [
-                                  Expanded(
+                                  // ── Product List ──────────────────────
+                                  Container(
+                                    padding:
+                                        EdgeInsets.all(isPhone ? 14 : 18),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(colors: [
+                                        Colors.grey.shade50,
+                                        Colors.white,
+                                      ]),
+                                      borderRadius:
+                                          BorderRadius.circular(16),
+                                      border: Border.all(
+                                          color: Colors.grey.shade200),
+                                    ),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text(
-                                          'Customer: ${data['customerName'] ?? 'Unknown'}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 18,
+                                        Row(children: [
+                                          Container(
+                                            padding:
+                                                EdgeInsets.all(
+                                                    isPhone ? 6 : 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.shade100,
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      10),
+                                            ),
+                                            child: Icon(
+                                                Icons.inventory_2_rounded,
+                                                size: isPhone ? 16 : 20,
+                                                color:
+                                                    Colors.blue.shade700),
                                           ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Sales Person: ${data['salesPerson'] ?? 'Unknown'}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 15,
+                                          const SizedBox(width: 10),
+                                          Text(
+                                            'Products',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: isPhone ? 14 : 16,
+                                              color: Colors.grey.shade800,
+                                            ),
+                                          ),
+                                        ]),
+                                        const SizedBox(height: 12),
+                                        ...products.map(
+                                          (p) => Container(
+                                            margin: EdgeInsets.only(
+                                                bottom: isPhone ? 8 : 10),
+                                            padding:
+                                                EdgeInsets.all(
+                                                    isPhone ? 10 : 12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      12),
+                                              border: Border.all(
+                                                  color: Colors
+                                                      .blue.shade100),
+                                            ),
+                                            child: Row(children: [
+                                              Container(
+                                                width: 7,
+                                                height: 7,
+                                                decoration: BoxDecoration(
+                                                  gradient:
+                                                      LinearGradient(colors: [
+                                                    Colors.blue.shade400,
+                                                    Colors.blue.shade600,
+                                                  ]),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment
+                                                          .start,
+                                                  children: [
+                                                    Text(
+                                                      '${p['productName'] ?? 'Product'} ${p['productCategory'] ?? ''}',
+                                                      style: TextStyle(
+                                                        fontSize: isPhone
+                                                            ? 13
+                                                            : 15,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors
+                                                            .grey.shade800,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(
+                                                        height: 4),
+                                                    Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors
+                                                            .orange.shade100,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8),
+                                                      ),
+                                                      child: Text(
+                                                        'Qty: ${p['quantity'] ?? '-'}',
+                                                        style: TextStyle(
+                                                          fontSize: isPhone
+                                                              ? 11
+                                                              : 13,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Colors.orange
+                                                              .shade800,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ]),
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  if (jobCardExists) ...[
-                                    // PDF Button
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.picture_as_pdf,
-                                        color: Colors.red,
-                                        size: 16.sp,
-                                      ),
-                                      onPressed: () =>
-                                          _generateAllProductsPDF(doc.id, data),
-                                      tooltip: 'Generate PDF',
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                    ),
-                                    SizedBox(width: 0.2.w),
-                                    // Job Card Badge
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Colors.green.shade400,
-                                            Colors.green.shade600,
-                                          ],
-                                        ),
-                                        borderRadius: BorderRadius.circular(20),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.green.shade200,
-                                            blurRadius: 4,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.check_circle,
-                                            color: Colors.white,
-                                            size: 12.sp,
-                                          ),
-                                          SizedBox(width: 0.2.w),
-                                          Text(
-                                            'Job Card',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 9.sp,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _getStatusColor(status),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        status,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _getPriorityColor(priority),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color:
-                                              priority.toLowerCase() == 'high'
-                                              ? Colors.red.shade200
-                                              : priority.toLowerCase() ==
-                                                    'medium'
-                                              ? Colors.orange.shade200
-                                              : Colors.green.shade200,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.flag,
-                                            size: 12,
-                                            color:
-                                                priority.toLowerCase() == 'high'
-                                                ? Colors.red.shade600
-                                                : priority.toLowerCase() ==
-                                                      'medium'
-                                                ? Colors.orange.shade600
-                                                : Colors.green.shade600,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            priority,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              color:
-                                                  priority.toLowerCase() ==
-                                                      'high'
-                                                  ? Colors.red.shade600
-                                                  : priority.toLowerCase() ==
-                                                        'medium'
-                                                  ? Colors.orange.shade600
-                                                  : Colors.green.shade600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.inventory_2_outlined,
-                                            size: 18,
-                                            color: Colors.teal.shade600,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            'Products:',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                              color: Colors.grey.shade700,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 12),
-                                      ...products.map(
-                                        (p) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 8,
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                width: 6,
-                                                height: 6,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.teal.shade400,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: RichText(
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  text: TextSpan(
-                                                    children: [
-                                                      TextSpan(
-                                                        text:
-                                                            '${p['productName'] ?? 'Product'}   ${p['productCategory'] ?? ''}',
+                                  SizedBox(height: isPhone ? 12 : 18),
 
-                                                        style: TextStyle(
-                                                          fontSize: 16,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color: Colors
-                                                              .teal
-                                                              .shade700,
-                                                        ),
-                                                      ),
-                                                      TextSpan(
-                                                        text:
-                                                            '  •  Qty: ${p['quantity'] ?? '-'}',
-                                                        style: TextStyle(
-                                                          fontSize: 15,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: Colors
-                                                              .deepOrange
-                                                              .shade600,
-                                                        ),
-                                                      ),
-                                                    ],
+                                  // ── Action Button ─────────────────────
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: _isLoading
+                                          ? null
+                                          : () =>
+                                              _openEditAndCreateJobCard(
+                                                  doc.id, data),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            Colors.blue.shade600,
+                                        foregroundColor: Colors.white,
+                                        elevation: 6,
+                                        shadowColor:
+                                            Colors.blue.shade300,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                                  isPhone ? 12 : 16),
+                                        ),
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: isPhone ? 20 : 28,
+                                          vertical: isPhone ? 12 : 16,
+                                        ),
+                                      ),
+                                      child: _isLoading
+                                          ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  jobCardExists
+                                                      ? Icons.edit_rounded
+                                                      : Icons
+                                                            .assignment_turned_in_rounded,
+                                                  size: isPhone ? 18 : 22,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  jobCardExists
+                                                      ? 'Edit Order'
+                                                      : 'Edit & Create Job Card',
+                                                  style: TextStyle(
+                                                    fontSize:
+                                                        isPhone ? 14 : 16,
+                                                    fontWeight:
+                                                        FontWeight.bold,
                                                   ),
                                                 ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: _isLoading
-                                        ? null
-                                        : () => _openEditAndCreateJobCard(
-                                            doc.id,
-                                            data,
-                                          ),
-                                    icon: _isLoading
-                                        ? const SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
+                                              ],
                                             ),
-                                          )
-                                        : Icon(
-                                            jobCardExists
-                                                ? Icons.edit_outlined
-                                                : Icons.assignment_outlined,
-                                            size: 20,
-                                          ),
-                                    label: Text(
-                                      jobCardExists
-                                          ? 'Edit Order'
-                                          : 'Edit & Create Job Card',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.teal.shade600,
-                                      foregroundColor: Colors.white,
-                                      elevation: 4,
-                                      shadowColor: Colors.teal.shade200,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 24,
-                                        vertical: 14,
-                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

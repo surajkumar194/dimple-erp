@@ -1,4 +1,3 @@
-// lib/ExcelBrowserPage.dart
 import 'dart:typed_data';
 import 'package:dimple_erp/all%20pages/firebase_optional.dart';
 import 'package:flutter/material.dart';
@@ -6,45 +5,36 @@ import 'package:excel/excel.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-
-const String kStorageFolder = 'EXCEL/'; // case-sensitive
-const int kMaxExcelBytes = 20 * 1024 * 1024; // 20 MB cap
-
+const String kStorageFolder = 'EXCEL/'; 
+const int kMaxExcelBytes = 20 * 1024 * 1024;
 class ExcelBrowserPage extends StatefulWidget {
   const ExcelBrowserPage({super.key});
   @override
   State<ExcelBrowserPage> createState() => _ExcelBrowserPageState();
 }
-
 class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
   bool _initDone = false;
   bool _loading = false;
   String? _error;
   List<Reference> _files = [];
-
   String? _selectedFilePath;
   List<String> _sheetNames = [];
   String? _selectedSheet;
   List<List<dynamic>> _rows = [];
-
   @override
   void initState() {
     super.initState();
     _bootstrap();
   }
-
   Future<void> _bootstrap() async {
     try {
       WidgetsFlutterBinding.ensureInitialized();
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-
-      // Sign-in (Anonymous ok; make sure Anonymous is enabled in Console)
       if (FirebaseAuth.instance.currentUser == null) {
         await FirebaseAuth.instance.signInAnonymously();
       }
-
       await _loadFiles();
       setState(() => _initDone = true);
     } catch (e, st) {
@@ -74,7 +64,6 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
     }
   }
 
-  // -------- OPEN FILE (WEB-SAFE via getData) --------
   Future<void> _openExcel(Reference fileRef) async {
     try {
       setState(() {
@@ -85,17 +74,13 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
         _selectedSheet = null;
         _rows = [];
       });
-
-      // >>> This is the key: read bytes via Storage SDK, not http.get
       final Uint8List? bytes = await fileRef.getData(kMaxExcelBytes);
       if (bytes == null || bytes.isEmpty) {
         throw Exception('Empty file or blocked read');
       }
-
       final excel = Excel.decodeBytes(bytes);
       final sheets = excel.tables.keys.toList();
       if (sheets.isEmpty) throw Exception('No sheets found');
-
       setState(() {
         _sheetNames = sheets;
         _selectedSheet = sheets.first;
@@ -104,7 +89,6 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
             .toList();
       });
     } on FirebaseException catch (e, st) {
-      // e.g. storage/unauthorized, storage/object-not-found, etc.
       debugPrint('OPEN ERROR(Firebase): ${e.code} ${e.message}\n$st');
       setState(() => _error = 'Open error: [${e.code}] ${e.message}');
     } catch (e, st) {
@@ -115,7 +99,6 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
     }
   }
 
-  // -------- CHANGE SHEET (also uses getData) --------
   Future<void> _changeSheet(String sheet) async {
     try {
       if (_selectedFilePath == null) return;
@@ -130,7 +113,6 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
       final excel = Excel.decodeBytes(bytes);
       final table = excel.tables[sheet];
       if (table == null) throw Exception('Sheet "$sheet" not found');
-
       setState(() {
         _selectedSheet = sheet;
         _rows = table.rows.map((r) => r.map((c) => c?.value).toList()).toList();
@@ -159,7 +141,6 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
     if (!_initDone) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Excel Browser (Firebase Storage)'),
@@ -169,7 +150,6 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
       ),
       body: Row(
         children: [
-          // LEFT: file list
           SizedBox(
             width: 320,
             child: Column(
@@ -206,8 +186,6 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
             ),
           ),
           const VerticalDivider(width: 1),
-
-          // RIGHT: preview
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -265,18 +243,15 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
 class _ExcelTable extends StatelessWidget {
   final List<List<dynamic>> rows;
   const _ExcelTable({required this.rows});
-
   @override
   Widget build(BuildContext context) {
     final normalized = rows
         .map<List<String>>((r) => r.map((c) => (c ?? '').toString()).toList())
         .toList();
-
     int colCount = 0;
     for (final r in normalized) {
       if (r.length > colCount) colCount = r.length;
     }
-
     final hasHeader =
         normalized.isNotEmpty &&
         normalized.first.any((e) => e.trim().isNotEmpty);
@@ -284,7 +259,6 @@ class _ExcelTable extends StatelessWidget {
         ? normalized.first
         : List.generate(colCount, (i) => 'Col ${i + 1}');
     final dataRows = hasHeader ? normalized.skip(1).toList() : normalized;
-
     return Scrollbar(
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,

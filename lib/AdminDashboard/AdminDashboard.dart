@@ -29,6 +29,8 @@ class AdminCollectionsScreen extends StatelessWidget {
     },
   ];
 
+ AdminCollectionsScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -48,7 +50,6 @@ class AdminCollectionsScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
-              // Future: Add search functionality
             },
           ),
           const SizedBox(width: 8),

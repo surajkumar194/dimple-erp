@@ -5,6 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:flutter/services.dart';
+import 'package:sizer/sizer.dart';
 
 class DeliveryManagementScreen extends StatefulWidget {
   const DeliveryManagementScreen({super.key});
@@ -40,19 +41,19 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 220,
+            expandedHeight: 150,
             floating: false,
             pinned: true,
-            backgroundColor: const Color(0xFF00ACC1),
+          //  backgroundColor: const Color(0xFF00ACC1),
             flexibleSpace: FlexibleSpaceBar(
-              title: const Text(
-                '🚚 Delivery Management',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                  fontSize: 20,
-                ),
-              ),
+              // title: Text(
+              //   '🚚 Delivery Management',
+              //   style: TextStyle(
+              //     fontWeight: FontWeight.w600,
+              //     color: Colors.white,
+              //     fontSize: 14.sp,
+              //   ),
+              // ),
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
@@ -1120,7 +1121,7 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                   controller: controller,
                   images: product['images'],
                 );
-              }).toList(),
+              }),
 
               const SizedBox(height: 24),
 

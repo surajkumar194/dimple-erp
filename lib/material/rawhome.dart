@@ -101,13 +101,12 @@ class _MenuCard extends StatelessWidget {
   final Widget route;
 
   const _MenuCard({
-    Key? key,
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.color,
     required this.route,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

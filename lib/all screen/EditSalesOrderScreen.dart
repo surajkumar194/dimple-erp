@@ -5,8 +5,34 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show File;
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
+
+class AppColors {
+  static const Color primary = Color(0xFF169a8d);
+  static const Color secondary = Color(0xFFFF6B6B);
+  static const Color accent = Color(0xFFFFA500);
+  static const Color success = Color(0xFF2ECC71);
+  static const Color info = Color(0xFF3498DB);
+  static const Color warning = Color(0xFFE74C3C);
+  static const Color lightBg = Color(0xFFF8F9FA);
+  static const Color darkText = Color(0xFF2C3E50);
+  static const Gradient primaryGradient = LinearGradient(
+    colors: [Color(0xFF169a8d), Color(0xFF0d7c70)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const Gradient accentGradient = LinearGradient(
+    colors: [Color(0xFFFF6B6B), Color(0xFFFF8E72)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const Gradient successGradient = LinearGradient(
+    colors: [Color(0xFF2ECC71), Color(0xFF27AE60)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+}
 
 class EditSalesOrderScreen extends StatefulWidget {
   final String orderId;
@@ -20,7 +46,8 @@ class EditSalesOrderScreen extends StatefulWidget {
   State<EditSalesOrderScreen> createState() => _EditSalesOrderScreenState();
 }
 
-class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
+class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _customerController;
   late TextEditingController _companyController;
@@ -38,12 +65,16 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
   bool _isSaving = false;
   final ImagePicker _picker = ImagePicker();
   String _selectedUnit = 'Unit 1';
+  late AnimationController _animationController;
   final List<String> _units = [
     'Unit 1',
     'Unit 2',
     'Meena Bazar',
     'College Road',
   ];
+
+  bool _showPartialDispatch = false;
+
   void _openFullScreenImage(ImageProvider imageProvider) {
     showDialog(
       context: context,
@@ -65,7 +96,13 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
     );
   }
 
-  final List<String> _productCategories = ['MDF', 'Kappa Box', 'Other'];
+  final List<String> _productCategories = [
+    'MDF',
+    'Kappa Box',
+    'Packaging',
+    'Rigid Box (unit 2)',
+    'Others',
+  ];
   final TextEditingController _otherSalesPersonController =
       TextEditingController();
   final List<String> _salesPersons = [
@@ -90,20 +127,6 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
     "Sunny Kalra",
     "Others",
   ];
-  void _syncQuantityToRemark(
-    TextEditingController quantityController,
-    TextEditingController remarkController,
-  ) {
-    quantityController.addListener(() {
-      final qty = quantityController.text.trim();
-
-      if (qty.isNotEmpty &&
-          (remarkController.text.isEmpty ||
-              remarkController.text.startsWith('Qty '))) {
-        remarkController.text = 'Qty $qty';
-      }
-    });
-  }
 
   Map<String, String> _splitQuantityAndRemark(String input) {
     final number = RegExp(r'\d+').stringMatch(input) ?? '';
@@ -111,9 +134,22 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
     return {'qty': number, 'remark': text};
   }
 
+  bool hasValue(dynamic v) {
+    if (v == null) return false;
+    if (v is String) return v.trim().isNotEmpty;
+    if (v is num) return true; // 👈 qty 0 bhi allow
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
+    // _productionUnit = widget.orderData['productionUnit'] ?? 'Unit 1';
+
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    )..forward();
 
     _customerController = TextEditingController(
       text: widget.orderData['customerName'] ?? '',
@@ -162,180 +198,160 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
       _selectedSalesPerson = null;
     }
     _selectedUnit = widget.orderData['unit'] ?? 'Unit 1';
-    _products =
-        (widget.orderData['products'] as List?)?.map((p) {
-          final sections = p['sections'] as Map<String, dynamic>? ?? {};
-          final extraSections = p['customExtraSections'] as List? ?? [];
-          final rawQty = safeText(p['quantity']);
-          final split = _splitQuantityAndRemark(rawQty); // ✅ HERE
+    final rawProducts = widget.orderData['products'];
 
-          return {
-            'nameController': TextEditingController(
-              text: p['productName'] ?? '',
-            ),
-            'quantityController': TextEditingController(
-              text: split['qty'], // ✅ only number
-            ),
-            'remarkController': TextEditingController(
-              text: (p['remarks']?.toString().isNotEmpty == true)
-                  ? p['remarks']
-                  : split['remark'], // ✅ only text
-            ),
-            'lengthController': TextEditingController(text: p['length'] ?? ''),
-            'heightController': TextEditingController(text: p['height'] ?? ''),
-            'widthController': TextEditingController(text: p['width'] ?? ''),
-            'priceController': TextEditingController(
-              text: safeText(p['price']),
-            ),
-            'productCategory': p['productCategory'] ?? 'MDF',
-            'images': List<String>.from(p['images'] ?? []),
-            'newImages': <XFile>[],
-            'sectionSelected': {
-              'Tray':
-                  sections['trayDetail'] != null ||
-                  sections['trayQty'] != null ||
-                  sections['trayPrice'] != null ||
-                  sections['tray'] != null, // 🔥 old data
+    List productsList = [];
 
-              'Salophin':
-                  sections['salophinDetail'] != null ||
-                  sections['salophinQty'] != null ||
-                  sections['salophinPrice'] != null ||
-                  sections['salophin'] != null, // backward support
-
-              'Box Cover':
-                  sections['boxCoverDetail'] != null ||
-                  sections['boxCoverQty'] != null ||
-                  sections['boxCoverPrice'] != null ||
-                  sections['boxCover'] != null, // 🔥 old data
-              // ================= Inner =================
-              'Inner':
-                  sections['innerDetail'] != null ||
-                  sections['innerQty'] != null ||
-                  sections['innerPrice'] != null ||
-                  sections['inner'] != null, // 🔥 old data
-              // ================= Bottom =================
-              'Bottom':
-                  sections['bottomDetail'] != null ||
-                  sections['bottomQty'] != null ||
-                  sections['bottomPrice'] != null ||
-                  sections['bottom'] != null, // 🔥 old data
-              // ================= Die =================
-              'Die':
-                  sections['dieDetail'] != null ||
-                  sections['dieQty'] != null ||
-                  sections['diePrice'] != null ||
-                  sections['die'] != null, // 🔥 old data
-              // ================= Others =================
-              'Others':
-                  sections['otherDetail'] != null ||
-                  sections['otherQty'] != null ||
-                  sections['otherPrice'] != null ||
-                  sections['other'] != null, // 🔥 old data
-            },
-            'trayDetailController': TextEditingController(
-              text: sections['trayDetail'] ?? sections['tray'] ?? '',
-            ),
-            'trayQtyController': TextEditingController(
-              text: sections['trayQty']?.toString() ?? '',
-            ),
-            'trayPriceController': TextEditingController(
-              text: sections['trayPrice'] ?? '',
-            ),
-
-            'salophinDetailController': TextEditingController(
-              text: sections['salophinDetail'] ?? sections['salophin'] ?? '',
-            ),
-            'salophinQtyController': TextEditingController(
-              text: sections['salophinQty']?.toString() ?? '',
-            ),
-            'salophinPriceController': TextEditingController(
-              text: sections['salophinPrice'] ?? '',
-            ),
-
-            'boxCoverDetailController': TextEditingController(
-              text: sections['boxCoverDetail'] ?? sections['boxCover'] ?? '',
-            ),
-            'boxCoverQtyController': TextEditingController(
-              text: sections['boxCoverQty']?.toString() ?? '',
-            ),
-            'boxCoverPriceController': TextEditingController(
-              text: sections['boxCoverPrice'] ?? '',
-            ),
-
-            // ================= Inner =================
-            'innerDetailController': TextEditingController(
-              text: sections['innerDetail'] ?? sections['inner'] ?? '',
-            ),
-            'innerQtyController': TextEditingController(
-              text: sections['innerQty']?.toString() ?? '',
-            ),
-            'innerPriceController': TextEditingController(
-              text: sections['innerPrice'] ?? '',
-            ),
-
-            // ================= Bottom =================
-            'bottomDetailController': TextEditingController(
-              text: sections['bottomDetail'] ?? sections['bottom'] ?? '',
-            ),
-            'bottomQtyController': TextEditingController(
-              text: sections['bottomQty']?.toString() ?? '',
-            ),
-            'bottomPriceController': TextEditingController(
-              text: sections['bottomPrice'] ?? '',
-            ),
-
-            // ================= Die =================
-            'dieDetailController': TextEditingController(
-              text: sections['dieDetail'] ?? sections['die'] ?? '',
-            ),
-            'dieQtyController': TextEditingController(
-              text: sections['dieQty']?.toString() ?? '',
-            ),
-            'diePriceController': TextEditingController(
-              text: sections['diePrice'] ?? '',
-            ),
-
-            // ================= Others =================
-            'otherDetailController': TextEditingController(
-              text: sections['otherDetail'] ?? sections['other'] ?? '',
-            ),
-            'otherQtyController': TextEditingController(
-              text: sections['otherQty']?.toString() ?? '',
-            ),
-            'otherPriceController': TextEditingController(
-              text: sections['otherPrice'] ?? '',
-            ),
-
-            'customExtraSections': extraSections
-                .map<Map<String, TextEditingController>>((sec) {
-                  return {
-                    'title': TextEditingController(text: sec['title'] ?? ''),
-                    'detail': TextEditingController(
-                      text: sec['detail'] ?? sec['details'] ?? '',
-                    ),
-
-                    // 🔹 QTY
-                    'qty': TextEditingController(
-                      text: sec['qty']?.toString() ?? '',
-                    ),
-
-                    // 🔹 PRICE
-                    'price': TextEditingController(text: sec['price'] ?? ''),
-                  };
-                })
-                .toList(),
-          };
-        }).toList() ??
-        [_createEmptyProduct()];
-    for (final product in _products) {
-      _syncQuantityToRemark(
-        product['quantityController'] as TextEditingController,
-        product['remarkController'] as TextEditingController,
-      );
+    if (rawProducts is List) {
+      productsList = rawProducts;
+    } else if (rawProducts is Map) {
+      productsList = [rawProducts];
     }
 
-    // Load partial dispatches
+    _products = productsList.map((p) {
+      final sections = p['sections'] as Map<String, dynamic>? ?? {};
+      final extraSections = p['customExtraSections'] as List? ?? [];
+      final rawQty = safeText(p['quantity']);
+      final split = _splitQuantityAndRemark(rawQty);
+
+      return {
+        'id': p['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+
+        'nameController': TextEditingController(text: p['productName'] ?? ''),
+        'quantityController': TextEditingController(text: split['qty']),
+        'remarkController': TextEditingController(
+          text: (p['remarks']?.toString().isNotEmpty == true)
+              ? p['remarks']
+              : split['remark'],
+        ),
+        'lengthController': TextEditingController(text: p['length'] ?? ''),
+        'heightController': TextEditingController(text: p['height'] ?? ''),
+        'widthController': TextEditingController(text: p['width'] ?? ''),
+        'priceController': TextEditingController(text: safeText(p['price'])),
+        'productCategory': p['productCategory'] ?? 'MDF',
+        'images': List<String>.from(p['images'] ?? []),
+        'newImages': <XFile>[],
+        'sectionSelected': {
+          'Tray':
+              hasValue(sections['trayDetail']) ||
+              hasValue(sections['trayQty']) ||
+              hasValue(sections['trayPrice']),
+
+          'Salophin':
+              hasValue(sections['salophinDetail']) ||
+              hasValue(sections['salophinQty']) ||
+              hasValue(sections['salophinPrice']),
+
+          'Box Cover':
+              hasValue(sections['boxCoverDetail']) ||
+              hasValue(sections['boxCoverQty']) ||
+              hasValue(sections['boxCoverPrice']),
+
+          'Inner':
+              hasValue(sections['innerDetail']) ||
+              hasValue(sections['innerQty']) ||
+              hasValue(sections['innerPrice']),
+
+          'Bottom':
+              hasValue(sections['bottomDetail']) ||
+              hasValue(sections['bottomQty']) ||
+              hasValue(sections['bottomPrice']),
+
+          'Die':
+              hasValue(sections['dieDetail']) ||
+              hasValue(sections['dieQty']) ||
+              hasValue(sections['diePrice']),
+
+          'Others':
+              hasValue(sections['otherDetail']) ||
+              hasValue(sections['otherQty']) ||
+              hasValue(sections['otherPrice']) ||
+              extraSections.isNotEmpty,
+        },
+
+        'trayDetailController': TextEditingController(
+          text: sections['trayDetail'] ?? '',
+        ),
+        'trayQtyController': TextEditingController(
+          text: sections['trayQty']?.toString() ?? '',
+        ),
+        'trayPriceController': TextEditingController(
+          text: sections['trayPrice'] ?? '',
+        ),
+        'salophinDetailController': TextEditingController(
+          text: sections['salophinDetail'] ?? '',
+        ),
+        'salophinQtyController': TextEditingController(
+          text: sections['salophinQty']?.toString() ?? '',
+        ),
+        'salophinPriceController': TextEditingController(
+          text: sections['salophinPrice'] ?? '',
+        ),
+        'boxCoverDetailController': TextEditingController(
+          text: sections['boxCoverDetail'] ?? '',
+        ),
+        'boxCoverQtyController': TextEditingController(
+          text: sections['boxCoverQty']?.toString() ?? '',
+        ),
+        'boxCoverPriceController': TextEditingController(
+          text: sections['boxCoverPrice'] ?? '',
+        ),
+        'innerDetailController': TextEditingController(
+          text: sections['innerDetail'] ?? '',
+        ),
+        'innerQtyController': TextEditingController(
+          text: sections['innerQty']?.toString() ?? '',
+        ),
+        'innerPriceController': TextEditingController(
+          text: sections['innerPrice'] ?? '',
+        ),
+        'bottomDetailController': TextEditingController(
+          text: sections['bottomDetail'] ?? '',
+        ),
+        'bottomQtyController': TextEditingController(
+          text: sections['bottomQty']?.toString() ?? '',
+        ),
+        'bottomPriceController': TextEditingController(
+          text: sections['bottomPrice'] ?? '',
+        ),
+        'dieDetailController': TextEditingController(
+          text: sections['dieDetail'] ?? '',
+        ),
+        'dieQtyController': TextEditingController(
+          text: sections['dieQty']?.toString() ?? '',
+        ),
+        'diePriceController': TextEditingController(
+          text: sections['diePrice'] ?? '',
+        ),
+        'otherDetailController': TextEditingController(
+          text: sections['otherDetail'] ?? '',
+        ),
+        'otherQtyController': TextEditingController(
+          text: sections['otherQty']?.toString() ?? '',
+        ),
+        'otherPriceController': TextEditingController(
+          text: sections['otherPrice'] ?? '',
+        ),
+
+        'customExtraSections': extraSections
+            .map<Map<String, TextEditingController>>((sec) {
+              return {
+                'title': TextEditingController(text: sec['title'] ?? ''),
+                'detail': TextEditingController(text: sec['detail'] ?? ''),
+                'qty': TextEditingController(
+                  text: sec['qty']?.toString() ?? '',
+                ),
+                'price': TextEditingController(text: sec['price'] ?? ''),
+              };
+            })
+            .toList(),
+      };
+    }).toList();
+
+    if (_products.isEmpty) {
+      _products = [_createEmptyProduct()];
+    }
+
     _partialDispatches =
         (widget.orderData['partialDispatches'] as List?)?.map((d) {
           return {
@@ -352,6 +368,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
 
   Map<String, dynamic> _createEmptyProduct() {
     return {
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
       'nameController': TextEditingController(),
       'quantityController': TextEditingController(),
       'lengthController': TextEditingController(),
@@ -374,34 +391,24 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
       'trayDetailController': TextEditingController(),
       'trayQtyController': TextEditingController(),
       'trayPriceController': TextEditingController(),
-
       'salophinDetailController': TextEditingController(),
       'salophinQtyController': TextEditingController(),
       'salophinPriceController': TextEditingController(),
       'boxCoverDetailController': TextEditingController(),
       'boxCoverQtyController': TextEditingController(),
       'boxCoverPriceController': TextEditingController(),
-
-      // ================= Inner =================
       'innerDetailController': TextEditingController(),
       'innerQtyController': TextEditingController(),
       'innerPriceController': TextEditingController(),
-
-      // ================= Bottom =================
       'bottomDetailController': TextEditingController(),
       'bottomQtyController': TextEditingController(),
       'bottomPriceController': TextEditingController(),
-
-      // ================= Die =================
       'dieDetailController': TextEditingController(),
       'dieQtyController': TextEditingController(),
       'diePriceController': TextEditingController(),
-
-      // ================= Others =================
       'otherDetailController': TextEditingController(),
       'otherQtyController': TextEditingController(),
       'otherPriceController': TextEditingController(),
-
       'customExtraSections': <Map<String, TextEditingController>>[],
     };
   }
@@ -417,14 +424,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
 
   void _addProduct() {
     setState(() {
-      final product = _createEmptyProduct();
-
-      _syncQuantityToRemark(
-        product['quantityController'] as TextEditingController,
-        product['remarkController'] as TextEditingController,
-      );
-
-      _products.add(product);
+      _products.add(_createEmptyProduct());
     });
   }
 
@@ -432,7 +432,6 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
     if (_products.length > 1) {
       setState(() {
         final product = _products[index];
-
         (_products[index]['nameController'] as TextEditingController).dispose();
         (_products[index]['quantityController'] as TextEditingController)
             .dispose();
@@ -449,44 +448,29 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
         (product['trayDetailController'] as TextEditingController).dispose();
         (product['trayQtyController'] as TextEditingController).dispose();
         (product['trayPriceController'] as TextEditingController).dispose();
-
-        // ---------- SALOPHIN ----------
         (product['salophinDetailController'] as TextEditingController)
             .dispose();
         (product['salophinQtyController'] as TextEditingController).dispose();
         (product['salophinPriceController'] as TextEditingController).dispose();
-
-        // ---------- BOX COVER ----------
         (product['boxCoverDetailController'] as TextEditingController)
             .dispose();
         (product['boxCoverQtyController'] as TextEditingController).dispose();
         (product['boxCoverPriceController'] as TextEditingController).dispose();
-
-        // ---------- INNER ----------
         (product['innerDetailController'] as TextEditingController).dispose();
         (product['innerQtyController'] as TextEditingController).dispose();
         (product['innerPriceController'] as TextEditingController).dispose();
-
-        // ---------- BOTTOM ----------
         (product['bottomDetailController'] as TextEditingController).dispose();
         (product['bottomQtyController'] as TextEditingController).dispose();
         (product['bottomPriceController'] as TextEditingController).dispose();
-
-        // ---------- DIE ----------
         (product['dieDetailController'] as TextEditingController).dispose();
         (product['dieQtyController'] as TextEditingController).dispose();
         (product['diePriceController'] as TextEditingController).dispose();
-
-        // ---------- OTHERS ----------
         (product['otherDetailController'] as TextEditingController).dispose();
         (product['otherQtyController'] as TextEditingController).dispose();
         (product['otherPriceController'] as TextEditingController).dispose();
-
-        // ---------- CUSTOM EXTRA SECTIONS ----------
         final extraSections =
             product['customExtraSections']
                 as List<Map<String, TextEditingController>>?;
-
         if (extraSections != null) {
           for (final sec in extraSections) {
             sec['title']?.dispose();
@@ -495,8 +479,6 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
             sec['price']?.dispose();
           }
         }
-
-        // ---------- REMOVE PRODUCT ----------
         _products.removeAt(index);
       });
     }
@@ -553,13 +535,10 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF169a8d).withOpacity(0.1),
+                  gradient: AppColors.primaryGradient,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  Icons.photo_library,
-                  color: Color(0xFF169a8d),
-                ),
+                child: const Icon(Icons.photo_library, color: Colors.white),
               ),
               title: const Text('Pick from Gallery'),
               subtitle: const Text('Choose multiple images'),
@@ -578,10 +557,10 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF169a8d).withOpacity(0.1),
+                  gradient: AppColors.accentGradient,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.camera_alt, color: Color(0xFF169a8d)),
+                child: const Icon(Icons.camera_alt, color: Colors.white),
               ),
               title: const Text('Use Camera'),
               subtitle: const Text('Take a photo'),
@@ -607,54 +586,44 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
     );
   }
 
-  pw.TableRow _buildPdfRow(String label, String value) {
-    return pw.TableRow(
-      children: [
-        pw.Container(
-          padding: const pw.EdgeInsets.all(8),
-          color: PdfColors.grey200,
-          child: pw.Text(
-            label,
-            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-          ),
-        ),
-        pw.Container(
-          padding: const pw.EdgeInsets.all(8),
-          child: pw.Text(value, style: const pw.TextStyle(fontSize: 10)),
-        ),
-      ],
-    );
-  }
-
   Future<void> _updateLinkedJobCard(
     List<Map<String, dynamic>> productsData,
     List<Map<String, dynamic>> partialDispatchesData,
   ) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('jobCards')
-        .where('linkedOrderId', isEqualTo: widget.orderId)
-        .limit(1)
-        .get();
+    try {
+      final jobDoc = FirebaseFirestore.instance
+          .collection('jobCards')
+          .doc(widget.orderId);
 
-    if (snap.docs.isEmpty) return;
+      await jobDoc.set({
+        'linkedOrderId': widget.orderId,
 
-    final jobDoc = snap.docs.first;
+        'jobCardNumber': widget.orderId, // ⭐⭐⭐ ADD THIS
 
-    await FirebaseFirestore.instance
-        .collection('jobCards')
-        .doc(jobDoc.id)
-        .update({
-          'customerName': _customerController.text.trim(),
-          'products': productsData,
-          'partialDispatches': partialDispatchesData,
-          'priority': _priority,
-          'salesPerson': _selectedSalesPerson == 'Others'
-              ? _customSalesPerson
-              : _selectedSalesPerson,
-          'location': _locationController.text.trim(),
-          'date': _orderDate,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        'customerName': _customerController.text.trim(),
+        'companyName': _companyController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'email': _emailController.text.trim(),
+        'location': _locationController.text.trim(),
+
+        'products': productsData,
+        'partialDispatches': partialDispatchesData,
+
+        'priority': _priority,
+        'salesPerson': _selectedSalesPerson == 'Others'
+            ? _customSalesPerson
+            : _selectedSalesPerson,
+
+        'unit': _selectedUnit,
+        'deliveryDate': Timestamp.fromDate(_deliveryDate),
+        'orderDate': Timestamp.fromDate(_orderDate),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      print("✅ JobCard upserted safely");
+    } catch (e) {
+      print("🔥 JobCard update error: $e");
+    }
   }
 
   Future<void> _saveOrder() async {
@@ -684,7 +653,6 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
         final existingImages = List<String>.from(product['images'] as List);
         final newImages = product['newImages'] as List<XFile>;
 
-        // Upload new images
         List<String> newImageUrls = [];
         for (final image in newImages) {
           final ref = FirebaseStorage.instance.ref().child(
@@ -705,7 +673,6 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
 
         final allImages = [...existingImages, ...newImageUrls];
 
-        // Build sections for this product
         final sectionSelected = product['sectionSelected'] as Map<String, bool>;
         final Map<String, dynamic> sections = {};
 
@@ -713,14 +680,12 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
           sections['trayDetail'] =
               (product['trayDetailController'] as TextEditingController).text
                   .trim();
-
           sections['trayQty'] =
               int.tryParse(
                 (product['trayQtyController'] as TextEditingController).text
                     .trim(),
               ) ??
               0;
-
           sections['trayPrice'] =
               (product['trayPriceController'] as TextEditingController).text
                   .trim();
@@ -731,14 +696,12 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
               (product['salophinDetailController'] as TextEditingController)
                   .text
                   .trim();
-
           sections['salophinQty'] =
               int.tryParse(
                 (product['salophinQtyController'] as TextEditingController).text
                     .trim(),
               ) ??
               0;
-
           sections['salophinPrice'] =
               (product['salophinPriceController'] as TextEditingController).text
                   .trim();
@@ -749,90 +712,77 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
               (product['boxCoverDetailController'] as TextEditingController)
                   .text
                   .trim();
-
           sections['boxCoverQty'] =
               int.tryParse(
                 (product['boxCoverQtyController'] as TextEditingController).text
                     .trim(),
               ) ??
               0;
-
           sections['boxCoverPrice'] =
               (product['boxCoverPriceController'] as TextEditingController).text
                   .trim();
         }
 
-        // ================= Inner =================
         if (sectionSelected['Inner'] == true) {
           sections['innerDetail'] =
               (product['innerDetailController'] as TextEditingController).text
                   .trim();
-
           sections['innerQty'] =
               int.tryParse(
                 (product['innerQtyController'] as TextEditingController).text
                     .trim(),
               ) ??
               0;
-
           sections['innerPrice'] =
               (product['innerPriceController'] as TextEditingController).text
                   .trim();
         }
 
-        // ================= Bottom =================
         if (sectionSelected['Bottom'] == true) {
           sections['bottomDetail'] =
               (product['bottomDetailController'] as TextEditingController).text
                   .trim();
-
           sections['bottomQty'] =
               int.tryParse(
                 (product['bottomQtyController'] as TextEditingController).text
                     .trim(),
               ) ??
               0;
-
           sections['bottomPrice'] =
               (product['bottomPriceController'] as TextEditingController).text
                   .trim();
         }
 
-        // ================= Die =================
         if (sectionSelected['Die'] == true) {
           sections['dieDetail'] =
               (product['dieDetailController'] as TextEditingController).text
                   .trim();
-
           sections['dieQty'] =
               int.tryParse(
                 (product['dieQtyController'] as TextEditingController).text
                     .trim(),
               ) ??
               0;
-
           sections['diePrice'] =
               (product['diePriceController'] as TextEditingController).text
                   .trim();
         }
 
-        // ================= Others =================
         if (sectionSelected['Others'] == true) {
           sections['otherDetail'] =
               (product['otherDetailController'] as TextEditingController).text
                   .trim();
-
           sections['otherQty'] =
               int.tryParse(
                 (product['otherQtyController'] as TextEditingController).text
                     .trim(),
               ) ??
               0;
-
           sections['otherPrice'] =
               (product['otherPriceController'] as TextEditingController).text
                   .trim();
         }
+
         final List<Map<String, dynamic>> extraSectionsData = [];
 
         for (final sec
@@ -855,9 +805,12 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
             });
           }
         }
+
         productsData.add({
-          'productName': nameController.text.trim(), // must not be empty
-          'quantity': quantityController.text.trim(),
+          'id': product['id'], // ⭐ ADD THIS LINE
+
+          'productName': nameController.text.trim(),
+          'quantity': int.tryParse(quantityController.text.trim()) ?? 0,
           'length': lengthController.text.trim(),
           'height': heightController.text.trim(),
           'width': widthController.text.trim(),
@@ -866,7 +819,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
           'productCategory': product['productCategory'],
           'images': allImages,
           'sections': sections,
-          'customExtraSections': extraSectionsData, // 🔥 THIS LINE MUST BE HERE
+          'customExtraSections': extraSectionsData,
         });
       }
 
@@ -899,20 +852,23 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
             'phone': _phoneController.text.trim(),
             'email': _emailController.text.trim(),
             'location': _locationController.text.trim(),
-            'unit': _selectedUnit,
-            'orderDate': _orderDate,
-            'deliveryDate': _deliveryDate,
+
+            'products': productsData,
+            'partialDispatches': partialDispatchesData,
+
             'priority': _priority,
             'salesPerson': _selectedSalesPerson == 'Others'
                 ? _customSalesPerson
                 : _selectedSalesPerson,
-            'products': productsData,
-            'notes': _notesController.text.trim(),
+
+            'unit': _selectedUnit,
+            'deliveryDate': Timestamp.fromDate(_deliveryDate),
+            'orderDate': Timestamp.fromDate(_orderDate),
             'updatedAt': FieldValue.serverTimestamp(),
           });
 
       await _updateLinkedJobCard(productsData, partialDispatchesData);
-
+      await _saveToUnit2IfRigid(productsData);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -923,7 +879,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
                 Text('Sales Order updated successfully!'),
               ],
             ),
-            backgroundColor: Colors.green.shade400,
+            backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -942,7 +898,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
               Expanded(child: Text('Error: $e')),
             ],
           ),
-          backgroundColor: Colors.red.shade400,
+          backgroundColor: AppColors.warning,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -954,60 +910,104 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
     }
   }
 
+  Future<void> _saveToUnit2IfRigid(
+    List<Map<String, dynamic>> productsData,
+  ) async {
+    try {
+      // check agar rigid box product hai
+      final rigidProducts = productsData
+          .where((p) => p['productCategory'] == 'Rigid Box (unit 2)')
+          .toList();
+
+      if (rigidProducts.isEmpty) return;
+
+      // save / update unit2JobCards
+      await FirebaseFirestore.instance.collection('unit2JobCards').add({
+        //  'orderId': orderNo,
+        // 'salesOrderNo': orderNo,
+        'orderId': widget.orderId,
+        'isJobCardCreated': false, // ⭐ ADD THIS
+        'customerName': _customerController.text.trim(),
+        'companyName': _companyController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'location': _locationController.text.trim(),
+        'salesPerson': _selectedSalesPerson == 'Others'
+            ? _customSalesPerson
+            : _selectedSalesPerson,
+        'priority': _priority,
+        'deliveryDate': Timestamp.fromDate(_deliveryDate),
+        'createdDate': Timestamp.fromDate(_orderDate),
+
+        // ⭐ only rigid products
+        'products': rigidProducts,
+
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      print("✅ Saved to unit2JobCards");
+    } catch (e) {
+      print("🔥 unit2 save error: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: AppColors.lightBg,
+
       appBar: AppBar(
         elevation: 0,
-        title: const Text(
-          'Edit Sales Order',
-          style: TextStyle(fontWeight: FontWeight.w600),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
         ),
-        backgroundColor: const Color(0xFF169a8d),
         foregroundColor: Colors.white,
         centerTitle: true,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Image.asset('assets/dpl.png', height: 28),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Edit Job Card',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 20,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
       ),
+
+      //  _buildAppBar(),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF169a8d), Color(0xFF8E24AA)],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF169a8d).withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: const [
-                  Icon(Icons.edit, color: Colors.white, size: 32),
-                  SizedBox(width: 16),
-                  Text(
-                    'Edit Sales Order',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 15),
-
+            // _buildHeaderCard(),
+            // const SizedBox(height: 24),
             _buildSection(
               title: 'Customer Details',
               icon: Icons.person_outline,
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade100, Colors.cyan.shade100],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               children: [
                 _buildTextField(
                   controller: _customerController,
@@ -1015,15 +1015,14 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
                   icon: Icons.person,
                   validator: _req,
                 ),
-                const SizedBox(height: 8),
-
+                const SizedBox(height: 12),
                 _buildTextField(
                   controller: _companyController,
                   label: 'Company Name',
                   icon: Icons.business,
                   validator: _req,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 _buildTextField(
                   controller: _locationController,
                   label: 'Location',
@@ -1032,21 +1031,20 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
               ],
             ),
             const SizedBox(height: 20),
-
             _buildSection(
               title: 'Order Location',
               icon: Icons.location_on,
+              gradient: LinearGradient(
+                colors: [Colors.orange.shade100, Colors.amber.shade100],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               children: [
                 DropdownButtonFormField<String>(
                   value: _selectedUnit,
-                  decoration: InputDecoration(
-                    labelText: 'Order Location (Unit)',
-                    prefixIcon: const Icon(Icons.factory_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
+                  decoration: _buildInputDecoration(
+                    'Order Location (Unit)',
+                    Icons.factory_outlined,
                   ),
                   items: _units
                       .map(
@@ -1059,1038 +1057,26 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
 
-            _buildSection(
-              title: 'Products',
-              icon: Icons.inventory_2,
-              children: [
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _products.length,
-                  itemBuilder: (context, index) {
-                    final product = _products[index];
-                    final nameController =
-                        product['nameController'] as TextEditingController;
-                    final quantityController =
-                        product['quantityController'] as TextEditingController;
-                    final lengthController =
-                        product['lengthController'] as TextEditingController;
-                    final heightController =
-                        product['heightController'] as TextEditingController;
-                    final widthController =
-                        product['widthController'] as TextEditingController;
-                    final priceController =
-                        product['priceController'] as TextEditingController;
-                    final remarkController =
-                        product['remarkController'] as TextEditingController;
-                    final existingImages = product['images'] as List<String>;
-                    final newImages = product['newImages'] as List<XFile>;
-                    final sectionSelected =
-                        product['sectionSelected'] as Map<String, bool>;
-                    final productCategory =
-                        product['productCategory'] as String;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE0E0E0)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Product ${index + 1}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              // PDF Button
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.picture_as_pdf,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () => null,
-                                tooltip: 'Generate PDF',
-                              ),
-                              if (_products.length > 1)
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.delete,
-                                    color: Colors.red,
-                                  ),
-                                  onPressed: () => _removeProduct(index),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Product Category Dropdown for each product
-                          DropdownButtonFormField<String>(
-                            value: productCategory,
-                            decoration: InputDecoration(
-                              labelText: 'Product Category',
-                              prefixIcon: const Icon(Icons.category),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            items: _productCategories
-                                .map(
-                                  (c) => DropdownMenuItem<String>(
-                                    value: c,
-                                    child: Text(c),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => product['productCategory'] = v!),
-                            validator: (v) =>
-                                v == null ? 'Select category' : null,
-                          ),
-                          const SizedBox(height: 12),
-
-                          Autocomplete<Map<String, dynamic>>(
-                            initialValue: TextEditingValue(
-                              text:
-                                  (product['nameController']
-                                          as TextEditingController)
-                                      .text,
-                            ),
-                            optionsBuilder: (TextEditingValue value) async {
-                              if (value.text.length < 2) return const [];
-
-                              final snap = await FirebaseFirestore.instance
-                                  .collection('orders')
-                                  .orderBy('createdAt', descending: true)
-                                  .limit(100)
-                                  .get();
-
-                              final Map<String, Map<String, dynamic>> unique =
-                                  {};
-
-                              for (final doc in snap.docs) {
-                                final products = doc['products'];
-                                if (products is List) {
-                                  for (final p in products) {
-                                    final name = (p['productName'] ?? '')
-                                        .toString()
-                                        .toLowerCase();
-
-                                    if (name.contains(
-                                      value.text.toLowerCase(),
-                                    )) {
-                                      unique[name] = Map<String, dynamic>.from(
-                                        p,
-                                      );
-                                    }
-                                  }
-                                }
-                              }
-                              return unique.values.toList();
-                            },
-
-                            displayStringForOption: (o) =>
-                                o['productName'] ?? '',
-
-                            fieldViewBuilder:
-                                (context, controller, focusNode, onSubmit) {
-                                  controller.text =
-                                      (product['nameController']
-                                              as TextEditingController)
-                                          .text;
-
-                                  controller.addListener(() {
-                                    (product['nameController']
-                                                as TextEditingController)
-                                            .text =
-                                        controller.text;
-                                  });
-                                  return TextFormField(
-                                    controller: controller,
-                                    focusNode: focusNode,
-                                    decoration: InputDecoration(
-                                      labelText: 'Product Name',
-                                      prefixIcon: const Icon(
-                                        Icons.shopping_bag,
-                                      ),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.white,
-                                    ),
-                                    validator: _req,
-                                    onChanged: (val) {
-                                      (product['nameController']
-                                                  as TextEditingController)
-                                              .text =
-                                          val;
-                                    },
-                                  );
-                                },
-
-                            onSelected: (data) {
-                              setState(() {
-                                (product['nameController']
-                                            as TextEditingController)
-                                        .text =
-                                    data['productName'] ?? '';
-                                (product['priceController']
-                                        as TextEditingController)
-                                    .text = (data['price'] ?? '')
-                                    .toString();
-
-                                final rawQty = (data['quantity'] ?? '')
-                                    .toString();
-                                final split = _splitQuantityAndRemark(rawQty);
-
-                                (product['quantityController']
-                                            as TextEditingController)
-                                        .text =
-                                    split['qty'] ?? '';
-
-                                if ((product['remarkController']
-                                        as TextEditingController)
-                                    .text
-                                    .isEmpty) {
-                                  (product['remarkController']
-                                              as TextEditingController)
-                                          .text =
-                                      split['remark'] ?? '';
-                                }
-
-                                // ✅ Images
-                                product['images'] = List<String>.from(
-                                  data['images'] ?? [],
-                                );
-
-                                final sections =
-                                    data['sections'] as Map<String, dynamic>? ??
-                                    {};
-
-                                // ================= TRAY =================
-                                sectionSelected['Tray'] =
-                                    sections['trayDetail'] != null ||
-                                    sections['trayQty'] != null ||
-                                    sections['trayPrice'] != null ||
-                                    sections['tray'] !=
-                                        null; // backward support
-
-                                (product['trayDetailController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['trayDetail'] ??
-                                    sections['tray'] ??
-                                    '';
-                                (product['trayQtyController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['trayQty']?.toString() ?? '';
-                                (product['trayPriceController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['trayPrice'] ?? '';
-
-                                // ================= SALOPHIN =================
-                                sectionSelected['Salophin'] =
-                                    sections['salophinDetail'] != null ||
-                                    sections['salophinQty'] != null ||
-                                    sections['salophinPrice'] != null ||
-                                    sections['salophin'] != null;
-
-                                (product['salophinDetailController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['salophinDetail'] ??
-                                    sections['salophin'] ??
-                                    '';
-                                (product['salophinQtyController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['salophinQty']?.toString() ?? '';
-                                (product['salophinPriceController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['salophinPrice'] ?? '';
-
-                                // ================= BOX COVER =================
-                                sectionSelected['Box Cover'] =
-                                    sections['boxCoverDetail'] != null ||
-                                    sections['boxCoverQty'] != null ||
-                                    sections['boxCoverPrice'] != null ||
-                                    sections['boxCover'] != null;
-
-                                (product['boxCoverDetailController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['boxCoverDetail'] ??
-                                    sections['boxCover'] ??
-                                    '';
-                                (product['boxCoverQtyController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['boxCoverQty']?.toString() ?? '';
-                                (product['boxCoverPriceController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['boxCoverPrice'] ?? '';
-
-                                // ================= INNER =================
-                                sectionSelected['Inner'] =
-                                    sections['innerDetail'] != null ||
-                                    sections['innerQty'] != null ||
-                                    sections['innerPrice'] != null ||
-                                    sections['inner'] != null;
-
-                                (product['innerDetailController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['innerDetail'] ??
-                                    sections['inner'] ??
-                                    '';
-                                (product['innerQtyController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['innerQty']?.toString() ?? '';
-                                (product['innerPriceController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['innerPrice'] ?? '';
-
-                                // ================= BOTTOM =================
-                                sectionSelected['Bottom'] =
-                                    sections['bottomDetail'] != null ||
-                                    sections['bottomQty'] != null ||
-                                    sections['bottomPrice'] != null ||
-                                    sections['bottom'] != null;
-
-                                (product['bottomDetailController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['bottomDetail'] ??
-                                    sections['bottom'] ??
-                                    '';
-                                (product['bottomQtyController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['bottomQty']?.toString() ?? '';
-                                (product['bottomPriceController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['bottomPrice'] ?? '';
-
-                                // ================= DIE =================
-                                sectionSelected['Die'] =
-                                    sections['dieDetail'] != null ||
-                                    sections['dieQty'] != null ||
-                                    sections['diePrice'] != null ||
-                                    sections['die'] != null;
-
-                                (product['dieDetailController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['dieDetail'] ??
-                                    sections['die'] ??
-                                    '';
-                                (product['dieQtyController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['dieQty']?.toString() ?? '';
-                                (product['diePriceController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['diePrice'] ?? '';
-
-                                // ================= OTHERS =================
-                                sectionSelected['Others'] =
-                                    sections['otherDetail'] != null ||
-                                    sections['otherQty'] != null ||
-                                    sections['otherPrice'] != null ||
-                                    sections['other'] != null;
-
-                                (product['otherDetailController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['otherDetail'] ??
-                                    sections['other'] ??
-                                    '';
-                                (product['otherQtyController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['otherQty']?.toString() ?? '';
-                                (product['otherPriceController']
-                                            as TextEditingController)
-                                        .text =
-                                    sections['otherPrice'] ?? '';
-
-                                // ================= CUSTOM EXTRA SECTIONS =================
-                                final extraSections =
-                                    data['customExtraSections'] as List? ?? [];
-                                product['customExtraSections'].clear();
-
-                                for (final sec in extraSections) {
-                                  if (sec is Map<String, dynamic>) {
-                                    product['customExtraSections'].add({
-                                      'title': TextEditingController(
-                                        text: sec['title']?.toString() ?? '',
-                                      ),
-                                      'detail': TextEditingController(
-                                        text:
-                                            sec['detail'] ??
-                                            sec['details'] ??
-                                            '',
-                                      ),
-                                      'qty': TextEditingController(
-                                        text: sec['qty']?.toString() ?? '',
-                                      ),
-                                      'price': TextEditingController(
-                                        text: sec['price']?.toString() ?? '',
-                                      ),
-                                    });
-                                  }
-                                }
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: quantityController,
-                                  label: 'Quantity',
-                                  icon: Icons.numbers,
-                                  keyboardType:
-                                      TextInputType.number, // ✅ number keyboard
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter
-                                        .digitsOnly, // ✅ only numbers
-                                  ],
-                                  validator: _req,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: priceController,
-                                  label: 'Price',
-                                  icon: Icons.currency_rupee,
-                                  keyboardType: TextInputType.number,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          _buildTextField(
-                            controller: remarkController,
-                            label: 'Product Remark',
-                            icon: Icons.comment_outlined,
-                            maxLines: 1,
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Size (L x H x W)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: Color(0xFF169a8d),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: lengthController,
-                                  label: 'Length',
-                                  icon: Icons.straighten,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: heightController,
-                                  label: 'Height',
-                                  icon: Icons.height,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: widthController,
-                                  label: 'Width',
-                                  icon: Icons.width_normal,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-
-                          // ================= PACKAGING SECTIONS =================
-                          const Text(
-                            'Packaging Sections',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: Color(0xFF169a8d),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // -------- Fixed Sections Chips (Tray / Die / Others etc.)
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: sectionSelected.keys.map((key) {
-                              return FilterChip(
-                                label: Text(
-                                  key,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                selected: sectionSelected[key]!,
-                                onSelected: (val) {
-                                  setState(() {
-                                    sectionSelected[key] = val;
-                                  });
-                                },
-                                selectedColor: Colors.teal.shade200,
-                              );
-                            }).toList(),
-                          ),
-
-                          // -------- Fixed Section Fields
-                          if (sectionSelected['Tray'] == true) ...[
-                            const SizedBox(height: 12),
-
-                            Row(
-                              children: [
-                                // 🔹 DETAILS (BIG)
-                                Expanded(
-                                  flex: 3,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['trayDetailController']
-                                            as TextEditingController,
-                                    label: 'Tray Details',
-                                    icon: Icons.description,
-                                  ),
-                                ),
-
-                                const SizedBox(width: 8),
-
-                                // 🔹 QUANTITY (SMALL)
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['trayQtyController']
-                                            as TextEditingController,
-                                    label: 'Qty',
-                                    icon: Icons.numbers,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                  ),
-                                ),
-
-                                const SizedBox(width: 8),
-
-                                // 🔹 PRICE (SMALL)
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['trayPriceController']
-                                            as TextEditingController,
-                                    label: 'Price',
-                                    icon: Icons.currency_rupee,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          if (sectionSelected['Salophin'] == true) ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                // 🔹 DETAILS (BIG)
-                                Expanded(
-                                  flex: 3,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['salophinDetailController']
-                                            as TextEditingController,
-                                    label: 'Salophin',
-                                    icon: Icons.description,
-                                  ),
-                                ),
-
-                                const SizedBox(width: 8),
-
-                                // 🔹 QUANTITY (SMALL)
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['salophinQtyController']
-                                            as TextEditingController,
-                                    label: 'Qty',
-                                    icon: Icons.numbers,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                  ),
-                                ),
-
-                                const SizedBox(width: 8),
-
-                                // 🔹 PRICE (SMALL)
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['salophinPriceController']
-                                            as TextEditingController,
-                                    label: 'Price',
-                                    icon: Icons.currency_rupee,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          if (sectionSelected['Box Cover'] == true) ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['boxCoverDetailController']
-                                            as TextEditingController,
-                                    label: 'Box Cover Details',
-                                    icon: Icons.cases_outlined,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['boxCoverQtyController']
-                                            as TextEditingController,
-                                    label: 'Qty',
-                                    icon: Icons.numbers,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['boxCoverPriceController']
-                                            as TextEditingController,
-                                    label: 'Price',
-                                    icon: Icons.currency_rupee,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          // ================= Inner =================
-                          if (sectionSelected['Inner'] == true) ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['innerDetailController']
-                                            as TextEditingController,
-                                    label: 'Inner Details',
-                                    icon: Icons.table_rows,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['innerQtyController']
-                                            as TextEditingController,
-                                    label: 'Qty',
-                                    icon: Icons.numbers,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['innerPriceController']
-                                            as TextEditingController,
-                                    label: 'Price',
-                                    icon: Icons.currency_rupee,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          // ================= Bottom =================
-                          if (sectionSelected['Bottom'] == true) ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['bottomDetailController']
-                                            as TextEditingController,
-                                    label: 'Bottom Details',
-                                    icon: Icons.align_vertical_bottom,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['bottomQtyController']
-                                            as TextEditingController,
-                                    label: 'Qty',
-                                    icon: Icons.numbers,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['bottomPriceController']
-                                            as TextEditingController,
-                                    label: 'Price',
-                                    icon: Icons.currency_rupee,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          // ================= Die =================
-                          if (sectionSelected['Die'] == true) ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['dieDetailController']
-                                            as TextEditingController,
-                                    label: 'Die Details',
-                                    icon: Icons.cut,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['dieQtyController']
-                                            as TextEditingController,
-                                    label: 'Qty',
-                                    icon: Icons.numbers,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['diePriceController']
-                                            as TextEditingController,
-                                    label: 'Price',
-                                    icon: Icons.currency_rupee,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                          if (sectionSelected['Others'] == true) ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['otherDetailController']
-                                            as TextEditingController,
-                                    label: 'Other Details',
-                                    icon: Icons.more_horiz,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['otherQtyController']
-                                            as TextEditingController,
-                                    label: 'Qty',
-                                    icon: Icons.numbers,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  flex: 1,
-                                  child: _buildTextField(
-                                    controller:
-                                        product['otherPriceController']
-                                            as TextEditingController,
-                                    label: 'Price',
-                                    icon: Icons.currency_rupee,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-
-                          const Text(
-                            'Extra Sections (Custom)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: Color(0xFF169a8d),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // ➕ Add Extra Section Button
-                          OutlinedButton.icon(
-                            icon: const Icon(Icons.add),
-                            label: const Text('Add Extra Section'),
-                            onPressed: () {
-                              setState(() {
-                                product['customExtraSections'].add({
-                                  'title': TextEditingController(),
-                                  'detail': TextEditingController(), // ✅ sahi
-                                  'qty': TextEditingController(),
-                                  'price': TextEditingController(),
-                                });
-                              });
-                            },
-                          ),
-
-                          ...((product['customExtraSections']
-                                      as List<
-                                        Map<String, TextEditingController>
-                                      >)
-                                  .asMap()
-                                  .entries
-                                  .map((entry) {
-                                    final i = entry.key;
-                                    final sec = entry.value;
-
-                                    return Container(
-                                      margin: const EdgeInsets.only(top: 12),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blueGrey.shade50,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: Colors.blueGrey.shade200,
-                                        ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          // 🔹 SECTION HEADER (SEPARATE – MUST STAY)
-                                          _buildTextField(
-                                            controller: sec['title']!,
-                                            label: 'Section Header',
-                                            icon: Icons.title,
-                                          ),
-
-                                          const SizedBox(height: 10),
-
-                                          // 🔹 DETAILS + QTY + PRICE (SAME ROW LIKE BOTTOM)
-                                          Row(
-                                            children: [
-                                              // DETAILS (FULL WIDTH STYLE)
-                                              Expanded(
-                                                flex: 3,
-                                                child: _buildTextField(
-                                                  controller: sec['detail']!,
-                                                  label:
-                                                      sec['title']!
-                                                          .text
-                                                          .isNotEmpty
-                                                      ? '${sec['title']!.text} Details'
-                                                      : 'Section Details',
-                                                  icon: Icons.description,
-                                                  maxLines: 1,
-                                                ),
-                                              ),
-
-                                              const SizedBox(width: 8),
-
-                                              // QTY
-                                              Expanded(
-                                                flex: 1,
-                                                child: _buildTextField(
-                                                  controller: sec['qty']!,
-                                                  label: 'Qty',
-                                                  icon: Icons.numbers,
-                                                  keyboardType:
-                                                      TextInputType.number,
-                                                  inputFormatters: [
-                                                    FilteringTextInputFormatter
-                                                        .digitsOnly,
-                                                  ],
-                                                ),
-                                              ),
-
-                                              const SizedBox(width: 8),
-
-                                              // PRICE
-                                              Expanded(
-                                                flex: 1,
-                                                child: _buildTextField(
-                                                  controller: sec['price']!,
-                                                  label: 'Price',
-                                                  icon: Icons.currency_rupee,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-
-                                          const SizedBox(height: 6),
-
-                                          // 🗑 DELETE
-                                          Align(
-                                            alignment: Alignment.centerRight,
-                                            child: IconButton(
-                                              icon: const Icon(
-                                                Icons.delete,
-                                                color: Colors.red,
-                                              ),
-                                              onPressed: () {
-                                                setState(() {
-                                                  sec['title']!.dispose();
-                                                  sec['detail']!.dispose();
-                                                  sec['qty']!.dispose();
-                                                  sec['price']!.dispose();
-                                                  product['customExtraSections']
-                                                      .removeAt(i);
-                                                });
-                                              },
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }))
-                              .toList(),
-
-                          const SizedBox(height: 8),
-                          const Divider(),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Product Images',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          _buildProductImagesGrid(
-                            index,
-                            existingImages,
-                            newImages,
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                OutlinedButton.icon(
-                  onPressed: _addProduct,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Another Product'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF169a8d),
-                    side: const BorderSide(color: Color(0xFF169a8d)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ],
-            ),
             const SizedBox(height: 20),
-
+            _buildProductsSection(),
+            const SizedBox(height: 20),
             _buildSection(
               title: 'Sales Person',
               icon: Icons.badge_outlined,
+              gradient: LinearGradient(
+                colors: [Colors.purple.shade100, Colors.pink.shade100],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               children: [
                 DropdownButtonFormField<String>(
                   value: _salesPersons.contains(_selectedSalesPerson)
                       ? _selectedSalesPerson
                       : null,
-                  decoration: InputDecoration(
-                    labelText: 'Select Sales Person',
-                    prefixIcon: const Icon(
-                      Icons.person_pin,
-                      color: Color(0xFF1976D2),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
+                  decoration: _buildInputDecoration(
+                    'Select Sales Person',
+                    Icons.person_pin,
                   ),
                   items: _salesPersons.map((person) {
                     return DropdownMenuItem<String>(
@@ -2109,20 +1095,12 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
                       value == null ? 'Please select a sales person' : null,
                 ),
                 if (_selectedSalesPerson == 'Others') ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   TextFormField(
                     controller: _otherSalesPersonController,
-                    decoration: InputDecoration(
-                      labelText: 'Enter Sales Person Name',
-                      prefixIcon: const Icon(
-                        Icons.edit,
-                        color: Color(0xFF1976D2),
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
+                    decoration: _buildInputDecoration(
+                      'Enter Sales Person Name',
+                      Icons.edit,
                     ),
                     onChanged: (val) =>
                         setState(() => _customSalesPerson = val),
@@ -2138,134 +1116,75 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            // Partial Dispatch
             _buildSection(
-              title: 'Partially Dispatch of Quantity (if any)',
+              title: 'Partial Dispatch',
               icon: Icons.local_shipping_outlined,
+              gradient: LinearGradient(
+                colors: [Colors.green.shade100, Colors.teal.shade100],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               children: [
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _partialDispatches.length,
-                  itemBuilder: (context, index) {
-                    final dispatch = _partialDispatches[index];
-                    final nameController =
-                        dispatch['nameController'] as TextEditingController;
-                    final qtyController =
-                        dispatch['qtyController'] as TextEditingController;
-                    final dateController =
-                        dispatch['dateController'] as TextEditingController;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange.shade200),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Dispatch ${index + 1}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.orange,
-                                  ),
-                                ),
-                              ),
-                              if (_partialDispatches.length > 1)
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.delete,
-                                    color: Colors.red,
-                                  ),
-                                  onPressed: () =>
-                                      _removePartialDispatch(index),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            controller: nameController,
-                            label: 'Dispatch Name',
-                            icon: Icons.person_outline,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildTextField(
-                            controller: qtyController,
-                            label: 'Dispatch Quantity',
-                            icon: Icons.confirmation_number_outlined,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: dateController,
-                            readOnly: true,
-                            decoration: InputDecoration(
-                              labelText: 'Dispatch Date',
-                              prefixIcon: const Icon(
-                                Icons.calendar_today,
-                                color: Color(0xFF169a8d),
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                            onTap: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: DateTime.now(),
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime(2035),
-                              );
-                              if (picked != null) {
-                                dateController.text =
-                                    '${picked.day}/${picked.month}/${picked.year}';
-                                dispatch['selectedDate'] = picked;
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    );
+                DropdownButtonFormField<String>(
+                  value: _showPartialDispatch ? 'Yes' : 'No',
+                  decoration: _buildInputDecoration(
+                    'Any Partial Dispatch?',
+                    Icons.help_outline,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'No', child: Text('No')),
+                    DropdownMenuItem(value: 'Yes', child: Text('Yes')),
+                  ],
+                  onChanged: (val) {
+                    setState(() {
+                      _showPartialDispatch = val == 'Yes';
+                      if (_showPartialDispatch && _partialDispatches.isEmpty) {
+                        _partialDispatches.add(_createEmptyDispatch());
+                      }
+                    });
                   },
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _addPartialDispatch,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Another Dispatch'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.orange,
-                    side: const BorderSide(color: Colors.orange),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+
+                if (_showPartialDispatch) ...[
+                  const SizedBox(height: 16),
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _partialDispatches.length,
+                    itemBuilder: (context, index) => _buildDispatchItem(index),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _addPartialDispatch,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Another Dispatch'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.accent,
+                      side: const BorderSide(color: AppColors.accent),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 20),
             _buildSection(
               title: 'Schedule & Priority',
               icon: Icons.schedule,
+              gradient: LinearGradient(
+                colors: [Colors.red.shade100, Colors.orange.shade100],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               children: [
                 Row(
                   children: [
                     Expanded(
-                      child: InkWell(
+                      child: _buildDateCard(
+                        label: 'Order Date',
+                        date: _orderDate,
                         onTap: () async {
                           final picked = await showDatePicker(
                             context: context,
@@ -2273,51 +1192,17 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
                             firstDate: DateTime(2020),
                             lastDate: DateTime(2035),
                           );
-                          if (picked != null)
+                          if (picked != null) {
                             setState(() => _orderDate = picked);
+                          }
                         },
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE0E0E0)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Order Date',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.calendar_today,
-                                    color: Color(0xFF169a8d),
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${_orderDate.day}/${_orderDate.month}/${_orderDate.year}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: InkWell(
+                      child: _buildDateCard(
+                        label: 'Delivery Date',
+                        date: _deliveryDate,
                         onTap: () async {
                           final picked = await showDatePicker(
                             context: context,
@@ -2325,89 +1210,36 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
                             firstDate: DateTime(2020),
                             lastDate: DateTime(2035),
                           );
-                          if (picked != null)
+                          if (picked != null) {
                             setState(() => _deliveryDate = picked);
+                          }
                         },
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE0E0E0)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Delivery Date',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.local_shipping,
-                                    color: Color(0xFF169a8d),
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${_deliveryDate.day}/${_deliveryDate.month}/${_deliveryDate.year}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
               ],
             ),
             const SizedBox(height: 20),
-
             _buildSection(
               title: 'Additional Notes',
               icon: Icons.note_outlined,
+              gradient: LinearGradient(
+                colors: [Colors.indigo.shade100, Colors.blue.shade100],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               children: [
                 _buildTextField(
                   controller: _notesController,
                   label: 'Notes (Optional)',
                   icon: Icons.notes,
-                  maxLines: 1,
+                  maxLines: 3,
                 ),
               ],
             ),
             const SizedBox(height: 32),
-
-            ElevatedButton(
-              onPressed: _isSaving ? null : _saveOrder,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF169a8d),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: _isSaving
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text(
-                      'Save Changes',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
+            _buildSaveButton(),
             const SizedBox(height: 30),
           ],
         ),
@@ -2415,21 +1247,92 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
     );
   }
 
-  Widget _buildSection({
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-  }) {
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      elevation: 2,
+      title: const Text(
+        'Edit Job Card',
+        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 22),
+      ),
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.white,
+      centerTitle: true,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+      ),
+    );
+  }
+
+  Widget _buildHeaderCard() {
+    return ScaleTransition(
+      scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+        CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF169a8d), Color(0xFF8E24AA)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF169a8d).withOpacity(0.4),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.edit, color: Colors.white, size: 32),
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Edit Sales Order',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Update order details and product information',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icon, color: const Color(0xFF169a8d)),
+            Icon(Icons.inventory_2, color: AppColors.primary),
             const SizedBox(width: 12),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            const Text(
+              'Products',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -2443,9 +1346,861 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
               BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
             ],
           ),
+          child: Column(
+            children: [
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _products.length,
+                itemBuilder: (context, index) {
+                  final product = _products[index];
+                  return KeyedSubtree(
+                    key: ValueKey(product['id']),
+                    child: _buildProductCard(index),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _addProduct,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Another Product'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProductCard(int index) {
+    final product = _products[index];
+    final nameController = product['nameController'] as TextEditingController;
+    final quantityController =
+        product['quantityController'] as TextEditingController;
+    final lengthController =
+        product['lengthController'] as TextEditingController;
+    final heightController =
+        product['heightController'] as TextEditingController;
+    final widthController = product['widthController'] as TextEditingController;
+    final priceController = product['priceController'] as TextEditingController;
+    final remarkController =
+        product['remarkController'] as TextEditingController;
+    final existingImages = product['images'] as List<String>;
+    final newImages = product['newImages'] as List<XFile>;
+    final sectionSelected = product['sectionSelected'] as Map<String, bool>;
+    final productCategory = product['productCategory'] ?? 'Others';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue.shade50, Colors.cyan.shade50],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Product ${index + 1}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              // const Spacer(),
+              // IconButton(
+              //   icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
+              //   onPressed: () {},
+              //   tooltip: 'Generate PDF',
+              // ),
+              if (_products.length > 1)
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _removeProduct(index),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _productCategories.contains(productCategory)
+                ? productCategory
+                : 'Others',
+            decoration: _buildInputDecoration(
+              'Product Category',
+              Icons.category,
+            ),
+            items: _productCategories
+                .map((c) => DropdownMenuItem<String>(value: c, child: Text(c)))
+                .toList(),
+            onChanged: (v) => setState(() => product['productCategory'] = v!),
+            validator: (v) => v == null ? 'Select category' : null,
+          ),
+          const SizedBox(height: 12),
+          Autocomplete<Map<String, dynamic>>(
+            initialValue: TextEditingValue(text: nameController.text),
+            optionsBuilder: (TextEditingValue value) async {
+              if (value.text.length < 2) return const [];
+              final snap = await FirebaseFirestore.instance
+                  .collection('orders')
+                  .orderBy('createdAt', descending: true)
+                  .limit(500)
+                  .get();
+              final List<Map<String, dynamic>> results = [];
+
+              for (final doc in snap.docs) {
+                final products = doc['products'];
+                if (products is List) {
+                  for (final p in products) {
+                    final name = (p['productName'] ?? '')
+                        .toString()
+                        .toLowerCase();
+
+                    if (name.contains(value.text.toLowerCase())) {
+                      results.add(Map<String, dynamic>.from(p));
+                    }
+                  }
+                }
+              }
+
+              return results;
+            },
+            displayStringForOption: (o) => o['productName'] ?? '',
+            fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+              controller.text = nameController.text;
+              controller.addListener(() {
+                nameController.text = controller.text;
+              });
+              return TextFormField(
+                controller: controller,
+                focusNode: focusNode,
+                decoration: _buildInputDecoration(
+                  'Product Name',
+                  Icons.shopping_bag,
+                ),
+                validator: _req,
+                onChanged: (val) {
+                  nameController.text = val;
+                },
+              );
+            },
+            onSelected: (data) {
+              setState(() {
+                nameController.text = data['productName'] ?? '';
+                priceController.text = (data['price'] ?? '').toString();
+                final rawQty = (data['quantity'] ?? '').toString();
+                final split = _splitQuantityAndRemark(rawQty);
+                quantityController.text = split['qty'] ?? '';
+                if (remarkController.text.isEmpty) {
+                  remarkController.text = split['remark'] ?? '';
+                }
+                product['images'] = List<String>.from(data['images'] ?? []);
+                final sections =
+                    data['sections'] as Map<String, dynamic>? ?? {};
+                sectionSelected['Tray'] =
+                    hasValue(sections['trayDetail']) ||
+                    hasValue(sections['trayQty']) ||
+                    hasValue(sections['trayPrice']);
+                (product['trayDetailController'] as TextEditingController)
+                        .text =
+                    sections['trayDetail'] ?? sections['tray'] ?? '';
+                (product['trayQtyController'] as TextEditingController).text =
+                    sections['trayQty']?.toString() ?? '';
+                (product['trayPriceController'] as TextEditingController).text =
+                    sections['trayPrice'] ?? '';
+                sectionSelected['Salophin'] =
+                    hasValue(sections['salophinDetail']) ||
+                    hasValue(sections['salophinQty']) ||
+                    hasValue(sections['salophinPrice']);
+                (product['salophinDetailController'] as TextEditingController)
+                        .text =
+                    sections['salophinDetail'] ?? sections['salophin'] ?? '';
+                (product['salophinQtyController'] as TextEditingController)
+                        .text =
+                    sections['salophinQty']?.toString() ?? '';
+                (product['salophinPriceController'] as TextEditingController)
+                        .text =
+                    sections['salophinPrice'] ?? '';
+                sectionSelected['Box Cover'] =
+                    hasValue(sections['boxCoverDetail']) ||
+                    hasValue(sections['boxCoverQty']) ||
+                    hasValue(sections['boxCoverPrice']);
+                (product['boxCoverDetailController'] as TextEditingController)
+                        .text =
+                    sections['boxCoverDetail'] ?? sections['boxCover'] ?? '';
+                (product['boxCoverQtyController'] as TextEditingController)
+                        .text =
+                    sections['boxCoverQty']?.toString() ?? '';
+                (product['boxCoverPriceController'] as TextEditingController)
+                        .text =
+                    sections['boxCoverPrice'] ?? '';
+                sectionSelected['Inner'] =
+                    hasValue(sections['innerDetail']) ||
+                    hasValue(sections['innerQty']) ||
+                    hasValue(sections['innerPrice']);
+                (product['innerDetailController'] as TextEditingController)
+                        .text =
+                    sections['innerDetail'] ?? sections['inner'] ?? '';
+                (product['innerQtyController'] as TextEditingController).text =
+                    sections['innerQty']?.toString() ?? '';
+                (product['innerPriceController'] as TextEditingController)
+                        .text =
+                    sections['innerPrice'] ?? '';
+                sectionSelected['Bottom'] =
+                    hasValue(sections['bottomDetail']) ||
+                    hasValue(sections['bottomQty']) ||
+                    hasValue(sections['bottomPrice']);
+                (product['bottomDetailController'] as TextEditingController)
+                        .text =
+                    sections['bottomDetail'] ?? sections['bottom'] ?? '';
+                (product['bottomQtyController'] as TextEditingController).text =
+                    sections['bottomQty']?.toString() ?? '';
+                (product['bottomPriceController'] as TextEditingController)
+                        .text =
+                    sections['bottomPrice'] ?? '';
+                sectionSelected['Die'] =
+                    hasValue(sections['dieDetail']) ||
+                    hasValue(sections['dieQty']) ||
+                    hasValue(sections['diePrice']);
+                (product['dieDetailController'] as TextEditingController).text =
+                    sections['dieDetail'] ?? sections['die'] ?? '';
+                (product['dieQtyController'] as TextEditingController).text =
+                    sections['dieQty']?.toString() ?? '';
+                (product['diePriceController'] as TextEditingController).text =
+                    sections['diePrice'] ?? '';
+                sectionSelected['Others'] =
+                    hasValue(sections['otherDetail']) ||
+                    hasValue(sections['otherQty']) ||
+                    hasValue(sections['otherPrice']) ||
+                    (data['customExtraSections'] as List?)?.isNotEmpty == true;
+                (product['otherDetailController'] as TextEditingController)
+                        .text =
+                    sections['otherDetail'] ?? sections['other'] ?? '';
+                (product['otherQtyController'] as TextEditingController).text =
+                    sections['otherQty']?.toString() ?? '';
+                (product['otherPriceController'] as TextEditingController)
+                        .text =
+                    sections['otherPrice'] ?? '';
+                final extraSections =
+                    data['customExtraSections'] as List? ?? [];
+                product['customExtraSections'].clear();
+                for (final sec in extraSections) {
+                  if (sec is Map<String, dynamic>) {
+                    product['customExtraSections'].add({
+                      'title': TextEditingController(
+                        text: sec['title']?.toString() ?? '',
+                      ),
+                      'detail': TextEditingController(
+                        text: sec['detail'] ?? sec['details'] ?? '',
+                      ),
+                      'qty': TextEditingController(
+                        text: sec['qty']?.toString() ?? '',
+                      ),
+                      'price': TextEditingController(
+                        text: sec['price']?.toString() ?? '',
+                      ),
+                    });
+                  }
+                }
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  controller: quantityController,
+                  label: 'Quantity',
+                  icon: Icons.numbers,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: _req,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTextField(
+                  controller: priceController,
+                  label: 'Price',
+                  icon: Icons.currency_rupee,
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: remarkController,
+            label: 'Product Remark',
+            icon: Icons.comment_outlined,
+            maxLines: 2,
+          ),
+          const SizedBox(height: 12),
+          _buildSizeSection(product),
+          const SizedBox(height: 12),
+          _buildPackagingSection(product, sectionSelected),
+          const SizedBox(height: 12),
+          _buildExtraSection(product),
+          const SizedBox(height: 12),
+          _buildImagesSection(index, existingImages, newImages),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSizeSection(Map<String, dynamic> product) {
+    final lengthController =
+        product['lengthController'] as TextEditingController;
+    final heightController =
+        product['heightController'] as TextEditingController;
+    final widthController = product['widthController'] as TextEditingController;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Size (L × H × W)',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTextField(
+                controller: lengthController,
+                label: 'Length',
+                icon: Icons.straighten,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildTextField(
+                controller: heightController,
+                label: 'Height',
+                icon: Icons.height,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildTextField(
+                controller: widthController,
+                label: 'Width',
+                icon: Icons.width_normal,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPackagingSection(
+    Map<String, dynamic> product,
+    Map<String, bool> sectionSelected,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Packaging Sections',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: sectionSelected.keys.map((key) {
+            return FilterChip(
+              label: Text(
+                key,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              selected: sectionSelected[key]!,
+              onSelected: (val) {
+                setState(() {
+                  sectionSelected[key] = val;
+                });
+              },
+              selectedColor: AppColors.primary.withOpacity(0.3),
+              backgroundColor: Colors.grey.shade200,
+              side: BorderSide(
+                color: sectionSelected[key]!
+                    ? AppColors.primary
+                    : Colors.grey.shade300,
+              ),
+            );
+          }).toList(),
+        ),
+        if (sectionSelected['Tray'] == true) ...[
+          const SizedBox(height: 12),
+          _buildPackagingRow(product, 'tray', 'Tray Details', Icons.inbox),
+        ],
+        if (sectionSelected['Salophin'] == true) ...[
+          const SizedBox(height: 12),
+          _buildPackagingRow(
+            product,
+            'salophin',
+            'Salophin',
+            Icons.local_shipping,
+          ),
+        ],
+        if (sectionSelected['Box Cover'] == true) ...[
+          const SizedBox(height: 12),
+          _buildPackagingRow(
+            product,
+            'boxCover',
+            'Box Cover Details',
+            Icons.cases_outlined,
+          ),
+        ],
+        if (sectionSelected['Inner'] == true) ...[
+          const SizedBox(height: 12),
+          _buildPackagingRow(
+            product,
+            'inner',
+            'Inner Details',
+            Icons.table_rows,
+          ),
+        ],
+        if (sectionSelected['Bottom'] == true) ...[
+          const SizedBox(height: 12),
+          _buildPackagingRow(
+            product,
+            'bottom',
+            'Bottom Details',
+            Icons.align_vertical_bottom,
+          ),
+        ],
+        if (sectionSelected['Die'] == true) ...[
+          const SizedBox(height: 12),
+          _buildPackagingRow(product, 'die', 'Die Details', Icons.cut),
+        ],
+        if (sectionSelected['Others'] == true) ...[
+          const SizedBox(height: 12),
+          _buildPackagingRow(
+            product,
+            'other',
+            'Other Details',
+            Icons.more_horiz,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPackagingRow(
+    Map<String, dynamic> product,
+    String prefix,
+    String label,
+    IconData icon,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 3,
+          child: _buildTextField(
+            controller:
+                product['${prefix}DetailController'] as TextEditingController,
+            label: '$label Details',
+            icon: icon,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 1,
+          child: _buildTextField(
+            controller:
+                product['${prefix}QtyController'] as TextEditingController,
+            label: 'Qty',
+            icon: Icons.numbers,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 1,
+          child: _buildTextField(
+            controller:
+                product['${prefix}PriceController'] as TextEditingController,
+            label: 'Price',
+            icon: Icons.currency_rupee,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExtraSection(Map<String, dynamic> product) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Extra Sections (Custom)',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.add),
+          label: const Text('Add Extra Section'),
+          onPressed: () {
+            setState(() {
+              product['customExtraSections'].add({
+                'title': TextEditingController(),
+                'detail': TextEditingController(),
+                'qty': TextEditingController(),
+                'price': TextEditingController(),
+              });
+            });
+          },
+        ),
+        ...((product['customExtraSections']
+                as List<Map<String, TextEditingController>>)
+            .asMap()
+            .entries
+            .map((entry) {
+              final i = entry.key;
+              final sec = entry.value;
+              return Container(
+                margin: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.amber.shade50, Colors.orange.shade50],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    _buildTextField(
+                      controller: sec['title']!,
+                      label: 'Section Header',
+                      icon: Icons.title,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: _buildTextField(
+                            controller: sec['detail']!,
+                            label: '${sec['title']!.text} Details',
+                            icon: Icons.description,
+                            maxLines: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 1,
+                          child: _buildTextField(
+                            controller: sec['qty']!,
+                            label: 'Qty',
+                            icon: Icons.numbers,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 1,
+                          child: _buildTextField(
+                            controller: sec['price']!,
+                            label: 'Price',
+                            icon: Icons.currency_rupee,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () {
+                          setState(() {
+                            sec['title']!.dispose();
+                            sec['detail']!.dispose();
+                            sec['qty']!.dispose();
+                            sec['price']!.dispose();
+                            product['customExtraSections'].removeAt(i);
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            })),
+      ],
+    );
+  }
+
+  Widget _buildImagesSection(
+    int productIndex,
+    List<String> existingImages,
+    List<XFile> newImages,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Product Images',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: AppColors.primary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildProductImagesGrid(productIndex, existingImages, newImages),
+      ],
+    );
+  }
+
+  Widget _buildDispatchItem(int index) {
+    final dispatch = _partialDispatches[index];
+    final nameController = dispatch['nameController'] as TextEditingController;
+    final qtyController = dispatch['qtyController'] as TextEditingController;
+    final dateController = dispatch['dateController'] as TextEditingController;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.orange.shade50, Colors.amber.shade50],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.accent.withOpacity(0.3), width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: AppColors.accentGradient,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Dispatch ${index + 1}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (_partialDispatches.length > 1)
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _removePartialDispatch(index),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: nameController,
+            label: 'Dispatch Name',
+            icon: Icons.person_outline,
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: qtyController,
+            label: 'Dispatch Quantity',
+            icon: Icons.confirmation_number_outlined,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: dateController,
+            readOnly: true,
+            decoration: _buildInputDecoration(
+              'Dispatch Date',
+              Icons.calendar_today,
+            ),
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: DateTime.now(),
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2035),
+              );
+              if (picked != null) {
+                dateController.text =
+                    '${picked.day}/${picked.month}/${picked.year}';
+                dispatch['selectedDate'] = picked;
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateCard({
+    required String label,
+    required DateTime date,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.red.shade50, Colors.orange.shade50],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.accent.withOpacity(0.3),
+            width: 2,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.calendar_today, color: AppColors.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  '${date.day}/${date.month}/${date.year}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSection({
+    required String title,
+    required IconData icon,
+    required Gradient gradient,
+    required List<Widget> children,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: AppColors.primary, size: 24),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.darkText,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12),
+            ],
+          ),
           child: Column(children: children),
         ),
       ],
+    );
+  }
+
+  InputDecoration _buildInputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: AppColors.primary),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
     );
   }
 
@@ -2463,21 +2218,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
       keyboardType: keyboardType,
       maxLines: maxLines,
       inputFormatters: inputFormatters,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: const Color(0xFF169a8d)),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF169a8d), width: 2),
-        ),
-        filled: true,
-        fillColor: Colors.white,
-      ),
+      decoration: _buildInputDecoration(label, icon),
       validator: validator,
     );
   }
@@ -2501,7 +2242,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
                   child: SizedBox(
                     width: 140,
                     height: 140,
-                    child: Image.network(url, fit: BoxFit.fill),
+                    child: Image.network(url, fit: BoxFit.cover),
                   ),
                 ),
               ),
@@ -2510,10 +2251,22 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
                 top: 4,
                 child: GestureDetector(
                   onTap: () => setState(() => existingImages.remove(url)),
-                  child: const CircleAvatar(
-                    radius: 12,
-                    backgroundColor: Colors.red,
-                    child: Icon(Icons.close, size: 16, color: Colors.white),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(50),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -2547,10 +2300,22 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
                 top: 4,
                 child: GestureDetector(
                   onTap: () => setState(() => newImages.remove(x)),
-                  child: const CircleAvatar(
-                    radius: 12,
-                    backgroundColor: Colors.red,
-                    child: Icon(Icons.close, size: 16, color: Colors.white),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(50),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -2563,18 +2328,52 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
             width: 100,
             height: 100,
             decoration: BoxDecoration(
-              color: const Color(0xFF169a8d).withOpacity(0.1),
+              gradient: AppColors.primaryGradient,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF169a8d), width: 2),
+              border: Border.all(color: AppColors.primary, width: 2),
             ),
-            child: const Icon(
-              Icons.add_a_photo,
-              size: 40,
-              color: Color(0xFF169a8d),
-            ),
+            child: const Icon(Icons.add_a_photo, size: 40, color: Colors.white),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: _isSaving ? null : _saveOrder,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shadowColor: Colors.transparent,
+        ),
+        child: _isSaving
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text(
+                'Save Changes',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
+              ),
+      ),
     );
   }
 
@@ -2582,6 +2381,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
 
   @override
   void dispose() {
+    _animationController.dispose();
     _customerController.dispose();
     _companyController.dispose();
     _phoneController.dispose();
@@ -2597,46 +2397,30 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
       (product['widthController'] as TextEditingController).dispose();
       (product['priceController'] as TextEditingController).dispose();
       (product['remarkController'] as TextEditingController).dispose();
-      // ---------- TRAY ----------
       (product['trayDetailController'] as TextEditingController).dispose();
       (product['trayQtyController'] as TextEditingController).dispose();
       (product['trayPriceController'] as TextEditingController).dispose();
-
-      // ---------- SALOPHIN ----------
       (product['salophinDetailController'] as TextEditingController).dispose();
       (product['salophinQtyController'] as TextEditingController).dispose();
       (product['salophinPriceController'] as TextEditingController).dispose();
-
-      // ---------- BOX COVER ----------
       (product['boxCoverDetailController'] as TextEditingController).dispose();
       (product['boxCoverQtyController'] as TextEditingController).dispose();
       (product['boxCoverPriceController'] as TextEditingController).dispose();
-
-      // ---------- INNER ----------
       (product['innerDetailController'] as TextEditingController).dispose();
       (product['innerQtyController'] as TextEditingController).dispose();
       (product['innerPriceController'] as TextEditingController).dispose();
-
-      // ---------- BOTTOM ----------
       (product['bottomDetailController'] as TextEditingController).dispose();
       (product['bottomQtyController'] as TextEditingController).dispose();
       (product['bottomPriceController'] as TextEditingController).dispose();
-
-      // ---------- DIE ----------
       (product['dieDetailController'] as TextEditingController).dispose();
       (product['dieQtyController'] as TextEditingController).dispose();
       (product['diePriceController'] as TextEditingController).dispose();
-
-      // ---------- OTHERS ----------
       (product['otherDetailController'] as TextEditingController).dispose();
       (product['otherQtyController'] as TextEditingController).dispose();
       (product['otherPriceController'] as TextEditingController).dispose();
-
-      // ---------- CUSTOM EXTRA ----------
       final extraSections =
           product['customExtraSections']
               as List<Map<String, TextEditingController>>?;
-
       if (extraSections != null) {
         for (final sec in extraSections) {
           sec['title']?.dispose();
@@ -2646,13 +2430,11 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen> {
         }
       }
     }
-
     for (var dispatch in _partialDispatches) {
       (dispatch['nameController'] as TextEditingController).dispose();
       (dispatch['qtyController'] as TextEditingController).dispose();
       (dispatch['dateController'] as TextEditingController).dispose();
     }
-
     super.dispose();
   }
 }

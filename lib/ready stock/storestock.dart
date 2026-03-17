@@ -264,11 +264,48 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                         ),
                         items: jobCards.map((d) {
                           final data = d.data() as Map<String, dynamic>;
-                          final jobNo = data['jobNo'] ?? 'N/A';
-                          final product = data['productName'] ?? '';
+
+                          final jobNo =
+                              data['jobCardNumber'] ?? data['jobNo'] ?? 'N/A';
+                          final dplCode = data['dplCode'] ?? '';
+                          final customer =
+                              data['customerName'] ?? data['customer'] ?? '';
+
+                          final List products = data['products'] ?? [];
+
+                          String product = '';
+                          String qty = '';
+
+                          if (products.isNotEmpty) {
+                            product = products[0]['productName'] ?? '';
+                            qty = products[0]['quantity']?.toString() ?? '';
+                          }
                           return DropdownMenuItem(
                             value: d.id,
-                            child: Text("$jobNo - $product"),
+                            child: SizedBox(
+                              width: 300,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        "DPL: $dplCode | Job: $jobNo",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text("Qty: $qty"),
+                                    ],
+                                  ),
+
+                                  // Text("Product: $product"),
+                                  // Text("Customer: $customer"),
+                                ],
+                              ),
+                            ),
                           );
                         }).toList(),
                         onChanged: (v) =>
@@ -629,19 +666,19 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => Container(
-        padding: EdgeInsets.all(20),
+        padding: EdgeInsets.all(14),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               "Update Stock",
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 15.sp,
                 fontWeight: FontWeight.bold,
                 color: Colors.orange[700],
               ),
             ),
-            SizedBox(height: 16),
+            SizedBox(height: 1),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -650,25 +687,32 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                     Navigator.pop(ctx);
                     _issueStockWithDepartment(item);
                   },
-                  icon: Icon(Icons.remove_circle, color: Colors.white),
-                  label: Text("Issue Stock"),
+                  icon: Icon(
+                    Icons.remove_circle,
+                    size: 18.sp,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    "Issue Stock",
+                    style: TextStyle(color: Colors.white, fontSize: 14.sp),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red[600],
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _addAdditionalWithParty(item);
-                  },
-                  icon: Icon(Icons.add_box, color: Colors.white),
-                  label: Text("Add Additional"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[600],
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                ),
+                // ElevatedButton.icon(
+                //   onPressed: () {
+                //     Navigator.pop(ctx);
+                //     _addAdditionalWithParty(item);
+                //   },
+                //   icon: Icon(Icons.add_box, color: Colors.white),
+                //   label: Text("Add Additional"),
+                //   style: ElevatedButton.styleFrom(
+                //     backgroundColor: Colors.green[600],
+                //     padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                //   ),
+                // ),
               ],
             ),
           ],
@@ -1068,10 +1112,11 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                                             .pickImage(
                                               source: ImageSource.gallery,
                                             );
-                                        if (image != null)
+                                        if (image != null) {
                                           setDialogState(
                                             () => selectedImage = image,
                                           );
+                                        }
                                       },
                                 icon: Icon(Icons.upload_file, size: 18),
                                 label: Text(
@@ -1159,7 +1204,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                                 locatedCtrl,
                                 "Stock Located",
                                 Icons.location_on,
-                                isNumber: false,
+                                isNumber: true,
                               ),
                             ),
                           ],
@@ -1283,8 +1328,9 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                                   return;
                                 }
                                 setDialogState(() => isUploading = true);
-                                if (selectedImage != null)
+                                if (selectedImage != null) {
                                   imageUrl = await _uploadImage(selectedImage!);
+                                }
                                 final old = int.tryParse(oldCtrl.text) ?? 0;
                                 final received =
                                     int.tryParse(receivedCtrl.text) ?? 0;
@@ -1303,7 +1349,8 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                                   "issue": issue,
                                   "current": current,
                                   "moving": movingCtrl.text.trim(),
-                                  "located": locatedCtrl.text.trim(),
+                                  "located":
+                                      int.tryParse(locatedCtrl.text) ?? 0,
                                   "dateEdit": currentDate,
                                   "updatedAt": FieldValue.serverTimestamp(),
                                 };
@@ -1443,8 +1490,9 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
         }
         if (item['code'] == null ||
             item['name'] == null ||
-            item['group'] == null)
+            item['group'] == null) {
           continue;
+        }
         int old = item['old'] ?? 0;
         int received = item['received'] ?? 0;
         item['issue'] = item['issue'] ?? 0;
@@ -1459,7 +1507,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
         } else {
           item['image'] = '';
         }
-        item['located'] = item['located'] ?? '';
+        item['located'] = int.tryParse(item['located']?.toString() ?? "0") ?? 0;
         item['dateEdit'] = today;
         item['sr'] ??= nextSr;
         nextSr++;
@@ -1751,14 +1799,14 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     child: Center(
       child: ElevatedButton(
         onPressed: () => _showUpdateOptions(item),
-        child: Text(
-          "Edit",
-          style: TextStyle(fontSize: 12, color: Colors.white),
-        ),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.blue[600],
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: Text(
+          "Edit",
+          style: TextStyle(fontSize: 12, color: Colors.white),
         ),
       ),
     ),
@@ -1973,7 +2021,12 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
               ..._paginatedData.map((item) {
                 final itemId = item['docId'];
                 final bool isExpanded = item['isExpanded'] == true;
+                final int located =
+                    int.tryParse(item["located"]?.toString() ?? "0") ?? 0;
+                final int received = item["received"] ?? 0;
+                final int issue = item["issue"] ?? 0;
 
+                final int stockInHand = located + received - issue;
                 return Column(
                   children: [
                     GestureDetector(
@@ -2006,11 +2059,12 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                               color: Colors.blue[700],
                             ),
                             _cell(item["group"], 110),
-                            _cell(item["located"] ?? "", 110),
+                            _cell((item["located"] ?? 0).toString(), 110),
                             _cell(item["received"].toString(), 130),
                             _cell(item["issue"].toString(), 110),
+
                             _cell(
-                              item["current"].toString(),
+                              stockInHand.toString(),
                               120,
                               color: Colors.green[900],
                               bold: true,
@@ -2138,7 +2192,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                       ),
                   ],
                 );
-              }).toList(),
+              }),
             ],
           ),
         ),
@@ -2149,80 +2203,84 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        toolbarHeight: 85,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xffb4d449), Color(0xffb4d449)],
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: AppBar(
+          automaticallyImplyLeading: false,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color.fromARGB(255, 33, 240, 88),
+                  const Color.fromARGB(255, 114, 236, 95),
+                  const Color.fromARGB(255, 5, 244, 33),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Image.asset('assets/dpl.png', height: 36),
+                ),
+
+                const SizedBox(width: 8),
+
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Store Stock Report',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Track & Download Store Stock',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        title: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Image.asset(
-                'assets/1.jpg',
-                height: 50,
-                width: 50,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) =>
-                    Icon(Icons.inventory_2, color: Colors.blue[700], size: 36),
-              ),
-            ),
-            SizedBox(width: 16),
-            Text(
-              "Store Stock Report",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: ElevatedButton.icon(
-              onPressed: _showGroupWiseAverageDialog,
-              icon: Icon(Icons.analytics, size: 18),
-              label: Text("Group Avg", style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple[700],
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: ElevatedButton.icon(
-              onPressed: _showDailyIssueHistory,
-              icon: Icon(Icons.history, size: 18),
-              label: Text("Daily Issue", style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepOrange,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: Colors.orange))
@@ -2338,9 +2396,10 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                                       ),
                                     )
                                     .toList(),
-                                onChanged: (v) => setState(
-                                  () => {_rowsPerPage = v!, _currentPage = 0},
-                                ),
+                                onChanged: (v) => setState(() {
+                                  _rowsPerPage = v!;
+                                  _currentPage = 0;
+                                }),
                               ),
                             ),
                             IconButton(

@@ -34,7 +34,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> {
   DateTime _poDate = DateTime.now();
 
   // Table Rows
-  List<Map<String, dynamic>> _items = [];
+  final List<Map<String, dynamic>> _items = [];
 
   @override
   void initState() {

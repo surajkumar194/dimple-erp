@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:sizer/sizer.dart';
 
 class QualityCheckScreen extends StatefulWidget {
   const QualityCheckScreen({super.key});
@@ -204,19 +205,19 @@ class _QualityCheckScreenState extends State<QualityCheckScreen> {
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children:  [
               Text(
                 "Quality Check 👋",
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 18.sp,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              SizedBox(height: 2),
+              SizedBox(height: 0.5.h),
               Text(
                 "Manage your quality checks",
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(fontSize: 14.sp,color: Colors.white70),
               ),
             ],
           ),

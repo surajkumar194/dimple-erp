@@ -1,4 +1,3 @@
-import 'package:dimple_erp/all%20screen/JobCardHistoryTab.dart';
 import 'package:dimple_erp/all%20screen/SelectSalesOrderTab.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -37,36 +36,26 @@ class _JobCardScreenState extends State<JobCardScreen>
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         elevation: 0,
-        title: const Text(
-          'Production Job Card',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
         backgroundColor: const Color(0xFF169a8d),
         foregroundColor: Colors.white,
         centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          indicatorWeight: 2,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 15,
-          ),
-          tabs: const [
-          //  Tab(icon: Icon(Icons.add_box), text: 'Create Job Card'),
-            Tab(icon: Icon(Icons.shopping_cart), text: 'From Sales Order'),
-            Tab(icon: Icon(Icons.history), text: 'History'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/dpl.png', height: 32),
+            const SizedBox(width: 10),
+            const Text(
+              'Created Job Card',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+            ),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: const [
-          //CreateJobCardTab(),
           SelectSalesOrderTab(),
-          JobCardHistoryTab(),
+          // JobCardHistoryTab(),
         ],
       ),
     );
@@ -107,7 +96,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
   String? _customSalesPerson;
 
   // 🔥 Product List - Each product has name, quantity, and images
-  List<Map<String, dynamic>> _products = [
+  final List<Map<String, dynamic>> _products = [
     {
       'nameController': TextEditingController(),
       'quantityController': TextEditingController(),
@@ -116,7 +105,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
   ];
 
   // 🔥 Partial Dispatch List - Dynamic fields
-  List<Map<String, dynamic>> _partialDispatches = [
+  final List<Map<String, dynamic>> _partialDispatches = [
     {
       'nameController': TextEditingController(),
       'qtyController': TextEditingController(),
@@ -414,7 +403,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
 
       await FirebaseFirestore.instance.collection('jobCards').doc(jobNo).set({
         'jobNo': jobNo,
-        
+
         'date': Timestamp.fromDate(_selectedDate),
         'priority': _priority,
         'customer': _customerController.text.trim(),
@@ -428,6 +417,8 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
         'partialDispatches':
             partialDispatchesData, // 🔥 Save partial dispatches
         'status': 'Pending',
+        'deliveryDate': 'deliveryDate',
+        'unit': 'unit',
         'createdAt': FieldValue.serverTimestamp(),
         'source': 'manual',
       });

@@ -2,49 +2,35 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-
 class ImageUploadScreen extends StatefulWidget {
   const ImageUploadScreen({super.key});
-
   @override
   State<ImageUploadScreen> createState() => _ImageUploadScreenState();
 }
-
 class _ImageUploadScreenState extends State<ImageUploadScreen> {
   final ImagePicker _picker = ImagePicker();
   Uint8List? _imageBytes;
   String? _downloadUrl;
   bool _isUploading = false;
-
   Future<void> _pickAndUploadImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image == null) return;
-
     setState(() => _isUploading = true);
-
     try {
       Uint8List bytes = await image.readAsBytes();
       setState(() => _imageBytes = bytes);
-
-      // Firebase Storage reference
       final storageRef = FirebaseStorage.instance.ref().child(
         'uploads/${DateTime.now().millisecondsSinceEpoch}.jpg',
       );
-
-      // Upload file
       final uploadTask = await storageRef.putData(
         bytes,
         SettableMetadata(contentType: 'image/jpeg'),
       );
-
-      // Get download URL
       final url = await uploadTask.ref.getDownloadURL();
-
       setState(() {
         _downloadUrl = url;
         _isUploading = false;
       });
-
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('✅ Image uploaded successfully!')));
@@ -87,7 +73,6 @@ class _ImageUploadScreenState extends State<ImageUploadScreen> {
                 Image.memory(_imageBytes!, height: 200, fit: BoxFit.cover)
               else
                 const Icon(Icons.image, size: 120, color: Colors.grey),
-
               const SizedBox(height: 30),
               ElevatedButton.icon(
                 onPressed: _isUploading ? null : _pickAndUploadImage,

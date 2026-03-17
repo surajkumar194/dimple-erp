@@ -1,5 +1,4 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
@@ -26,26 +25,26 @@ class _IssueInventoryScreenState extends State<IssueInventoryScreen> {
   bool _isLoading = false;
   List<Map<String, dynamic>> jobCards = [];
   List<Map<String, dynamic>> filteredCards = [];
-  final List<String> artSubSteps = ['Keyline', 'Design', 'Prepress'];
+  final List<String> artSubSteps = ['Suman Keyline', 'Satish Design', 'Suraj Prepress'];
 
   final List<String> darkRoomSubSteps = ['Leaf Block', 'Screen Exposing'];
 
   final List<String> departments = [
-    'Paper cutting instructions',
-    'Mdf cutting instructions',
+    'Lallan/Gora Paper cutting instructions',
+    'Varan/Manish Mdf cutting instructions',
     'Art Department',
-    'Material Required',
-    'Dark Room',
-    'Offset printing',
-    'Digital printing',
-    'Lamination',
-    'Scodix',
-    'Screen',
-    'lesser',
-    'Letter press/Die',
-    'Binding',
-    'Quality checking',
-    'Dispatch',
+    'Krishan Material Required',
+    'Jaswant ji Dark Room',
+    'Kapil/suraj Offset printing',
+    'Kapil Digital printing',
+    'Taranpreet Lamination',
+    'Suraj Scodix',
+    'Jaswant ji Screen',
+    'Rohit lesser',
+    'Lallan Letter press/Die',
+    'Gora/Munish Binding',
+    'Vinay/Gurdial Quality checking',
+    'Karan Dispatch',
   ];
 
   final Map<String, Color> departmentColors = {
@@ -363,8 +362,9 @@ class _IssueInventoryScreenState extends State<IssueInventoryScreen> {
                                               fit: BoxFit.fill,
                                               loadingBuilder:
                                                   (context, child, progress) {
-                                                    if (progress == null)
+                                                    if (progress == null) {
                                                       return child;
+                                                    }
                                                     return Container(
                                                       width: 60,
                                                       height: 60,
@@ -484,14 +484,14 @@ class _IssueInventoryScreenState extends State<IssueInventoryScreen> {
                                     currentRemark: deptData['remark'] ?? '',
                                     lastDispatchedDept: '',
                                   );
-                                }).toList(),
+                                }),
                               ],
                             ),
                           ),
                         ],
                       ),
                     );
-                  }).toList(),
+                  }),
                 ],
               ),
             ),
@@ -1086,15 +1086,89 @@ class _IssueInventoryScreenState extends State<IssueInventoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
-      appBar: AppBar(
-        title: const Text(
-          '📦 Issue Inventory System',
-          style: TextStyle(fontWeight: FontWeight.bold),
+      appBar: PreferredSize(
+  preferredSize: const Size.fromHeight(60),
+  child: AppBar(
+    automaticallyImplyLeading: false,
+    elevation: 0,
+    backgroundColor: Colors.transparent,
+    flexibleSpace: Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.purple.shade600,
+            Colors.blue.shade600,
+            Colors.teal.shade600,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        backgroundColor: const Color(0xFF1565C0),
-        elevation: 8,
-        shadowColor: Colors.black45,
       ),
+    ),
+    titleSpacing: 0,
+    title: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Image.asset('assets/dpl.png', height: 36),
+          ),
+
+          const SizedBox(width: 8),
+
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '📦 Issue Inventory System',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Track and manage your production workflow efficiently',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+),
+    
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dimple_erp/AdminDashboard/admin.dart';
+import 'package:dimple_erp/AdminDashboard/constrcutiondashboard.dart';
+import 'package:dimple_erp/UNIT%202/unit2.dart';
+import 'package:dimple_erp/UNIT%202/unit2_sales.dart';
+import 'package:dimple_erp/main.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -59,18 +63,25 @@ class _MainScreenState extends State<MainScreen>
               'quality': true,
               'mom': true,
               'master': true,
+              'unit2 stock':true,
+              'unit2 sales':true,
+              'Contractor':true,
             }
           : Map<String, dynamic>.from(permissions);
 
+        final tabs = _buildTabs();
+
+    if (tabs.isNotEmpty) {
       _tabController?.dispose();
-      _tabController = TabController(length: _buildTabs().length, vsync: this);
+      _tabController = TabController(length: tabs.length, vsync: this);
+    }
 
-      _loading = false;
-    });
+    _loading = false;
+  });
 
-    debugPrint('ROLE => $_role');
-    debugPrint('PERMISSIONS => $_permissions');
-  }
+  debugPrint('ROLE => $_role');
+  debugPrint('PERMISSIONS => $_permissions');
+}
 
   // ================= BUILD TABS =================
   List<Tab> _buildTabs() {
@@ -82,6 +93,11 @@ class _MainScreenState extends State<MainScreen>
       if (_permissions['quality'] == true) const Tab(text: 'Quality Check'),
       if (_permissions['mom'] == true) const Tab(text: 'MOM'),
       if (_permissions['master'] == true) const Tab(text: 'Master'),
+      if (_permissions['unit2 stock'] == true) const Tab(text: 'Unit 2 Stock'),
+      if (_permissions['unit2 sales'] == true) const Tab(text: 'Unit 2 Sales'),
+      if (_permissions['Contractor'] == true) const Tab(text: 'Contractor'),
+
+
     ];
   }
 
@@ -95,7 +111,9 @@ class _MainScreenState extends State<MainScreen>
       if (_permissions['quality'] == true) QualityCheckScreen(),
       if (_permissions['mom'] == true) MinutesOfMeetingScreen(),
       if (_permissions['master'] == true) AdminDashboardScreen(),
-    ];
+      if (_permissions['unit2 stock'] == true) Unit2(),
+      if (_permissions['unit2 sales'] == true) const Unit2Sales(),
+if (_permissions['Contractor'] == true) const Constrcutiondashboard(),    ];
   }
 
   
@@ -108,11 +126,11 @@ Future<void> _logout() async {
 
   if (!mounted) return;
 
-  Navigator.pushAndRemoveUntil(
-    context,
-    MaterialPageRoute(builder: (_) => const LoginScreen()),
-    (_) => false,
-  );
+Navigator.pushAndRemoveUntil(
+  context,
+  MaterialPageRoute(builder: (_) => const AppModeHandler()),
+  (_) => false,
+);
 }
 
 
@@ -134,46 +152,43 @@ Future<void> _logout() async {
     final tabs = _buildTabs();
     final screens = _buildScreens();
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          // ================= TOP BAR (TAB + LOGOUT) =================
-          Container(
-            color: const Color(0xFFafcb1f),
-            child: Row(
-              children: [
-                // ---------- TAB BAR ----------
-                Expanded(
-                  child: TabBar(
-                    controller: _tabController,
-                    isScrollable: true,
-                    indicatorColor: Colors.white,
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.white70,
-                    labelStyle: TextStyle(
-                      fontSize: 15.sp,
-                      fontWeight: FontWeight.bold,
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: Colors.white,
+      
+        body: Column(
+          children: [
+            Container(
+              color: const Color(0xFFafcb1f),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TabBar(
+                      controller: _tabController,
+                      isScrollable: true,
+                      indicatorColor: Colors.white,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.white70,
+                      labelStyle: TextStyle(
+                        fontSize: 15.sp,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      tabs: tabs,
                     ),
-                    tabs: tabs,
                   ),
-                ),
-
-                // ---------- LOGOUT BUTTON (LAST RIGHT) ----------
-                IconButton(
-                  tooltip: 'Logout',
-                  icon: const Icon(Icons.logout, color: Colors.white),
-                  onPressed: _logout,
-                ),
-              ],
+                          IconButton(
+                    tooltip: 'Logout',
+                    icon: const Icon(Icons.logout, color: Colors.white),
+                    onPressed: _logout,
+                  ),
+                ],
+              ),
             ),
-          ),
-
-          // ================= TAB BODY =================
-          Expanded(
-            child: TabBarView(controller: _tabController, children: screens),
-          ),
-        ],
+                    Expanded(
+              child: TabBarView(controller: _tabController, children: screens),
+            ),
+          ],
+        ),
       ),
     );
   }

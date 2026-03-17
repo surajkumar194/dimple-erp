@@ -32,11 +32,19 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
 
               LayoutBuilder(
                 builder: (context, constraints) {
-                  int crossAxisCount = constraints.maxWidth > 1200
-                      ? 4
-                      : constraints.maxWidth > 800
-                          ? 3
-                          : 2;
+                  int crossAxisCount;
+                  double childAspectRatio;
+
+                  if (constraints.maxWidth < 600) {
+                    crossAxisCount = 2; // Mobile
+                    childAspectRatio = 0.75;
+                  } else if (constraints.maxWidth < 1100) {
+                    crossAxisCount = 3; // Tablet
+                    childAspectRatio = 0.9;
+                  } else {
+                    crossAxisCount = 4; // Web
+                    childAspectRatio = 1.1;
+                  }
 
                   return GridView.count(
                     shrinkWrap: true,
@@ -44,7 +52,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: 24,
                     mainAxisSpacing: 24,
-                    childAspectRatio: 1,
+                    childAspectRatio: childAspectRatio,
                     children: [
                       _masterCard(
                         title: "Departments",
@@ -143,8 +151,7 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
               ),
             ],
           ),
-          Icon(Icons.dashboard_customize,
-              size: 50, color: Colors.white),
+          Icon(Icons.dashboard_customize, size: 50, color: Colors.white),
         ],
       ),
     );
@@ -182,29 +189,38 @@ class _MasterDashboardScreenState extends State<MasterDashboardScreen> {
               ),
               padding: const EdgeInsets.all(18),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(icon, size: 22.sp, color: Colors.white),
 
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
+                        Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10.sp,
+                            color: Colors.white.withOpacity(0.9),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
 
                   Row(

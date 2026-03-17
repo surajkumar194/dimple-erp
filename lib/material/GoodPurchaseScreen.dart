@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class GoodPurchaseScreen extends StatefulWidget {
-  const GoodPurchaseScreen({Key? key}) : super(key: key);
+  const GoodPurchaseScreen({super.key});
 
   @override
   State<GoodPurchaseScreen> createState() => _GoodPurchaseScreenState();
@@ -263,7 +263,7 @@ class _GoodPurchaseScreenState extends State<GoodPurchaseScreen> {
                     ),
                   ),
                 );
-              }).toList(),
+              }),
 
               const SizedBox(height: 20),
 

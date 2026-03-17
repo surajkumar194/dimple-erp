@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dimple_erp/all%20screen/DemoScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,7 +8,10 @@ import 'package:sizer/sizer.dart';
 import 'package:dimple_erp/all screen/MainScreen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool isDemo;
+
+  const LoginScreen({super.key, required this.isDemo});
+
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -16,19 +20,84 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _rememberMe = true;
 
   bool _isLoading = false;
   bool _obscurePassword = true;
   final _formKey = GlobalKey<FormState>();
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final savedEmail = prefs.getString('savedEmail') ?? '';
+    final savedPassword = prefs.getString('savedPassword') ?? '';
+
+    _emailController.text = savedEmail;
+    _passwordController.text = savedPassword;
+  }
 
   // ================= LOGIN FUNCTION =================
-  Future<void> _login() async {
+ Future<void> _login() async {
   if (!_formKey.currentState!.validate()) return;
 
   setState(() => _isLoading = true);
 
   try {
-    // 🔐 Firebase Auth
+
+    // 🔥 CHECK APP MODE FROM FIRESTORE
+   final mode = widget.isDemo ? "demo" : "live";
+    // ================= DEMO MODE =================
+    if (mode == "demo") {
+
+      if (_emailController.text.trim() == "demo@erp.com" &&
+          _passwordController.text.trim() == "123456") {
+
+        final prefs = await SharedPreferences.getInstance();
+
+        // Demo admin access
+        await prefs.setString('role', 'admin');
+
+        await prefs.setString(
+          'permissions',
+          jsonEncode({
+            'stock': true,
+            'sales': true,
+            'production': true,
+            'purchase': true,
+            'quality': true,
+            'mom': true,
+            'master': true,
+            'unit2 stock': true,
+            'unit2 sales': true,
+            'Contractor': true,
+          }),
+        );
+
+        if (!mounted) return;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DemoDashboard()),
+        );
+
+        _showSnackBar("Demo login successful!");
+
+        setState(() => _isLoading = false);
+        return;
+      } else {
+        _showSnackBar("Use demo@erp.com / 123456", isError: true);
+        setState(() => _isLoading = false);
+        return;
+      }
+    }
+
+    // ================= LIVE MODE =================
+
     await FirebaseAuth.instance.signInWithEmailAndPassword(
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
@@ -37,9 +106,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final uid = FirebaseAuth.instance.currentUser!.uid;
     final prefs = await SharedPreferences.getInstance();
 
-  
+    if (_rememberMe) {
+      await prefs.setString('savedEmail', _emailController.text.trim());
+      await prefs.setString('savedPassword', _passwordController.text.trim());
+    }
 
-    // 🔥 FETCH USER FROM FIRESTORE
     final doc = await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -47,11 +118,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final data = doc.data()!;
     final role = data['role'] ?? 'user';
-    final permissions = Map<String, dynamic>.from(
-      data['permissions'] ?? {},
-    );
+    final permissions = Map<String, dynamic>.from(data['permissions'] ?? {});
 
-    // ✅ SAVE LOCALLY
     await prefs.setString('role', role);
     await prefs.setString('permissions', jsonEncode(permissions));
 
@@ -63,20 +131,19 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     _showSnackBar("Login successful!");
+
   } catch (e) {
     _showSnackBar(e.toString(), isError: true);
   }
 
   if (mounted) setState(() => _isLoading = false);
 }
-
   // ================= SNACKBAR =================
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor:
-            isError ? Colors.red.shade600 : Colors.green.shade600,
+        backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
         behavior: SnackBarBehavior.floating,
         margin: EdgeInsets.all(5.w),
       ),
@@ -128,8 +195,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             Text(
                               "Welcome Back!",
+                              maxLines: 1,
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 28.sp,
+                                fontSize: Device.screenType == ScreenType.mobile
+                                    ? 25.sp
+                                    : 28.sp,
                                 fontWeight: FontWeight.bold,
                                 color: const Color(0xFF1e3a8a),
                               ),
@@ -138,11 +209,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             Text(
                               "Sign in to continue",
                               style: TextStyle(
-                                fontSize: 14.sp,
+                                fontSize: 17.sp,
                                 color: Colors.grey.shade600,
                               ),
                             ),
-                            SizedBox(height: 3.h),
+                            SizedBox(height: 2.h),
 
                             // ================= EMAIL =================
                             TextFormField(
@@ -176,7 +247,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               },
                             ),
 
-                            SizedBox(height: 3.h),
+                            SizedBox(height: 1.h),
 
                             // ================= PASSWORD =================
                             TextFormField(
@@ -222,7 +293,23 @@ class _LoginScreenState extends State<LoginScreen> {
                               },
                             ),
 
-                            SizedBox(height: 5.h),
+                            SizedBox(height: 1.h),
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: _rememberMe,
+                                  onChanged: (v) {
+                                    setState(() {
+                                      _rememberMe = v!;
+                                    });
+                                  },
+                                ),
+                                Text(
+                                  "Remember me",
+                                  style: TextStyle(fontSize: 15.sp),
+                                ),
+                              ],
+                            ),
 
                             // ================= LOGIN BUTTON =================
                             SizedBox(
@@ -231,8 +318,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: ElevatedButton(
                                 onPressed: _isLoading ? null : _login,
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      const Color(0xFF1e3a8a),
+                                  backgroundColor: const Color(0xFF1e3a8a),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -244,7 +330,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     : Text(
                                         "Sign In",
                                         style: TextStyle(
-                                          fontSize: 16.sp,
+                                          fontSize: 18.sp,
                                           fontWeight: FontWeight.bold,
                                           color: Colors.white,
                                         ),
@@ -252,11 +338,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
 
-                            SizedBox(height: 3.h),
+                            SizedBox(height: 2.h),
                             Text(
                               "Dimple Packaging Pvt. Ltd.",
                               style: TextStyle(
-                                fontSize: 13.sp,
+                                fontSize: 15.sp,
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF1e3a8a),
                               ),
@@ -265,7 +351,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Text(
                               "© 2026 All Rights Reserved",
                               style: TextStyle(
-                                fontSize: 11.sp,
+                                fontSize: 13.sp,
                                 color: Colors.grey.shade500,
                               ),
                             ),

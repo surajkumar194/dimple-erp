@@ -77,8 +77,11 @@ class _AddProductionScreenState extends State<AddProductionScreen>
     );
     if (picked != null) {
       setState(() {
-        if (isStart) startTime = picked;
-        else endTime = picked;
+        if (isStart) {
+          startTime = picked;
+        } else {
+          endTime = picked;
+        }
       });
     }
   }

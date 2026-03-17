@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
+import 'package:sizer/sizer.dart';
 
 class PurchaseOrderScreen extends StatefulWidget {
   const PurchaseOrderScreen({super.key});
@@ -222,19 +222,19 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> {
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
                 "Purchase Order 👋",
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 18.sp,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              SizedBox(height: 2),
+              SizedBox(height: 0.5.h),
               Text(
                 "Manage your purchase orders",
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(fontSize: 14.sp,color: Colors.white70),
               ),
             ],
           ),

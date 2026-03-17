@@ -35,11 +35,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               LayoutBuilder(
                 builder: (context, constraints) {
-                  int crossAxisCount = constraints.maxWidth > 1200
-                      ? 4
-                      : constraints.maxWidth > 800
-                      ? 3
-                      : 2;
+                  int crossAxisCount;
+                  double childAspectRatio;
+
+                  if (constraints.maxWidth < 600) {
+                    crossAxisCount = 2; // Mobile
+                    childAspectRatio = 0.78;
+                  } else if (constraints.maxWidth < 1100) {
+                    crossAxisCount = 3; // Tablet
+                    childAspectRatio = 0.9;
+                  } else {
+                    crossAxisCount = 4; // Web
+                    childAspectRatio = 1.1;
+                  }
 
                   return GridView.count(
                     shrinkWrap: true,
@@ -47,7 +55,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: 24,
                     mainAxisSpacing: 24,
-                    childAspectRatio: 1.0,
+                    childAspectRatio: childAspectRatio,
                     children: [
                       _firestoreCard(
                         title: "Wedding / Boxes Raw Material",
@@ -65,6 +73,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         },
                       ),
 
+                      //    _firestoreCard(
+                      //   title: "Paper / Stock",
+                      //   subtitle: "Manage Paper Stock",
+                      //   icon: Icons.shopping_cart_checkout_sharp,
+                      //   gradient: [const Color.fromARGB(255, 87, 147, 232)!, const Color.fromARGB(255, 94, 143, 211)!],
+                      //   collection: "paper_stock_items",
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //         builder: (_) => const PaperStockScreen(),
+                      //       ),
+                      //     );
+                      //   },
+                      // ),
                       _firestoreCard(
                         title: "Mdf / Boxes Ready Stock",
                         subtitle: "Ready stock dashboard",
@@ -124,19 +147,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
                 "Stock Store 👋",
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 18.sp,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              SizedBox(height: 2),
+              SizedBox(height: 0.5.h),
               Text(
                 "Manage your store stock",
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(fontSize: 14.sp, color: Colors.white70),
               ),
             ],
           ),
@@ -174,31 +197,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(20),
               ),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(icon, size: 22.sp, color: Colors.white),
 
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: TextStyle(color: Colors.white.withOpacity(0.9)),
-                      ),
-                    ],
+                        Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
 
                   Row(

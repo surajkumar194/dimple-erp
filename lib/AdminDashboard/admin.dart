@@ -7,14 +7,12 @@ import 'package:sizer/sizer.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
-
   @override
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   Future<int> _getCount(String collection) async {
     final snap = await _firestore.collection(collection).get();
     return snap.docs.length;
@@ -32,14 +30,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             children: [
               _header(),
               const SizedBox(height: 32),
-
               LayoutBuilder(
                 builder: (context, constraints) {
-                  int crossAxisCount = constraints.maxWidth > 1200
-                      ? 4
-                      : constraints.maxWidth > 800
-                          ? 3
-                          : 2;
+                  int crossAxisCount;
+                  double childAspectRatio;
+                  if (constraints.maxWidth < 600) {
+                    crossAxisCount = 2; // Mobile
+                    childAspectRatio = 0.75;
+                  } else if (constraints.maxWidth < 1100) {
+                    crossAxisCount = 3; // Tablet
+                    childAspectRatio = 0.9;
+                  } else {
+                    crossAxisCount = 4; // Web
+                    childAspectRatio = 1.1;
+                  }
 
                   return GridView.count(
                     shrinkWrap: true,
@@ -47,7 +51,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: 24,
                     mainAxisSpacing: 24,
-                    childAspectRatio: 1.0,
+                    childAspectRatio: childAspectRatio,
                     children: [
                       _adminCard(
                         title: "Users",
@@ -75,8 +79,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                 AdminCollectionsScreen(),
+                              builder: (_) => AdminCollectionsScreen(),
                             ),
                           );
                         },
@@ -92,8 +95,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  AdminCollectionsScreen(),
+                              builder: (_) => AdminCollectionsScreen(),
                             ),
                           );
                         },
@@ -114,7 +116,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       //     );
                       //   },
                       // ),
-
                       _adminCard(
                         title: "Sales order",
                         subtitle: "Admin data tools",
@@ -125,7 +126,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => AdminDocumentsScreen(collection: 'orders',),
+                              builder: (_) =>
+                                  AdminDocumentsScreen(collection: 'orders'),
                             ),
                           );
                         },
@@ -147,39 +149,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.deepPurple[700]!, Colors.blue[600]!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          colors: [Colors.blue.shade700, Colors.purple.shade600],
         ),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
+           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
-                "Admin Panel 👑",
+                "Admin Panel 👋",
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 18.sp,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-              SizedBox(height: 2),
+              SizedBox(height: 0.5.h),
               Text(
-                "Control everything from one place",
-                style: TextStyle(color: Colors.white70),
+                "Control your data",
+                style: TextStyle(fontSize: 14.sp,
+                  color: Colors.white70),
               ),
             ],
           ),
-          Icon(Icons.admin_panel_settings,
-              size: 48, color: Colors.white),
+          Image.asset("assets/dpl.png", scale: 3.5),
         ],
       ),
     );
   }
+
 
   // ================= ADMIN CARD =================
   Widget _adminCard({
@@ -211,31 +212,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 borderRadius: BorderRadius.circular(24),
               ),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(icon, size: 22.sp, color: Colors.white),
 
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
+                        Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
 
                   Row(

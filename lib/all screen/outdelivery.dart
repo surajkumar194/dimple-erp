@@ -135,7 +135,7 @@ class _OutForDeliveryScreenState extends State<OutForDeliveryScreen> {
                   controller: controller,
                   images: product['images'],
                 );
-              }).toList(),
+              }),
 
               const SizedBox(height: 24),
 
