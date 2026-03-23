@@ -178,7 +178,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
   String? _selectedSalesPerson;
   String? _customSalesPerson;
   final String _selectedProductCategory = 'MDF';
-  final List<String> _productCategories =  ['MDF', 'Kappa Box', 'Packaging', 'Rigid Box (unit 2)', 'Others'];
+  final List<String> _productCategories =  ['MDF', 'Kappa Box (Gora)', 'Packaging', 'Shagun Envelopes', 'Rigid Box (unit 2 Hussainpura)', 'Others'];
   String? _selectedUnit;
 
   final List<String> _units = [
@@ -652,7 +652,7 @@ String generateProductCode(int index) {
         'email': _emailController.text,
         'customerGstNumber': _gstNumberController.text,
         'location': _locationController.text,
-        'productCategory': _selectedProductCategory,
+      //  'productCategory': _selectedProductCategory,
         'unit': _selectedUnit,
         'salesPerson': _selectedSalesPerson == 'Others'
             ? _customSalesPerson

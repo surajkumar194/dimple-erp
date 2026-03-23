@@ -1,12 +1,22 @@
-import 'dart:typed_data';
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'dart:typed_data';
 import 'package:sizer/sizer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html;
 
 class StoreStockScreen extends StatefulWidget {
   const StoreStockScreen({super.key});
@@ -14,7 +24,8 @@ class StoreStockScreen extends StatefulWidget {
   _StoreStockScreenState createState() => _StoreStockScreenState();
 }
 
-class _StoreStockScreenState extends State<StoreStockScreen> {
+class _StoreStockScreenState extends State<StoreStockScreen>
+    with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
@@ -22,36 +33,57 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
   List<Map<String, dynamic>> stockData = [];
   List<Map<String, dynamic>> filteredData = [];
   final TextEditingController _searchController = TextEditingController();
-  int _rowsPerPage = 10;
-  int _currentPage = 0;
+
   bool _isLoading = false;
+  String _selectedDateFilter = 'All';
+  String _selectedMovingFilter = 'All';
+  DateTimeRange? _customDateRange;
+  String _selectedGroupFilter = 'All';
 
-  String? _selectedGroup;
-  List<String> _groupList = [];
-  String normalizeHeader(String h) {
-    h = h.toLowerCase().trim();
-    if (h.contains('code')) return 'code';
-    if (h.contains('item name')) return 'name';
-    if (h == 'group') return 'group';
-    if (h.contains('received')) return 'received';
-    if (h.contains('issue')) return 'issue';
-    if (h.contains('stock in hand')) return 'current';
-    if (h.contains('stock located')) return 'located';
-    if (h.contains('moving')) return 'moving';
-    if (h.contains('sr')) return 'sr';
-    return h;
-  }
+  static const Color primaryOrange = Color(0xFFE65100);
+  static const Color lightOrange = Color(0xFFFFB74D);
+  static const Color darkOrange = Color(0xFFBF360C);
+  static const Color accentOrange = Color(0xFFFF9800);
+  static const Color bgOrange = Color(0xFFFFF3E0);
+  static const Color cardOrange = Color(0xFFFFF8F0);
 
-  final List<String> _departments = [
-    'Gora Depatment',
-    'Mdf hall 1',
-    'Mdf hall 2',
-    'designing room',
+  final List<String> _movingFilters = [
+    'All',
+    'FAST MOVING',
+    'SLOW MOVING',
+    'NON MOVING',
+    'NEW',
+    'NEW JAR',
+    'ON ORDER',
   ];
+  final List<String> _dateFilters = [
+    'All',
+    'Today',
+    'Last 7 Days',
+    'Last 30 Days',
+    'Custom',
+  ];
+
+  List<String> _groupList = [];
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  int _rowsPerPage = 20;
+  int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
+    _selectedDateFilter = 'All';
+    _selectedGroupFilter = 'All';
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+    _animationController.forward();
     _loadDataFromFirebase();
     _searchController.addListener(_filterData);
   }
@@ -59,21 +91,194 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
-  // RE-NUMBER SR AFTER DELETE
+  String normalizeHeader(String h) {
+    h = h.toLowerCase().trim();
+    if (h.contains('code')) return 'code';
+    if (h.contains('item name') || h == 'name') return 'name';
+    if (h == 'group') return 'group';
+    if (h.contains('received')) return 'received';
+    if (h.contains('issue')) return 'issue';
+    if (h.contains('stock in hand') || h == 'current') return 'current';
+    if (h.contains('stock located') || h == 'located') return 'located';
+    if (h.contains('moving')) return 'moving';
+    if (h.contains('sr')) return 'sr';
+    return h;
+  }
+
+  Future<Uint8List?> _networkImageToBytes(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) return response.bodyBytes;
+    } catch (e) {}
+    return null;
+  }
+
+  // ==================== PDF ====================
+
+  Future<void> _downloadPdf() async {
+    final pdf = pw.Document();
+    Uint8List logoBytes;
+    try {
+      final data = await rootBundle.load('assets/logo.png');
+      logoBytes = data.buffer.asUint8List();
+    } catch (e) {
+      logoBytes = Uint8List(0);
+    }
+    final logoImage = logoBytes.isNotEmpty ? pw.MemoryImage(logoBytes) : null;
+    List<List<dynamic>> tableData = [];
+
+    for (var item in filteredData) {
+      Uint8List? imageBytes;
+      if (item['image'] != null && item['image'].toString().isNotEmpty) {
+        imageBytes = await _networkImageToBytes(item['image']);
+      }
+      final located = int.tryParse(item['located']?.toString() ?? '0') ?? 0;
+      final received = item['received'] ?? 0;
+      final issue = item['issue'] ?? 0;
+      final stockInHand = located + received - issue;
+
+      tableData.add([
+        item['sr']?.toString() ?? '',
+        item['code'] ?? '',
+        item['name'] ?? '',
+        item['group'] ?? '',
+        imageBytes != null
+            ? pw.Image(pw.MemoryImage(imageBytes), width: 40, height: 40)
+            : pw.Text('No Image'),
+        located.toString(),
+        received.toString(),
+        issue.toString(),
+        stockInHand.toString(),
+        item['moving'] ?? '',
+        item['dateEdit'] ?? '',
+      ]);
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        build: (context) => [
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              if (logoImage != null)
+                pw.Container(width: 80, height: 80, child: pw.Image(logoImage)),
+              pw.SizedBox(width: 15),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'DIMPLE PACKAGING PVT. LTD.',
+                    style: pw.TextStyle(
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.orange900,
+                    ),
+                  ),
+                  pw.SizedBox(height: 5),
+                  pw.Text(
+                    'Grand Trunk Rd, near Navdeep Resorts, adjoining Sidak Resorts,\n'
+                    'West, Bhattian Ludhiana, Punjab - 141008\nContact No.: 9872518000, 7888696774',
+                    style: const pw.TextStyle(fontSize: 10),
+                  ),
+                  pw.SizedBox(height: 3),
+                  pw.Text(
+                    'GST No.: 03AADCD5371K1ZP     PAN No.: AADCD5371K',
+                    style: const pw.TextStyle(fontSize: 10),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 1),
+          pw.Divider(thickness: 1),
+          pw.Text(
+            'Store Stock Report',
+            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Table.fromTextArray(
+            headers: [
+              'Sr',
+              'Code',
+              'Item Name',
+              'Group',
+              'Image',
+              'Total Stock',
+              'Received',
+              'Issue',
+              'Stock In Hand',
+              'Moving',
+              'Date',
+            ],
+            data: tableData,
+          ),
+        ],
+      ),
+    );
+
+    final bytes = await pdf.save();
+    if (kIsWeb) {
+      final blob = html.Blob([bytes]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'store_stock_report.pdf')
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    } else {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/store_stock_report.pdf');
+      await file.writeAsBytes(bytes);
+      await OpenFile.open(file.path);
+    }
+    _showSnackBar('PDF Generated');
+  }
+
+  // ==================== DATA OPERATIONS ====================
+
+  // ✅ Sr aur Code dono ek saath — next Sr number return karta hai
+  Future<int> _getNextSrNumber() async {
+    try {
+      final snapshot = await _firestore.collection('stock_items').get();
+      int maxSr = 0;
+      for (var doc in snapshot.docs) {
+        final sr = doc.data()['sr'];
+        if (sr != null && sr is int && sr > maxSr) maxSr = sr;
+      }
+      return maxSr + 1;
+    } catch (e) {
+      return 1;
+    }
+  }
+
+  // ✅ Code = Sr ke hisaab se — Sr 1 = DPL-001, Sr 5 = DPL-005
+  String _srToCode(int sr) => 'DPL-${sr.toString().padLeft(3, '0')}';
+
+  // ✅ Auto code = next Sr se generate hota hai
+  Future<String> _getNextAutoCode() async {
+    final nextSr = await _getNextSrNumber();
+    return _srToCode(nextSr);
+  }
+
+  // ✅ Delete ke baad Sr renumber + Code bhi sync
   Future<void> _renumberSrNumbers() async {
     try {
       final snapshot = await _firestore
           .collection('stock_items')
-          .orderBy('sr')
+          .orderBy('createdAt', descending: false)
           .get();
-      final WriteBatch batch = _firestore.batch();
-      int newSr = 1;
+      WriteBatch batch = _firestore.batch();
+      int sr = 1;
       for (var doc in snapshot.docs) {
-        batch.update(doc.reference, {'sr': newSr});
-        newSr++;
+        batch.update(doc.reference, {
+          'sr': sr,
+          'code': _srToCode(sr), // ✅ Code bhi Sr ke saath sync
+        });
+        sr++;
       }
       await batch.commit();
     } catch (e) {
@@ -81,64 +286,123 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     }
   }
 
-  Future<int> _getNextSrNumber() async {
-    try {
-      final snapshot = await _firestore
-          .collection('stock_items')
-          .orderBy('sr', descending: true)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isEmpty) return 1;
-      final lastSr = snapshot.docs.first.data()['sr'] as int?;
-      return (lastSr ?? 0) + 1;
-    } catch (e) {
-      return 1;
+  // ✅ Fix Codes — Sr ke hisaab se code set karta hai
+  Future<void> _fixCodesSequentially() async {
+    final snapshot = await _firestore
+        .collection('stock_items')
+        .orderBy('createdAt')
+        .get();
+    WriteBatch batch = _firestore.batch();
+    int counter = 1;
+    for (var doc in snapshot.docs) {
+      batch.update(doc.reference, {
+        'sr': counter,
+        'code': _srToCode(counter), // ✅ Sr 1 = DPL-001
+      });
+      counter++;
     }
+    await batch.commit();
+    await _loadDataFromFirebase();
   }
 
   Future<void> _loadDataFromFirebase() async {
     setState(() => _isLoading = true);
     try {
-      final snapshot = await _firestore
-          .collection('stock_items')
-          .orderBy('sr')
-          .get();
+      final snapshot = await _firestore.collection('stock_items').get();
       stockData = snapshot.docs.map((doc) {
         final data = doc.data();
         data['docId'] = doc.id;
         return data;
       }).toList();
 
-      final groups = stockData.map((e) => e['group'] as String).toSet().toList()
-        ..sort();
+      stockData.sort((a, b) {
+        final aSr = a['sr'];
+        final bSr = b['sr'];
+        if (aSr != null && bSr != null && aSr is int && bSr is int)
+          return aSr.compareTo(bSr);
+        final aCreated = a['createdAt'];
+        final bCreated = b['createdAt'];
+        if (aCreated is Timestamp && bCreated is Timestamp)
+          return aCreated.compareTo(bCreated);
+        return 0;
+      });
+
+      final groups =
+          stockData
+              .map((e) => e['group']?.toString() ?? '')
+              .where((g) => g.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
       _groupList = ['All', ...groups];
-      if (_selectedGroup == null || !_groupList.contains(_selectedGroup)) {
-        _selectedGroup = 'All';
-      }
+      if (!_groupList.contains(_selectedGroupFilter))
+        _selectedGroupFilter = 'All';
 
       filteredData = List.from(stockData);
       _applyFilters();
     } catch (e) {
-      _showSnackBar("Error loading data: $e", isError: true);
+      _showSnackBar('Error loading data: $e', isError: true);
     }
     setState(() => _isLoading = false);
   }
 
-  void _filterData() {
-    _applyFilters();
-  }
+  void _filterData() => _applyFilters();
 
   void _applyFilters() {
     final query = _searchController.text.toLowerCase();
+    final now = DateTime.now();
     setState(() {
       filteredData = stockData.where((item) {
         final matchesSearch =
-            item["code"].toString().toLowerCase().contains(query) ||
-            item["name"].toString().toLowerCase().contains(query) ||
-            item["group"].toString().toLowerCase().contains(query);
-        final matchesGroup =
-            _selectedGroup == 'All' || item['group'] == _selectedGroup;
-        return matchesSearch && matchesGroup;
+            item['code'].toString().toLowerCase().contains(query) ||
+            item['name'].toString().toLowerCase().contains(query) ||
+            (item['group'] ?? '').toString().toLowerCase().contains(query);
+
+        bool matchesMoving =
+            _selectedMovingFilter == 'All' ||
+            (item['moving'] ?? '').toString().toUpperCase() ==
+                _selectedMovingFilter;
+        bool matchesGroup =
+            _selectedGroupFilter == 'All' ||
+            item['group'] == _selectedGroupFilter;
+
+        bool matchesDate = true;
+        try {
+          DateTime? itemDate;
+          if (item['dateEdit'] != null &&
+              item['dateEdit'].toString().isNotEmpty) {
+            itemDate = DateFormat('dd-MM-yyyy').parse(item['dateEdit']);
+          }
+          if (itemDate != null) {
+            if (_selectedDateFilter == 'Today') {
+              matchesDate =
+                  itemDate.year == now.year &&
+                  itemDate.month == now.month &&
+                  itemDate.day == now.day;
+            } else if (_selectedDateFilter == 'Last 7 Days') {
+              matchesDate = itemDate.isAfter(
+                now.subtract(const Duration(days: 7)),
+              );
+            } else if (_selectedDateFilter == 'Last 30 Days') {
+              matchesDate = itemDate.isAfter(
+                now.subtract(const Duration(days: 30)),
+              );
+            } else if (_selectedDateFilter == 'Custom' &&
+                _customDateRange != null) {
+              matchesDate =
+                  itemDate.isAfter(
+                    _customDateRange!.start.subtract(const Duration(days: 1)),
+                  ) &&
+                  itemDate.isBefore(
+                    _customDateRange!.end.add(const Duration(days: 1)),
+                  );
+            }
+          }
+        } catch (e) {
+          matchesDate = true;
+        }
+
+        return matchesSearch && matchesMoving && matchesGroup && matchesDate;
       }).toList();
       _currentPage = 0;
     });
@@ -150,34 +414,22 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     return filteredData.sublist(start, end);
   }
 
-  Future<Map<String, XFile>> _pickImageFolder() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      type: FileType.image,
-      withData: true,
-    );
-
-    if (result == null) return {};
-
-    return {
-      for (var f in result.files)
-        f.name: XFile.fromData(f.bytes!, name: f.name),
-    };
-  }
+  // ==================== IMAGE ====================
 
   Future<String?> _uploadImage(XFile imageFile) async {
     try {
       final Uint8List imageBytes = await imageFile.readAsBytes();
-      final String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      final Reference ref = _storage.ref().child('stock_images/$fileName.png');
+      final String fileName = 'store_${DateTime.now().millisecondsSinceEpoch}';
+      final Reference ref = _storage.ref().child(
+        'store_stock_images/$fileName.png',
+      );
       final uploadTask = await ref.putData(
         imageBytes,
         SettableMetadata(contentType: 'image/png'),
       );
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-      return downloadUrl;
+      return await uploadTask.ref.getDownloadURL();
     } catch (e) {
-      _showSnackBar("Image upload failed: $e", isError: true);
+      _showSnackBar('Image upload failed: $e', isError: true);
       return null;
     }
   }
@@ -185,21 +437,41 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
   void _showImageZoom(String imageUrl) {
     showDialog(
       context: context,
+      barrierColor: Colors.black87,
       builder: (ctx) => Dialog(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
         child: Stack(
           children: [
             Center(
               child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
                 child: Image.network(imageUrl, fit: BoxFit.contain),
               ),
             ),
             Positioned(
               top: 40,
               right: 20,
-              child: IconButton(
-                icon: Icon(Icons.close, color: Colors.white, size: 32),
-                onPressed: () => Navigator.pop(ctx),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.pop(ctx),
+                  borderRadius: BorderRadius.circular(30),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Colors.white24, width: 2),
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -208,352 +480,485 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     );
   }
 
+  Widget _imageCellFlex(Map<String, dynamic> item, int flex) {
+    final url = item['image'];
+    return Expanded(
+      flex: flex,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(color: Colors.grey.shade200, width: 1),
+          ),
+        ),
+        child: url != null && url.toString().isNotEmpty
+            ? GestureDetector(
+                onTap: () => _showImageZoom(url),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: lightOrange, width: 1.5),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: Image.network(
+                      url,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              )
+            : Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: bgOrange,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: lightOrange, width: 1.5),
+                ),
+                child: Icon(Icons.image, color: Colors.grey[400], size: 24),
+              ),
+      ),
+    );
+  }
+
+  Widget _imagePickerBox({
+    XFile? imageFile,
+    String? imageUrl,
+    required VoidCallback onPick,
+  }) {
+    return GestureDetector(
+      onTap: onPick,
+      child: Container(
+        width: 150,
+        height: 150,
+        decoration: BoxDecoration(
+          color: bgOrange,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: accentOrange, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: accentOrange.withOpacity(0.2),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: imageFile != null
+              ? (kIsWeb
+                    ? FutureBuilder<Uint8List>(
+                        future: imageFile.readAsBytes(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData)
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          return Image.memory(
+                            snapshot.data!,
+                            fit: BoxFit.cover,
+                          );
+                        },
+                      )
+                    : Image.file(File(imageFile.path), fit: BoxFit.cover))
+              : imageUrl != null && imageUrl.isNotEmpty
+              ? Image.network(imageUrl, fit: BoxFit.cover)
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.cloud_upload_outlined,
+                      size: 50,
+                      color: accentOrange,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Upload Image',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryOrange,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  // ==================== STOCK OPERATIONS ====================
+
   void _issueStockWithDepartment(Map<String, dynamic> item) {
     final qtyCtrl = TextEditingController();
     String? selectedJobCard;
+    String? selectedJobLabel;
+    List<QueryDocumentSnapshot> jobCardDocs = [];
+    bool isLoadingJobs = true;
+    bool isSubmitting = false;
+
+    // Pehle job cards load karo
+    _firestore
+        .collection('jobCards')
+        .orderBy('createdAt', descending: true)
+        .get()
+        .then((snapshot) {
+          jobCardDocs = snapshot.docs;
+          isLoadingJobs = false;
+        });
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) {
+          // Job cards load karo dialog open hote hi
+          if (isLoadingJobs) {
+            _firestore
+                .collection('jobCards')
+                .orderBy('createdAt', descending: true)
+                .get()
+                .then((snapshot) {
+                  jobCardDocs = snapshot.docs;
+                  isLoadingJobs = false;
+                  setStateDialog(() {});
+                });
+          }
+
           return AlertDialog(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(24),
             ),
-            title: Text(
-              "Issue Stock to Job",
-              style: TextStyle(
-                color: Colors.red[700],
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 🔹 Fetch job cards
-                  FutureBuilder<QuerySnapshot>(
-                    future: _firestore
-                        .collection('jobCards')
-                        .orderBy('createdAt', descending: true)
-                        .get(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(
-                          child: CircularProgressIndicator(
-                            color: Colors.orange,
-                          ),
-                        );
-                      }
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                        return Text(
-                          "No Job Cards found.",
-                          style: TextStyle(color: Colors.grey[600]),
-                        );
-                      }
-
-                      final jobCards = snapshot.data!.docs;
-                      return DropdownButtonFormField<String>(
-                        value: selectedJobCard,
-                        decoration: InputDecoration(
-                          labelText: "Select Job Card",
-                          prefixIcon: Icon(Icons.work, color: Colors.red[700]),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        items: jobCards.map((d) {
-                          final data = d.data() as Map<String, dynamic>;
-
-                          final jobNo =
-                              data['jobCardNumber'] ?? data['jobNo'] ?? 'N/A';
-                          final dplCode = data['dplCode'] ?? '';
-                          final customer =
-                              data['customerName'] ?? data['customer'] ?? '';
-
-                          final List products = data['products'] ?? [];
-
-                          String product = '';
-                          String qty = '';
-
-                          if (products.isNotEmpty) {
-                            product = products[0]['productName'] ?? '';
-                            qty = products[0]['quantity']?.toString() ?? '';
-                          }
-                          return DropdownMenuItem(
-                            value: d.id,
-                            child: SizedBox(
-                              width: 300,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        "DPL: $dplCode | Job: $jobNo",
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Text("Qty: $qty"),
-                                    ],
-                                  ),
-
-                                  // Text("Product: $product"),
-                                  // Text("Customer: $customer"),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (v) =>
-                            setStateDialog(() => selectedJobCard = v),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: qtyCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: "Enter Quantity to Issue",
-                      prefixIcon: Icon(Icons.inventory, color: Colors.red[700]),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text("Cancel"),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red[600],
+            title: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.red.shade400, Colors.red.shade600],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                onPressed: () async {
-                  if (selectedJobCard == null) {
-                    _showSnackBar("Please select a Job Card", isError: true);
-                    return;
-                  }
-
-                  final qtyText = qtyCtrl.text.trim();
-                  final qty = int.tryParse(qtyText) ?? 0;
-                  if (qty <= 0) {
-                    _showSnackBar("Enter valid quantity", isError: true);
-                    return;
-                  }
-
-                  final currentStock = item['current'] ?? 0;
-                  if (currentStock < qty) {
-                    _showSnackBar("Not enough stock available!", isError: true);
-                    return;
-                  }
-
-                  try {
-                    // ✅ 1️⃣ Record issue transaction
-                    await _firestore.collection('stock_transactions').add({
-                      'itemId': item['docId'],
-                      'type': 'issue',
-                      'jobCardId': selectedJobCard,
-                      'quantity': qty,
-                      'timestamp': FieldValue.serverTimestamp(),
-                    });
-
-                    // 🔹 Update stock item
-                    await _firestore
-                        .collection('stock_items')
-                        .doc(item['docId'])
-                        .update({
-                          'current': currentStock - qty,
-                          'issue': (item['issue'] ?? 0) + qty,
-                          'dateEdit': DateFormat(
-                            'dd-MM-yyyy',
-                          ).format(DateTime.now()),
-                          'updatedAt': FieldValue.serverTimestamp(),
-                        });
-
-                    // 🔹 Update jobCard dispatch log
-                    final jobDoc = _firestore
-                        .collection('jobCards')
-                        .doc(selectedJobCard);
-                    final jobSnap = await jobDoc.get();
-                    if (jobSnap.exists) {
-                      final jobData = jobSnap.data() as Map<String, dynamic>;
-                      final totalQty =
-                          int.tryParse(
-                            jobData['quantity']?.toString() ?? '0',
-                          ) ??
-                          0;
-                      final issuedQty =
-                          int.tryParse(
-                            jobData['issuedQuantity']?.toString() ?? '0',
-                          ) ??
-                          0;
-                      final newIssued = issuedQty + qty;
-                      final newStatus = newIssued >= totalQty
-                          ? "Completed"
-                          : "Partially Issued";
-
-                      await jobDoc.update({
-                        'issuedQuantity': newIssued,
-                        'status': newStatus,
-                        'dispatchLog': FieldValue.arrayUnion([
-                          {
-                            'department': 'Store',
-                            'issuedQty': qty,
-                            'time': DateTime.now(),
-                            'itemName': item['name'],
-                          },
-                        ]),
-                      });
-                    }
-                    final todayKey = DateFormat(
-                      'yyyy-MM-dd',
-                    ).format(DateTime.now());
-                    final dailyRef = _firestore
-                        .collection('stock_daily_history')
-                        .doc(todayKey)
-                        .collection('items')
-                        .doc(item['docId']);
-
-                    final dailySnap = await dailyRef.get();
-                    if (dailySnap.exists) {
-                      await dailyRef.update({
-                        'totalIssued': FieldValue.increment(qty),
-                        'lastUpdated': FieldValue.serverTimestamp(),
-                      });
-                    } else {
-                      await dailyRef.set({
-                        'itemId': item['docId'],
-                        'itemName': item['name'],
-                        'totalIssued': qty,
-                        'date': todayKey,
-                        'createdAt': FieldValue.serverTimestamp(),
-                      });
-                    }
-
-                    await _loadDataFromFirebase();
-                    Navigator.pop(ctx);
-                    _showSnackBar("Issued $qty units to Job successfully!");
-                  } catch (e) {
-                    _showSnackBar("Error issuing stock: $e", isError: true);
-                  }
-                },
-                child: Text("Issue Now"),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  void _showItemHistoryBelowDialog(Map<String, dynamic> item) {
-    showDialog(
-      context: context,
-      builder: (ctx) => FutureBuilder<QuerySnapshot>(
-        future: _firestore
-            .collection('stock_transactions')
-            .where('itemId', isEqualTo: item['docId'])
-            .where('type', isEqualTo: 'issue')
-            .orderBy('timestamp', descending: true)
-            .get(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-              child: CircularProgressIndicator(color: Colors.orange),
-            );
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              title: Row(
+              child: Row(
                 children: [
-                  Icon(Icons.history, color: Colors.orange[700]),
-                  SizedBox(width: 8),
-                  Text(
-                    "Issue History",
-                    style: TextStyle(color: Colors.orange[700]),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.remove_circle_outline,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Issue Stock',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                          ),
+                        ),
+                        Text(
+                          item['name'] ?? '',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.85),
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-              content: Text("No previous issues found."),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text("Close"),
-                ),
-              ],
-            );
-          }
-
-          final docs = snapshot.data!.docs;
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
             ),
-            title: Row(
-              children: [
-                Icon(Icons.history, color: Colors.orange[700]),
-                SizedBox(width: 8),
-                Text(
-                  "${item['name']} Issue History",
-                  style: TextStyle(color: Colors.orange[700]),
-                ),
-              ],
-            ),
-            content: Container(
+            content: SizedBox(
               width: double.maxFinite,
-              constraints: BoxConstraints(maxHeight: 60.h),
-              child: ListView.builder(
-                itemCount: docs.length,
-                itemBuilder: (context, i) {
-                  final data = docs[i].data() as Map<String, dynamic>;
-                  final dept = data['department'] ?? '-';
-                  final qty = data['quantity'] ?? 0;
-                  final remaining = data['remaining'] ?? '-';
-                  final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
-                  final dateStr = timestamp != null
-                      ? DateFormat('dd-MM-yyyy hh:mm a').format(timestamp)
-                      : '';
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Stock in hand dikhao
+                    Builder(
+                      builder: (_) {
+                        final located =
+                            int.tryParse(item['located']?.toString() ?? '0') ??
+                            0;
+                        final received = item['received'] ?? 0;
+                        final issue = item['issue'] ?? 0;
+                        final stockInHand = located + received - issue;
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.inventory_2_outlined,
+                                color: Colors.red[700],
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Stock In Hand: ',
+                                style: TextStyle(
+                                  color: Colors.red[700],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                '$stockInHand',
+                                style: TextStyle(
+                                  color: Colors.red[900],
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
 
-                  return Card(
-                    margin: EdgeInsets.symmetric(vertical: 4),
-                    elevation: 2,
-                    child: ListTile(
-                      leading: Icon(Icons.arrow_upward, color: Colors.red[700]),
-                      title: Text(
-                        "Issued $qty → $dept",
-                        style: TextStyle(
-                          color: Colors.red[700],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: Text(
-                        "Remaining: $remaining | $dateStr",
-                        style: TextStyle(fontSize: 12),
+                    // Job Card Dropdown — FutureBuilder nahi, direct list
+                    Text(
+                      'Select Job Card',
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
                       ),
                     ),
-                  );
-                },
+                    const SizedBox(height: 6),
+                    isLoadingJobs
+                        ? const Center(child: CircularProgressIndicator())
+                        : jobCardDocs.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'No Job Cards found.',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.shade300),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: DropdownButton<String>(
+                              value: selectedJobCard,
+                              isExpanded: true,
+                              underline: const SizedBox(),
+                              hint: const Text('Select Job Card'),
+                              icon: Icon(
+                                Icons.arrow_drop_down,
+                                color: Colors.red[700],
+                              ),
+                              items: jobCardDocs.map((d) {
+                                final data = d.data() as Map<String, dynamic>;
+                                final jobNo =
+                                    data['jobCardNumber'] ??
+                                    data['jobNo'] ??
+                                    'N/A';
+                                final dplCode = data['dplCode'] ?? '';
+                                final List products = data['products'] ?? [];
+                                final qty = products.isNotEmpty
+                                    ? products[0]['quantity']?.toString() ?? ''
+                                    : '';
+                                final label =
+                                    'DPL: $dplCode | Job: $jobNo | Qty: $qty';
+                                return DropdownMenuItem<String>(
+                                  value: d.id,
+                                  child: Text(
+                                    label,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (v) {
+                                setStateDialog(() {
+                                  selectedJobCard = v;
+                                });
+                              },
+                            ),
+                          ),
+
+                    const SizedBox(height: 16),
+
+                    // Quantity field
+                    Text(
+                      'Quantity to Issue',
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red.shade300),
+                      ),
+                      child: TextField(
+                        controller: qtyCtrl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onChanged: (_) => setStateDialog(() {}),
+                        decoration: InputDecoration(
+                          hintText: 'Enter quantity',
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.numbers,
+                            color: Colors.red[700],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(
-                  "Close",
-                  style: TextStyle(color: Colors.orange[700]),
+                  'Cancel',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 16),
                 ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      selectedJobCard != null && qtyCtrl.text.isNotEmpty
+                      ? Colors.red[600]
+                      : Colors.grey,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed:
+                    isSubmitting ||
+                        selectedJobCard == null ||
+                        qtyCtrl.text.isEmpty
+                    ? null
+                    : () async {
+                        final qty = int.tryParse(qtyCtrl.text) ?? 0;
+                        if (qty <= 0) {
+                          _showSnackBar('Valid quantity daalo', isError: true);
+                          return;
+                        }
+
+                        final located =
+                            int.tryParse(item['located']?.toString() ?? '0') ??
+                            0;
+                        final received = item['received'] ?? 0;
+                        final currentIssue = item['issue'] ?? 0;
+                        final currentStock = located + received - currentIssue;
+
+                        if (qty > currentStock) {
+                          _showSnackBar(
+                            'Stock mein sirf $currentStock bacha hai!',
+                            isError: true,
+                          );
+                          return;
+                        }
+
+                        setStateDialog(() => isSubmitting = true);
+
+                        try {
+                          // Transaction record
+                          await _firestore
+                              .collection('stock_transactions')
+                              .add({
+                                'itemId': item['docId'],
+                                'type': 'issue',
+                                'jobCardId': selectedJobCard,
+                                'quantity': qty,
+                                'timestamp': FieldValue.serverTimestamp(),
+                              });
+
+                          // ✅ Issue column mein add karo
+                          final newIssue = currentIssue + qty;
+                          await _firestore
+                              .collection('stock_items')
+                              .doc(item['docId'])
+                              .update({
+                                'issue': newIssue,
+                                'dateEdit': DateFormat(
+                                  'dd-MM-yyyy',
+                                ).format(DateTime.now()),
+                                'updatedAt': FieldValue.serverTimestamp(),
+                              });
+
+                          await _loadDataFromFirebase();
+                          _showSnackBar(
+                            '✓ $qty issue ho gaya | Issue Total: $newIssue | Bacha: ${currentStock - qty}',
+                          );
+                          Navigator.pop(ctx);
+                        } catch (e) {
+                          _showSnackBar('Error: $e', isError: true);
+                          setStateDialog(() => isSubmitting = false);
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Issue Stock',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ],
           );
@@ -571,60 +976,121 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(24),
           ),
-          title: Text(
-            "Add Additional Stock",
-            style: TextStyle(color: Colors.green[700]),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // TEXT FIELD FOR PARTY NAME
-              TextField(
-                controller: partyCtrl,
-                decoration: InputDecoration(
-                  labelText: "Second Party Name",
-                  hintText: "Enter party name (e.g., Vendor A)",
-                  border: OutlineInputBorder(
+          title: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [lightOrange, accentOrange],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  prefixIcon: Icon(Icons.person, color: Colors.green[700]),
-                ),
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: qtyCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: "Quantity",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  child: const Icon(
+                    Icons.add_box_outlined,
+                    color: Colors.white,
+                    size: 28,
                   ),
-                  prefixIcon: Icon(Icons.add_box, color: Colors.green[700]),
                 ),
-              ),
-            ],
+                const SizedBox(width: 16),
+                const Text(
+                  'Add Stock',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: bgOrange,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: lightOrange),
+                  ),
+                  child: TextField(
+                    controller: partyCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Second Party Name',
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      prefixIcon: Icon(Icons.people, color: primaryOrange),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    color: bgOrange,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: lightOrange),
+                  ),
+                  child: TextField(
+                    controller: qtyCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(
+                      labelText: 'Quantity',
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      prefixIcon: Icon(Icons.numbers, color: primaryOrange),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text("Cancel"),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey[600], fontSize: 16),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[600],
+                backgroundColor: accentOrange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               onPressed: partyCtrl.text.trim().isEmpty || qtyCtrl.text.isEmpty
                   ? null
                   : () async {
                       final qty = int.tryParse(qtyCtrl.text) ?? 0;
                       if (qty <= 0) {
-                        _showSnackBar("Enter valid quantity", isError: true);
+                        _showSnackBar('Enter valid quantity', isError: true);
                         return;
                       }
-                      final newStock = (item['current'] ?? 0) + qty;
-
                       await _firestore.collection('stock_transactions').add({
                         'itemId': item['docId'],
                         'type': 'received',
@@ -632,26 +1098,26 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                         'quantity': qty,
                         'timestamp': FieldValue.serverTimestamp(),
                       });
-
                       await _firestore
                           .collection('stock_items')
                           .doc(item['docId'])
                           .update({
-                            'current': newStock,
                             'received': (item['received'] ?? 0) + qty,
                             'dateEdit': DateFormat(
                               'dd-MM-yyyy',
                             ).format(DateTime.now()),
                             'updatedAt': FieldValue.serverTimestamp(),
                           });
-
                       await _loadDataFromFirebase();
                       _showSnackBar(
-                        "Received $qty from ${partyCtrl.text.trim()}",
+                        '✓ Received $qty from ${partyCtrl.text.trim()}',
                       );
                       Navigator.pop(ctx);
                     },
-              child: Text("Continue Received"),
+              child: const Text(
+                'Add Stock',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ),
@@ -662,349 +1128,153 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
   void _showUpdateOptions(Map<String, dynamic> item) {
     showModalBottomSheet(
       context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        padding: EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              "Update Stock",
-              style: TextStyle(
-                fontSize: 15.sp,
-                fontWeight: FontWeight.bold,
-                color: Colors.orange[700],
+            Container(
+              width: 60,
+              height: 6,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
-            SizedBox(height: 1),
+            const SizedBox(height: 24),
+            Text(
+              'Update Stock',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryOrange,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item['name'] ?? '',
+              style: TextStyle(fontSize: 15, color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _issueStockWithDepartment(item);
-                  },
-                  icon: Icon(
-                    Icons.remove_circle,
-                    size: 18.sp,
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    "Issue Stock",
-                    style: TextStyle(color: Colors.white, fontSize: 14.sp),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[600],
-                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                Expanded(
+                  child: _buildUpdateButton(
+                    icon: Icons.remove_circle_outline,
+                    label: 'Issue Stock',
+                    color: Colors.red,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _issueStockWithDepartment(item);
+                    },
                   ),
                 ),
-                // ElevatedButton.icon(
-                //   onPressed: () {
-                //     Navigator.pop(ctx);
-                //     _addAdditionalWithParty(item);
-                //   },
-                //   icon: Icon(Icons.add_box, color: Colors.white),
-                //   label: Text("Add Additional"),
-                //   style: ElevatedButton.styleFrom(
-                //     backgroundColor: Colors.green[600],
-                //     padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                // const SizedBox(width: 16),
+                // Expanded(
+                //   child: _buildUpdateButton(
+                //     icon: Icons.add_box_outlined,
+                //     label: 'Add Stock',
+                //     color: accentOrange,
+                //     onTap: () {
+                //       Navigator.pop(ctx);
+                //       _addAdditionalWithParty(item);
+                //     },
                 //   ),
                 // ),
               ],
             ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
 
-  Future<double> _calculateAverageStock(String itemId) async {
-    try {
-      final thirtyDaysAgo = DateTime.now().subtract(Duration(days: 30));
-      final snapshot = await _firestore
-          .collection('stock_transactions')
-          .where('itemId', isEqualTo: itemId)
-          .where('timestamp', isGreaterThan: Timestamp.fromDate(thirtyDaysAgo))
-          .orderBy('timestamp')
-          .get();
-
-      if (snapshot.docs.isEmpty) return 0.0;
-
-      final itemDoc = await _firestore
-          .collection('stock_items')
-          .doc(itemId)
-          .get();
-      int currentStock = itemDoc.exists ? (itemDoc['current'] ?? 0) : 0;
-
-      Map<String, int> dailyStock = {};
-      DateTime? lastDate;
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final timestamp = (data['timestamp'] as Timestamp).toDate();
-        final dateKey = DateFormat('yyyy-MM-dd').format(timestamp);
-        final qty = data['quantity'] as int;
-        final type = data['type'];
-
-        if (lastDate != null) {
-          var fillDate = lastDate.add(Duration(days: 1));
-          while (fillDate.isBefore(timestamp)) {
-            final fillKey = DateFormat('yyyy-MM-dd').format(fillDate);
-            dailyStock[fillKey] = currentStock;
-            fillDate = fillDate.add(Duration(days: 1));
-          }
-        }
-
-        if (type == 'issue') currentStock -= qty;
-        if (type == 'received') currentStock += qty;
-
-        dailyStock[dateKey] = currentStock;
-        lastDate = timestamp;
-      }
-
-      final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      dailyStock[todayKey] = dailyStock[todayKey] ?? currentStock;
-
-      if (dailyStock.isEmpty) return 0.0;
-      final total = dailyStock.values.reduce((a, b) => a + b);
-      return total / dailyStock.length;
-    } catch (e) {
-      return 0.0;
-    }
-  }
-
-  void _showAverageStockDialog(Map<String, dynamic> item) async {
-    final avg = await _calculateAverageStock(item['docId']);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.bar_chart, color: Colors.purple[700]),
-            SizedBox(width: 8),
-            Text(
-              "1-Month Average",
-              style: TextStyle(color: Colors.purple[700]),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              "Item: ${item['name']}",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text("Code: ${item['code']}"),
-            SizedBox(height: 16),
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.purple[50],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    "Average Stock (30 Days)",
-                    style: TextStyle(fontSize: 12, color: Colors.purple[700]),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    avg.toStringAsFixed(2),
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.purple[900],
-                    ),
-                  ),
-                  Text(
-                    "units",
-                    style: TextStyle(fontSize: 12, color: Colors.purple[600]),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text("Close", style: TextStyle(color: Colors.purple[700])),
+  Widget _buildUpdateButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: color.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withOpacity(0.3), width: 2),
           ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showGroupWiseAverageDialog() async {
-    final thirtyDaysAgo = DateTime.now().subtract(Duration(days: 30));
-    final itemSnapshot = await _firestore.collection('stock_items').get();
-    final transSnapshot = await _firestore
-        .collection('stock_transactions')
-        .where('timestamp', isGreaterThan: Timestamp.fromDate(thirtyDaysAgo))
-        .get();
-
-    Map<String, List<Map<String, dynamic>>> groupItems = {};
-    for (var doc in itemSnapshot.docs) {
-      final data = doc.data();
-      final group = data['group'] ?? 'Unknown';
-      groupItems[group] ??= [];
-      groupItems[group]!.add({...data, 'docId': doc.id});
-    }
-
-    Map<String, double> groupAverages = {};
-
-    for (var entry in groupItems.entries) {
-      final group = entry.key;
-      final items = entry.value;
-      double totalStockDays = 0;
-      int totalDays = 0;
-
-      for (var item in items) {
-        final itemId = item['docId'];
-        int currentStock = item['current'] ?? 0;
-
-        final itemTrans =
-            transSnapshot.docs.where((t) => t['itemId'] == itemId).toList()
-              ..sort(
-                (a, b) => (a['timestamp'] as Timestamp).compareTo(
-                  b['timestamp'] as Timestamp,
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 42),
+              const SizedBox(height: 10),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
                 ),
-              );
-
-        DateTime? lastDate;
-        for (var trans in itemTrans) {
-          final timestamp = (trans['timestamp'] as Timestamp).toDate();
-          final qty = trans['quantity'] as int;
-          final type = trans['type'];
-
-          if (lastDate != null) {
-            var fillDate = lastDate.add(Duration(days: 1));
-            while (fillDate.isBefore(timestamp)) {
-              totalStockDays += currentStock;
-              totalDays++;
-              fillDate = fillDate.add(Duration(days: 1));
-            }
-          }
-
-          if (type == 'issue') currentStock -= qty;
-          if (type == 'received') currentStock += qty;
-
-          totalStockDays += currentStock;
-          totalDays++;
-          lastDate = timestamp;
-        }
-
-        totalStockDays += currentStock;
-        totalDays++;
-      }
-
-      groupAverages[group] = totalDays > 0 ? totalStockDays / totalDays : 0.0;
-    }
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.bar_chart, color: Colors.purple[700]),
-            SizedBox(width: 8),
-            Text(
-              "Group-wise 30-Day Average",
-              style: TextStyle(color: Colors.purple[700]),
-            ),
-          ],
-        ),
-        content: Container(
-          width: double.maxFinite,
-          constraints: BoxConstraints(maxHeight: 60.h),
-          child: groupAverages.isEmpty
-              ? Center(child: Text("No data in last 30 days"))
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: groupAverages.length,
-                  itemBuilder: (context, i) {
-                    final group = groupAverages.keys.elementAt(i);
-                    final avg = groupAverages[group]!;
-                    return Card(
-                      margin: EdgeInsets.symmetric(vertical: 4),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.purple[100],
-                          child: Text(
-                            group[0],
-                            style: TextStyle(color: Colors.purple[900]),
-                          ),
-                        ),
-                        title: Text(
-                          group,
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        trailing: Text(
-                          avg.toStringAsFixed(2),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.purple[900],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text("Close", style: TextStyle(color: Colors.purple[700])),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+
+  // ==================== ADD/EDIT ITEM ====================
 
   void _addOrUpdateItem({Map<String, dynamic>? existingItem}) async {
     final isEdit = existingItem != null;
-    final codeCtrl = TextEditingController(
-      text: isEdit ? existingItem["code"] : '',
-    );
+    final codeCtrl = TextEditingController();
+    if (!isEdit) {
+      codeCtrl.text = await _getNextAutoCode();
+    } else {
+      codeCtrl.text = existingItem['code'] ?? '';
+    }
+
     final nameCtrl = TextEditingController(
-      text: isEdit ? existingItem["name"] : '',
+      text: isEdit ? existingItem['name'] : '',
     );
     final groupCtrl = TextEditingController(
-      text: isEdit ? existingItem["group"] : '',
-    );
-    final oldCtrl = TextEditingController(
-      text: isEdit ? existingItem["old"].toString() : '0',
-    );
-    final receivedCtrl = TextEditingController(
-      text: isEdit ? existingItem["received"].toString() : '0',
-    );
-    final issueCtrl = TextEditingController(
-      text: isEdit ? existingItem["issue"].toString() : '0',
-    );
-    final currentCtrl = TextEditingController(
-      text: isEdit ? existingItem["current"].toString() : '0',
-    );
-    final movingCtrl = TextEditingController(
-      text: isEdit ? existingItem["moving"] : 'FAST MOVING',
+      text: isEdit ? existingItem['group'] : '',
     );
     final locatedCtrl = TextEditingController(
-      text: isEdit ? (existingItem["located"] ?? '') : '',
+      text: isEdit ? (existingItem['located'] ?? 0).toString() : '0',
     );
-
-    String? imageUrl = isEdit ? existingItem["image"] : null;
+    final receivedCtrl = TextEditingController(
+      text: isEdit ? (existingItem['received'] ?? 0).toString() : '0',
+    );
+    final issueCtrl = TextEditingController(text: '0');
+    String movingValue = isEdit
+        ? (existingItem['moving'] ?? 'FAST MOVING')
+        : 'FAST MOVING';
+    String? imageUrl = isEdit ? existingItem['image'] : null;
     XFile? selectedImage;
     bool isUploading = false;
-
-    int nextSr = isEdit ? existingItem["sr"] : await _getNextSrNumber();
+    int nextSr = isEdit
+        ? (existingItem['sr'] is int
+              ? existingItem['sr']
+              : await _getNextSrNumber())
+        : await _getNextSrNumber();
     final String currentDate = DateFormat('dd-MM-yyyy').format(DateTime.now());
 
     showDialog(
@@ -1012,284 +1282,265 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => Dialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(28),
           ),
           child: Container(
-            width: 600,
-            constraints: BoxConstraints(maxHeight: 80.h),
+            width: 100.w,
+            constraints: BoxConstraints(maxHeight: 88.h),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // HEADER
                 Container(
-                  padding: EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.orange[700]!, Colors.orange[500]!],
+                      colors: [primaryOrange, accentOrange],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(20),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
                     ),
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        isEdit ? Icons.edit : Icons.add_circle,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                      SizedBox(width: 12),
-                      Text(
-                        isEdit ? "Edit Stock Item" : "Add New Stock Item",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          isEdit ? Icons.edit_note : Icons.add_circle_outline,
                           color: Colors.white,
-                          fontSize: 20,
+                          size: 32,
                         ),
                       ),
-                      Spacer(),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isEdit ? 'Edit Stock Item' : 'Add New Stock Item',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                fontSize: 24,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              isEdit
+                                  ? 'Update item details'
+                                  : 'Create new stock entry',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       IconButton(
-                        icon: Icon(Icons.close, color: Colors.white),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
                 ),
+
+                // CONTENT
                 Flexible(
                   child: SingleChildScrollView(
-                    padding: EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Center(
+                          child: _imagePickerBox(
+                            imageFile: selectedImage,
+                            imageUrl: imageUrl,
+                            onPick: () async {
+                              final img = await _picker.pickImage(
+                                source: ImageSource.gallery,
+                              );
+                              if (img != null)
+                                setDialogState(() => selectedImage = img);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildModernField(
+                          codeCtrl,
+                          'Code${!isEdit ? " (Auto-generated)" : ""}',
+                          Icons.qr_code_2,
+                          required: true,
+                          readOnly: !isEdit,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildModernField(
+                          nameCtrl,
+                          'Item Name',
+                          Icons.inventory,
+                          required: true,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildModernField(
+                          groupCtrl,
+                          'Group / Category',
+                          Icons.category_outlined,
+                          required: true,
+                        ),
+                        const SizedBox(height: 16),
+
+                        Container(
+                          decoration: BoxDecoration(
+                            color: bgOrange,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: lightOrange, width: 1.5),
+                          ),
+                          child: DropdownButtonFormField<String>(
+                            value: movingValue,
+                            items:
+                                [
+                                      'FAST MOVING',
+                                      'SLOW MOVING',
+                                      'NON MOVING',
+                                      'NEW',
+                                      'NEW JAR',
+                                      'ON ORDER',
+                                    ]
+                                    .map(
+                                      (t) => DropdownMenuItem(
+                                        value: t,
+                                        child: Text(t),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged: (v) =>
+                                setDialogState(() => movingValue = v!),
+                            decoration: InputDecoration(
+                              labelText: 'Moving Status *',
+                              labelStyle: TextStyle(color: primaryOrange),
+                              prefixIcon: Icon(
+                                Icons.trending_up,
+                                color: primaryOrange,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Divider(color: Colors.grey[300], thickness: 1),
+                        const SizedBox(height: 10),
+
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: bgOrange,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.inventory_2_outlined,
+                                color: primaryOrange,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Stock Information',
+                              style: TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.bold,
+                                color: primaryOrange,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: bgOrange.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Column(
                             children: [
-                              Container(
-                                width: 150,
-                                height: 150,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: selectedImage != null
-                                    ? FutureBuilder<Uint8List>(
-                                        future: selectedImage!.readAsBytes(),
-                                        builder: (context, snapshot) {
-                                          if (snapshot.hasData) {
-                                            return ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              child: Image.memory(
-                                                snapshot.data!,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            );
-                                          }
-                                          return Center(
-                                            child: CircularProgressIndicator(),
-                                          );
-                                        },
-                                      )
-                                    : imageUrl != null && imageUrl!.isNotEmpty
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(10),
-                                        child: Image.network(
-                                          imageUrl!,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      )
-                                    : Icon(
-                                        Icons.image,
-                                        size: 60,
-                                        color: Colors.grey[400],
-                                      ),
+                              // ✅ 'Total Stock' label (tumhara change)
+                              _buildModernField(
+                                locatedCtrl,
+                                'Total Stock',
+                                Icons.inventory_2_outlined,
+                                isNumber: true,
                               ),
-                              SizedBox(height: 12),
-                              ElevatedButton.icon(
-                                onPressed: isUploading
-                                    ? null
-                                    : () async {
-                                        final XFile? image = await _picker
-                                            .pickImage(
-                                              source: ImageSource.gallery,
-                                            );
-                                        if (image != null) {
-                                          setDialogState(
-                                            () => selectedImage = image,
-                                          );
-                                        }
-                                      },
-                                icon: Icon(Icons.upload_file, size: 18),
-                                label: Text(
-                                  selectedImage != null
-                                      ? "Change Image"
-                                      : "Upload Image",
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange[600],
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
+                              const SizedBox(height: 12),
+                              _buildModernField(
+                                receivedCtrl,
+                                isEdit ? 'Add More Received' : 'Received Stock',
+                                Icons.add_box,
+                                isNumber: true,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildModernField(
+                                issueCtrl,
+                                isEdit ? 'Add More Issue' : 'Issue Stock',
+                                Icons.remove_circle,
+                                isNumber: true,
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [bgOrange, cardOrange],
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: lightOrange, width: 1.5),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.calendar_today, color: primaryOrange),
+                              const SizedBox(width: 14),
+                              Text(
+                                'Date: $currentDate',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: darkOrange,
+                                  fontSize: 16,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        SizedBox(height: 24),
-                        _buildModernField(
-                          codeCtrl,
-                          "Item Code",
-                          Icons.qr_code,
-                          required: true,
-                        ),
-                        SizedBox(height: 16),
-                        _buildModernField(
-                          nameCtrl,
-                          "Item Name",
-                          Icons.inventory,
-                          required: true,
-                        ),
-                        SizedBox(height: 16),
-                        _buildModernField(
-                          groupCtrl,
-                          "Group/Category",
-                          Icons.category,
-                          required: true,
-                        ),
-                        SizedBox(height: 24),
-                        Text(
-                          "Stock Information",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange[800],
-                          ),
-                        ),
-                        SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildModernField(
-                                currentCtrl,
-                                "Stock in Hand",
-                                Icons.inventory_2,
-                                isNumber: true,
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: _buildModernField(
-                                receivedCtrl,
-                                "Received (if any)",
-                                Icons.add_box,
-                                isNumber: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildModernField(
-                                issueCtrl,
-                                "Issue (if any)",
-                                Icons.remove_circle,
-                                isNumber: true,
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: _buildModernField(
-                                locatedCtrl,
-                                "Stock Located",
-                                Icons.location_on,
-                                isNumber: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 20,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange[50],
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today,
-                                      color: Colors.orange[700],
-                                    ),
-                                    SizedBox(width: 12),
-                                    Text(
-                                      "Date Edit: $currentDate",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.orange[900],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: movingCtrl.text.isEmpty
-                                    ? "FAST MOVING"
-                                    : movingCtrl.text,
-                                decoration: InputDecoration(
-                                  labelText: "Moving Status",
-                                  prefixIcon: Icon(
-                                    Icons.trending_up,
-                                    color: Colors.orange[700],
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.orange[50],
-                                ),
-                                items:
-                                    [
-                                          "FAST MOVING",
-                                          "SLOW MOVING",
-                                          "NON MOVING",
-                                          "NEW",
-                                          "NEW JAR",
-                                          "ON ORDER",
-                                        ]
-                                        .map(
-                                          (s) => DropdownMenuItem(
-                                            value: s,
-                                            child: Text(s),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged: (v) =>
-                                    setDialogState(() => movingCtrl.text = v!),
-                              ),
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   ),
                 ),
+
+                // FOOTER
                 Container(
-                  padding: EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.vertical(
-                      bottom: Radius.circular(20),
+                    color: Colors.grey[50],
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(28),
                     ),
                   ),
                   child: Row(
@@ -1297,84 +1548,128 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: Text("Cancel", style: TextStyle(fontSize: 16)),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[700],
+                          ),
+                        ),
                       ),
-                      SizedBox(width: 12),
+                      const SizedBox(width: 12),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange[600],
+                          backgroundColor: accentOrange,
                           foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 14,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 16,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(14),
                           ),
+                          elevation: 2,
                         ),
                         onPressed: isUploading
                             ? null
                             : () async {
-                                final code = codeCtrl.text.trim();
-                                final name = nameCtrl.text.trim();
-                                final group = groupCtrl.text.trim();
-                                if (code.isEmpty ||
-                                    name.isEmpty ||
-                                    group.isEmpty) {
-                                  _showSnackBar(
-                                    "Please fill all required fields",
-                                    isError: true,
-                                  );
-                                  return;
-                                }
                                 setDialogState(() => isUploading = true);
-                                if (selectedImage != null) {
-                                  imageUrl = await _uploadImage(selectedImage!);
-                                }
-                                final old = int.tryParse(oldCtrl.text) ?? 0;
-                                final received =
-                                    int.tryParse(receivedCtrl.text) ?? 0;
-                                final issue = int.tryParse(issueCtrl.text) ?? 0;
-                                final current =
-                                    int.tryParse(currentCtrl.text) ?? 0;
-
-                                final newItem = {
-                                  "sr": nextSr,
-                                  "code": code,
-                                  "image": imageUrl ?? "",
-                                  "name": name,
-                                  "group": group,
-                                  "old": old,
-                                  "received": received,
-                                  "issue": issue,
-                                  "current": current,
-                                  "moving": movingCtrl.text.trim(),
-                                  "located":
-                                      int.tryParse(locatedCtrl.text) ?? 0,
-                                  "dateEdit": currentDate,
-                                  "updatedAt": FieldValue.serverTimestamp(),
-                                };
-
                                 try {
+                                  if (selectedImage != null)
+                                    imageUrl = await _uploadImage(
+                                      selectedImage!,
+                                    );
+                                  final code = codeCtrl.text.trim();
+                                  final name = nameCtrl.text.trim();
+                                  final group = groupCtrl.text.trim();
+                                  if (code.isEmpty ||
+                                      name.isEmpty ||
+                                      group.isEmpty) {
+                                    _showSnackBar(
+                                      'Please fill all required fields',
+                                      isError: true,
+                                    );
+                                    setDialogState(() => isUploading = false);
+                                    return;
+                                  }
+                                  if (!isEdit) {
+                                    final existing = await _firestore
+                                        .collection('stock_items')
+                                        .where('code', isEqualTo: code)
+                                        .get();
+                                    if (existing.docs.isNotEmpty) {
+                                      _showSnackBar(
+                                        'Code already exists!',
+                                        isError: true,
+                                      );
+                                      setDialogState(() => isUploading = false);
+                                      return;
+                                    }
+                                  }
+
+                                  final inputReceived =
+                                      int.tryParse(receivedCtrl.text) ?? 0;
+                                  final inputIssue =
+                                      int.tryParse(issueCtrl.text) ?? 0;
+                                  final located =
+                                      int.tryParse(locatedCtrl.text) ?? 0;
+                                  int finalReceived = isEdit
+                                      ? (existingItem['received'] ?? 0) +
+                                            inputReceived
+                                      : inputReceived;
+                                  int finalIssue = isEdit
+                                      ? (existingItem['issue'] ?? 0) +
+                                            inputIssue
+                                      : inputIssue;
+                                  final stockInHand =
+                                      located + finalReceived - finalIssue;
+
+                                  if (stockInHand < 0) {
+                                    _showSnackBar(
+                                      'Not enough stock!',
+                                      isError: true,
+                                    );
+                                    setDialogState(() => isUploading = false);
+                                    return;
+                                  }
+
+                                  final newItem = {
+                                    'code': code,
+                                    'image': imageUrl ?? '',
+                                    'name': name,
+                                    'group': group,
+                                    'located': located,
+                                    'received': finalReceived,
+                                    'issue': finalIssue,
+                                    'moving': movingValue,
+                                    'dateEdit': currentDate,
+                                    'updatedAt': FieldValue.serverTimestamp(),
+                                  };
+
                                   if (isEdit) {
                                     await _firestore
                                         .collection('stock_items')
-                                        .doc(existingItem["docId"])
+                                        .doc(existingItem['docId'])
                                         .update(newItem);
-                                    _showSnackBar("Item updated successfully");
+                                    _showSnackBar(
+                                      '✓ Item updated successfully',
+                                    );
                                   } else {
-                                    newItem["createdAt"] =
+                                    // ✅ Sr aur Code sync — Sr 1 = DPL-001
+                                    newItem['sr'] = nextSr;
+                                    newItem['code'] = _srToCode(nextSr);
+                                    newItem['createdAt'] =
                                         FieldValue.serverTimestamp();
                                     await _firestore
                                         .collection('stock_items')
                                         .add(newItem);
-                                    _showSnackBar("Item added successfully!");
+                                    _showSnackBar('✓ Item added successfully');
                                   }
                                   await _loadDataFromFirebase();
                                   Navigator.pop(ctx);
                                 } catch (e) {
                                   _showSnackBar(
-                                    "Error saving item: $e",
+                                    'Error saving item: $e',
                                     isError: true,
                                   );
                                 } finally {
@@ -1382,7 +1677,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                                 }
                               },
                         icon: isUploading
-                            ? SizedBox(
+                            ? const SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
@@ -1392,8 +1687,11 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                               )
                             : Icon(isEdit ? Icons.check : Icons.add),
                         label: Text(
-                          isEdit ? "Update Item" : "Add Item",
-                          style: TextStyle(fontSize: 16),
+                          isEdit ? 'Update Item' : 'Add Item',
+                          style: TextStyle(
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -1407,42 +1705,44 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     );
   }
 
+  // ==================== EXCEL UPLOAD ====================
+
   Future<void> _uploadExcelFile() async {
     setState(() => _isLoading = true);
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['xlsx'],
+        allowedExtensions: ['xlsx', 'xls'],
         withData: true,
       );
       if (result == null || result.files.isEmpty) {
-        _showSnackBar("No file selected", isError: true);
+        _showSnackBar('No file selected', isError: true);
         setState(() => _isLoading = false);
         return;
       }
       final fileBytes = result.files.first.bytes;
       if (fileBytes == null) {
-        _showSnackBar("Failed to read file", isError: true);
+        _showSnackBar('Failed to read file', isError: true);
         setState(() => _isLoading = false);
         return;
       }
-      var excel = Excel.decodeBytes(fileBytes as List<int>);
-      final imageFiles = await _pickImageFolder();
 
+      var excel = Excel.decodeBytes(fileBytes as List<int>);
       if (excel.tables.isEmpty) {
-        _showSnackBar("Excel file is empty", isError: true);
+        _showSnackBar('Excel file is empty', isError: true);
         setState(() => _isLoading = false);
         return;
       }
       var sheet = excel.tables.values.first;
       var rows = sheet.rows;
       if (rows.isEmpty) {
-        _showSnackBar("No data in Excel sheet", isError: true);
+        _showSnackBar('No data in Excel sheet', isError: true);
         setState(() => _isLoading = false);
         return;
       }
+
       var headerRow = rows[0]
-          .map((cell) => normalizeHeader(cell?.value?.toString() ?? ''))
+          .map((cell) => normalizeHeader(cell?.value?.toString().trim() ?? ''))
           .toList();
       bool hasRequired = [
         'code',
@@ -1451,31 +1751,30 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
       ].every((h) => headerRow.contains(h));
       if (!hasRequired) {
         _showSnackBar(
-          "Missing required columns: code, name, group",
+          'Missing required columns: code, name, group',
           isError: true,
         );
         setState(() => _isLoading = false);
         return;
       }
+
       List<Map<String, dynamic>> importedItems = [];
       final String today = DateFormat('dd-MM-yyyy').format(DateTime.now());
-      int nextSr = await _getNextSrNumber();
 
       for (int i = 1; i < rows.length; i++) {
         var row = rows[i];
-        if (row.length < 3) continue;
+        if (row.length < 2) continue;
         Map<String, dynamic> item = {};
         for (int j = 0; j < headerRow.length && j < row.length; j++) {
           var header = headerRow[j];
-          var cell = row[j];
-          var value = cell?.value;
+          var value = row[j]?.value;
           if (value == null) continue;
           switch (header) {
             case 'sr':
-            case 'old':
+              break;
+            case 'located':
             case 'received':
             case 'issue':
-            case 'current':
               item[header] = int.tryParse(value.toString()) ?? 0;
               break;
             case 'code':
@@ -1483,63 +1782,54 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
             case 'group':
             case 'moving':
             case 'image':
-            case 'located':
               item[header] = value.toString().trim();
               break;
           }
         }
         if (item['code'] == null ||
             item['name'] == null ||
-            item['group'] == null) {
+            item['group'] == null)
           continue;
-        }
-        int old = item['old'] ?? 0;
-        int received = item['received'] ?? 0;
+        item['located'] = item['located'] ?? 0;
+        item['received'] = item['received'] ?? 0;
         item['issue'] = item['issue'] ?? 0;
-        item['current'] = item['current'] ?? (old + received);
         item['moving'] = (item['moving'] ?? 'FAST MOVING')
             .toString()
             .toUpperCase();
-        if (item['image'] != null && imageFiles.containsKey(item['image'])) {
-          final imgFile = imageFiles[item['image']];
-          final url = await _uploadImage(imgFile!);
-          item['image'] = url ?? '';
-        } else {
-          item['image'] = '';
-        }
-        item['located'] = int.tryParse(item['located']?.toString() ?? "0") ?? 0;
+        item['image'] = item['image'] ?? '';
         item['dateEdit'] = today;
-        item['sr'] ??= nextSr;
-        nextSr++;
+        // Sr aur Code sync
+        final assignedSr = await _getNextSrNumber();
+        item['sr'] = assignedSr;
+        item['code'] = _srToCode(assignedSr);
         importedItems.add(item);
       }
+
       if (importedItems.isEmpty) {
-        _showSnackBar("No valid data found in Excel", isError: true);
+        _showSnackBar('No valid data found in Excel', isError: true);
         setState(() => _isLoading = false);
         return;
       }
-      WriteBatch batch = _firestore.batch();
-      final existingSnapshot = await _firestore.collection('stock_items').get();
 
-      final Map<String, DocumentReference> existingMap = {
-        for (var d in existingSnapshot.docs) d['code']: d.reference,
-      };
+      WriteBatch batch = _firestore.batch();
       int batchCount = 0;
       for (var item in importedItems) {
-        if (existingMap.containsKey(item['code'])) {
-          batch.update(existingMap[item['code']]!, {
+        var existingQuery = await _firestore
+            .collection('stock_items')
+            .where('sr', isEqualTo: item['sr'])
+            .limit(1)
+            .get();
+        if (existingQuery.docs.isNotEmpty) {
+          batch.update(existingQuery.docs.first.reference, {
             ...item,
             'updatedAt': FieldValue.serverTimestamp(),
           });
         } else {
-          final docRef = _firestore.collection('stock_items').doc();
-          batch.set(docRef, {
-            ...item,
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+          var docRef = _firestore.collection('stock_items').doc();
+          item['createdAt'] = FieldValue.serverTimestamp();
+          item['updatedAt'] = FieldValue.serverTimestamp();
+          batch.set(docRef, item);
         }
-
         batchCount++;
         if (batchCount >= 400) {
           await batch.commit();
@@ -1547,39 +1837,40 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
           batchCount = 0;
         }
       }
-
       if (batchCount > 0) await batch.commit();
       await _loadDataFromFirebase();
       _showSnackBar(
-        "Excel imported successfully! ${importedItems.length} items processed.",
+        '✓ Excel imported! ${importedItems.length} items processed.',
       );
     } catch (e) {
-      _showSnackBar("Import failed: $e", isError: true);
+      _showSnackBar('Import failed: $e', isError: true);
     }
     setState(() => _isLoading = false);
   }
 
-  void _deleteItem(String docId, int sr) {
+  // ==================== DELETE ====================
+
+  void _deleteItem(String docId) {
+    if (docId.isEmpty) {
+      _showSnackBar('Invalid document reference', isError: true);
+      return;
+    }
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber, color: Colors.red[700], size: 28),
-            SizedBox(width: 12),
-            Text("Delete Item?", style: TextStyle(color: Colors.red[700])),
-          ],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Delete Item?'),
+        content: const Text(
+          'This action cannot be undone. Are you sure you want to delete this item?',
         ),
-        content: Text("This action cannot be undone. Are you sure?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text("Cancel"),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[600],
+              backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
             onPressed: () async {
@@ -1587,28 +1878,66 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                 await _firestore.collection('stock_items').doc(docId).delete();
                 await _renumberSrNumbers();
                 await _loadDataFromFirebase();
-                _showSnackBar("Item deleted & Sr No. updated");
+                _showSnackBar('✓ Item deleted');
               } catch (e) {
-                _showSnackBar("Error: $e", isError: true);
+                _showSnackBar('Error: $e', isError: true);
               }
               Navigator.pop(ctx);
             },
-            child: Text("Delete"),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
   }
 
+  // ==================== UI HELPERS ====================
+
   void _showSnackBar(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red[600] : Colors.green[600],
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 20,
+        left: 20,
+        right: 20,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: isError ? Colors.red : accentOrange,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isError ? Icons.error_outline : Icons.check_circle_outline,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
+    overlay.insert(overlayEntry);
+    Future.delayed(
+      const Duration(seconds: 2),
+    ).then((_) => overlayEntry.remove());
   }
 
   Widget _buildModernField(
@@ -1617,591 +1946,197 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
     IconData icon, {
     bool isNumber = false,
     bool required = false,
+    bool readOnly = false,
   }) {
-    return TextField(
-      controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label + (required ? " *" : ""),
-        prefixIcon: Icon(icon, color: Colors.orange[700]),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.orange[200]!),
+    return Container(
+      decoration: BoxDecoration(
+        color: readOnly ? Colors.grey[100] : bgOrange,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: readOnly ? Colors.grey[300]! : lightOrange,
+          width: 1.5,
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.orange[200]!),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.orange[600]!, width: 2),
-        ),
-        filled: true,
-        fillColor: Colors.orange[50],
       ),
-    );
-  }
-
-  Widget _header(String text, double width) => SizedBox(
-    width: width,
-    child: Text(
-      text,
-      style: TextStyle(
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
-        fontSize: 12,
-      ),
-      textAlign: TextAlign.center,
-      maxLines: 2,
-      overflow: TextOverflow.visible,
-      softWrap: true,
-    ),
-  );
-
-  Widget _cell(
-    String text,
-    double width, {
-    Color? color,
-    bool bold = false,
-    double fontSize = 13,
-  }) => SizedBox(
-    width: width,
-    child: Text(
-      text,
-      style: TextStyle(
-        color: color ?? Colors.black87,
-        fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
-        fontSize: fontSize,
-      ),
-      textAlign: TextAlign.center,
-      overflow: TextOverflow.ellipsis,
-    ),
-  );
-
-  Widget _cellImage(String? url, double width) {
-    if (url == null || url.isEmpty) return _placeholderImage(width);
-    return SizedBox(
-      width: width,
-      child: Center(
-        child: GestureDetector(
-          onTap: () => _showImageZoom(url.trim()),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              url.trim(),
-              width: 55,
-              height: 55,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _errorImage(width),
-            ),
+      child: TextField(
+        controller: controller,
+        readOnly: readOnly,
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        inputFormatters: isNumber
+            ? [FilteringTextInputFormatter.digitsOnly]
+            : null,
+        decoration: InputDecoration(
+          labelText: label + (required ? ' *' : ''),
+          labelStyle: TextStyle(color: primaryOrange),
+          prefixIcon: Icon(icon, color: primaryOrange),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
           ),
         ),
       ),
     );
   }
 
-  Widget _placeholderImage(double width) => SizedBox(
-    width: width,
+  Widget _headerFlex(String text, int flex) => Expanded(
+    flex: flex,
     child: Center(
-      child: Container(
-        width: 55,
-        height: 55,
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontSize: 13,
         ),
-        child: Icon(Icons.image, size: 28, color: Colors.grey[500]),
-      ),
-    ),
-  );
-  Widget _errorImage(double width) => SizedBox(
-    width: width,
-    child: Center(
-      child: Container(
-        width: 55,
-        height: 55,
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.broken_image, size: 24, color: Colors.red[400]),
-            Text(
-              "Error",
-              style: TextStyle(fontSize: 8, color: Colors.red[600]),
-            ),
-          ],
-        ),
+        textAlign: TextAlign.center,
       ),
     ),
   );
 
-  Widget _statusBadge(String status, double width) {
+  Widget _cellFlex(String text, int flex, {bool bold = false, Color? color}) =>
+      Expanded(
+        flex: flex,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border(
+              right: BorderSide(color: Colors.grey.shade200, width: 1),
+            ),
+          ),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+              color: color ?? Colors.grey[800],
+              fontSize: 12,
+            ),
+          ),
+        ),
+      );
+
+  Widget _statusCellFlex(String status, int flex) {
     Color bgColor;
     switch (status.toUpperCase()) {
-      case "FAST MOVING":
+      case 'FAST MOVING':
         bgColor = Colors.green[600]!;
         break;
-      case "SLOW MOVING":
+      case 'SLOW MOVING':
         bgColor = Colors.orange[600]!;
         break;
-      case "NON MOVING":
+      case 'NON MOVING':
         bgColor = Colors.red[600]!;
         break;
       default:
         bgColor = Colors.grey[600]!;
     }
-    return SizedBox(
-      width: width,
-      child: Center(
+    return Expanded(
+      flex: flex,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(color: Colors.grey.shade200, width: 1),
+          ),
+        ),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
             status,
-            style: TextStyle(
+            style: const TextStyle(
               color: Colors.white,
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
+            textAlign: TextAlign.center,
           ),
         ),
       ),
     );
   }
 
-  Widget _actionButtons(Map<String, dynamic> item, double width) => SizedBox(
-    width: width,
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        IconButton(
-          icon: Icon(Icons.edit, color: Colors.orange[700], size: 20),
-          onPressed: () => _addOrUpdateItem(existingItem: item),
-          tooltip: "Edit",
+  Widget _actionFlex(Map<String, dynamic> item, int flex) => Expanded(
+    flex: flex,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        border: Border(
+          right: BorderSide(color: Colors.grey.shade200, width: 1),
         ),
-        IconButton(
-          icon: Icon(Icons.delete, color: Colors.red[700], size: 20),
-          onPressed: () => _deleteItem(item["docId"] ?? '', item["sr"]),
-          tooltip: "Delete",
-        ),
-      ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: accentOrange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              icon: Icon(Icons.edit_outlined, color: primaryOrange, size: 18),
+              onPressed: () => _addOrUpdateItem(existingItem: item),
+              tooltip: 'Edit',
+            ),
+          ),
+          const SizedBox(width: 1),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: IconButton(
+              icon: Icon(
+                Icons.delete_outline,
+                color: Colors.red[400],
+                size: 18,
+              ),
+              onPressed: () => _deleteItem(item['docId'] ?? ''),
+              tooltip: 'Delete',
+            ),
+          ),
+        ],
+      ),
     ),
   );
 
-  Widget _updateButton(Map<String, dynamic> item, double width) => SizedBox(
-    width: width,
-    child: Center(
+  Widget _updateFlex(Map<String, dynamic> item, int flex) => Expanded(
+    flex: flex,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      alignment: Alignment.center,
       child: ElevatedButton(
         onPressed: () => _showUpdateOptions(item),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue[600],
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          backgroundColor: accentOrange,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          elevation: 2,
         ),
-        child: Text(
-          "Edit",
-          style: TextStyle(fontSize: 12, color: Colors.white),
+        child: const Text(
+          'Update',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
         ),
       ),
     ),
   );
 
-  void _showDailyIssueHistory() async {
-    final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final dayRef = _firestore
-        .collection('stock_daily_history')
-        .doc(todayKey)
-        .collection('items');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StreamBuilder<QuerySnapshot>(
-        stream: dayRef.orderBy('itemName').snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-              child: CircularProgressIndicator(color: Colors.orange),
-            );
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Text(
-                "Issued Today",
-                style: TextStyle(color: Colors.deepOrange),
-              ),
-              content: Text("No items issued today."),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text("Close"),
-                ),
-              ],
-            );
-          }
-
-          final items = snapshot.data!.docs;
-
-          return AlertDialog(
-            backgroundColor: Colors.grey[100],
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Row(
-              children: [
-                Icon(Icons.history, color: Colors.deepOrange),
-                SizedBox(width: 8),
-                Text(
-                  "Issued Today (${items.length})",
-                  style: TextStyle(
-                    color: Colors.deepOrange,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            content: Container(
-              width: double.maxFinite,
-              constraints: BoxConstraints(maxHeight: 60.h),
-              child: ListView.builder(
-                itemCount: items.length,
-                itemBuilder: (context, i) {
-                  final item = items[i].data() as Map<String, dynamic>;
-                  final itemId = items[i].id;
-
-                  return ExpansionTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.orange[100],
-                      child: Icon(Icons.inventory_2, color: Colors.deepOrange),
-                    ),
-                    title: Text(
-                      item['itemName'] ?? '-',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    trailing: Text(
-                      "${item['totalIssued'] ?? 0} pcs",
-                      style: TextStyle(
-                        color: Colors.red[700],
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                    ),
-                    children: [
-                      StreamBuilder<QuerySnapshot>(
-                        stream: dayRef
-                            .doc(itemId)
-                            .collection('transactions')
-                            .orderBy('timestamp', descending: true)
-                            .snapshots(),
-                        builder: (context, txSnap) {
-                          if (!txSnap.hasData || txSnap.data!.docs.isEmpty) {
-                            return Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Text(
-                                "No detailed records",
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            );
-                          }
-
-                          return Column(
-                            children: txSnap.data!.docs.map((t) {
-                              final tx = t.data() as Map<String, dynamic>;
-                              final time = (tx['timestamp'] as Timestamp?)
-                                  ?.toDate();
-                              final dateStr = time != null
-                                  ? DateFormat(
-                                      'dd-MM-yyyy hh:mm a',
-                                    ).format(time)
-                                  : '-';
-                              return ListTile(
-                                dense: true,
-                                leading: Icon(
-                                  Icons.arrow_right,
-                                  color: Colors.orange,
-                                ),
-                                title: Text(
-                                  "JobCard: ${tx['jobNo'] ?? '-'} (${tx['productName'] ?? ''})",
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                subtitle: Text(
-                                  "Issued on: $dateStr",
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                                trailing: Text(
-                                  "${tx['quantity']} pcs",
-                                  style: TextStyle(
-                                    color: Colors.red[800],
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          );
-                        },
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(
-                  "Close",
-                  style: TextStyle(color: Colors.deepOrange),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _responsiveTable() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: BouncingScrollPhysics(),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.vertical,
-        physics: BouncingScrollPhysics(),
-        child: Container(
-          width: 1500, // Increased width to fit all columns properly
-          padding: EdgeInsets.symmetric(horizontal: 8),
-          child: Column(
-            children: [
-              // 🔹 Table Header
-              Container(
-                padding: EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.orange[600]!, Colors.orange[400]!],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.orange.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    _header("Sr No.", 70),
-                    _header("CODE", 100),
-                    _header("ITEM PICTURES", 110),
-                    _header("ITEM NAME", 160),
-                    _header("GROUP", 110),
-                    _header("STOCK LOCATED", 110),
-                    _header("RECEIVED STOCK", 130),
-                    _header("ISSUE STOCK", 110),
-                    _header("STOCK IN HAND", 120),
-                    _header("DATE EDIT", 90),
-                    _header("MOVING ITEMS", 130),
-                    _header("ACTIONS", 100),
-                    _header("UPDATE", 100),
-                  ],
-                ),
-              ),
-              SizedBox(height: 4),
-
-              // 🔹 Rows with collapsible history
-              ..._paginatedData.map((item) {
-                final itemId = item['docId'];
-                final bool isExpanded = item['isExpanded'] == true;
-                final int located =
-                    int.tryParse(item["located"]?.toString() ?? "0") ?? 0;
-                final int received = item["received"] ?? 0;
-                final int issue = item["issue"] ?? 0;
-
-                final int stockInHand = located + received - issue;
-                return Column(
-                  children: [
-                    GestureDetector(
-                      onTap: () => setState(() {
-                        item['isExpanded'] = !isExpanded;
-                      }),
-                      child: Container(
-                        margin: EdgeInsets.only(bottom: 4),
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 6,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            _cell(item["sr"].toString(), 70),
-                            _cell(item["code"], 100, bold: true),
-                            _cellImage(item["image"], 110),
-                            _cell(
-                              item["name"],
-                              160,
-                              bold: true,
-                              color: Colors.blue[700],
-                            ),
-                            _cell(item["group"], 110),
-                            _cell((item["located"] ?? 0).toString(), 110),
-                            _cell(item["received"].toString(), 130),
-                            _cell(item["issue"].toString(), 110),
-
-                            _cell(
-                              stockInHand.toString(),
-                              120,
-                              color: Colors.green[900],
-                              bold: true,
-                              fontSize: 16.sp,
-                            ),
-                            _cell(item["dateEdit"]?.toString() ?? "", 90),
-                            _statusBadge(item["moving"], 130),
-                            _actionButtons(item, 100),
-                            _updateButton(item, 100),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // 🔻 Expandable History Section
-                    if (isExpanded)
-                      Container(
-                        margin: EdgeInsets.only(bottom: 8, left: 8, right: 8),
-                        padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange[50],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: StreamBuilder<QuerySnapshot>(
-                          stream: _firestore
-                              .collection('stock_transactions')
-                              .where('itemId', isEqualTo: itemId)
-                              .where('type', isEqualTo: 'issue')
-                              .orderBy('timestamp', descending: true)
-                              .snapshots(),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(8),
-                                  child: CircularProgressIndicator(
-                                    color: Colors.orange,
-                                  ),
-                                ),
-                              );
-                            }
-                            if (!snapshot.hasData ||
-                                snapshot.data!.docs.isEmpty) {
-                              return Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Text(
-                                  "No issue history for this item.",
-                                  style: TextStyle(color: Colors.grey[700]),
-                                ),
-                              );
-                            }
-
-                            final docs = snapshot.data!.docs;
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.history,
-                                      color: Colors.orange[700],
-                                      size: 18,
-                                    ),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      "Issue History (${docs.length})",
-                                      style: TextStyle(
-                                        color: Colors.orange[700],
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 6),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: ListView.builder(
-                                    shrinkWrap: true,
-                                    physics: NeverScrollableScrollPhysics(),
-                                    itemCount: docs.length,
-                                    itemBuilder: (context, i) {
-                                      final data =
-                                          docs[i].data()
-                                              as Map<String, dynamic>;
-                                      final qty = data['quantity'] ?? 0;
-                                      final jobId = data['jobCardId'] ?? '-';
-                                      final ts =
-                                          (data['timestamp'] as Timestamp?)
-                                              ?.toDate();
-                                      final dateStr = ts != null
-                                          ? DateFormat(
-                                              'dd-MM-yyyy hh:mm a',
-                                            ).format(ts)
-                                          : '-';
-
-                                      return ListTile(
-                                        dense: true,
-                                        leading: Icon(
-                                          Icons.arrow_upward,
-                                          color: Colors.red[600],
-                                        ),
-                                        title: Text(
-                                          "Issued $qty pcs",
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.red[700],
-                                          ),
-                                        ),
-                                        subtitle: Text(
-                                          "Job Card: $jobId\n$dateStr",
-                                          style: TextStyle(fontSize: 12),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                  ],
-                );
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // ==================== BUILD ====================
 
   @override
   Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    double tableWidth = screenWidth < 1200 ? 1600 : screenWidth;
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
@@ -2210,12 +2145,12 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
           elevation: 0,
           backgroundColor: Colors.transparent,
           flexibleSpace: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  const Color.fromARGB(255, 33, 240, 88),
-                  const Color.fromARGB(255, 114, 236, 95),
-                  const Color.fromARGB(255, 5, 244, 33),
+                  Color(0xFFE65100),
+                  Color(0xFFFF9800),
+                  Color(0xFFFFB300),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -2242,9 +2177,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 10),
-
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -2253,9 +2186,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                   ),
                   child: Image.asset('assets/dpl.png', height: 36),
                 ),
-
                 const SizedBox(width: 8),
-
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2271,7 +2202,7 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Track & Download Store Stock',
+                        'Track & manage store stock',
                         style: TextStyle(fontSize: 12, color: Colors.white70),
                       ),
                     ],
@@ -2283,173 +2214,429 @@ class _StoreStockScreenState extends State<StoreStockScreen> {
         ),
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: Colors.orange))
-          : Column(
-              children: [
-                Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.orange.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              hintText: "Search by Code, Name or Group...",
-                              hintStyle: TextStyle(color: Colors.grey[400]),
-                              border: InputBorder.none,
-                              prefixIcon: Icon(
-                                Icons.search,
-                                color: Colors.orange[600],
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.orange.withOpacity(0.1),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: DropdownButton<String>(
-                          value: _selectedGroup,
-                          hint: Text("Filter Group"),
-                          items: _groupList
-                              .map(
-                                (g) => DropdownMenuItem(
-                                  value: g,
-                                  child: Text(g == 'All' ? 'All Groups' : g),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) {
-                            setState(() => _selectedGroup = v!);
-                            _applyFilters();
-                          },
-                          underline: SizedBox(),
-                        ),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    color: accentOrange,
+                    strokeWidth: 3,
                   ),
-                ),
-                Expanded(child: _responsiveTable()),
-                if (filteredData.isNotEmpty)
+                  const SizedBox(height: 28),
+                  Text(
+                    'Loading store stock...',
+                    style: TextStyle(
+                      color: primaryOrange,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : FadeTransition(
+              opacity: _fadeAnimation,
+              child: Column(
+                children: [
+                  // SEARCH & FILTER BAR
                   Container(
-                    margin: EdgeInsets.only(top: 16),
-                    padding: EdgeInsets.all(8),
+                    margin: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: accentOrange.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
                       children: [
-                        Text(
-                          "Page ${_currentPage + 1} of ${((filteredData.length - 1) / _rowsPerPage).ceil()}",
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.chevron_left),
-                              onPressed: _currentPage > 0
-                                  ? () => setState(() => _currentPage--)
-                                  : null,
-                            ),
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: 10),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
+                        Expanded(
+                          flex: 3,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: bgOrange,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: lightOrange,
+                                width: 1.5,
                               ),
-                              child: DropdownButton<int>(
-                                value: _rowsPerPage,
-                                underline: SizedBox(),
-                                items: [5, 10, 20, 50]
+                            ),
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: 'Search by Code, Name, or Group...',
+                                hintStyle: TextStyle(color: Colors.grey[500]),
+                                border: InputBorder.none,
+                                prefixIcon: Icon(
+                                  Icons.search,
+                                  color: accentOrange,
+                                  size: 17.sp,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: accentOrange, width: 1.5),
+                          ),
+                          child: Row(
+                            children: [
+                              DropdownButton<String>(
+                                value: _selectedMovingFilter,
+                                underline: const SizedBox(),
+                                icon: Icon(
+                                  Icons.filter_list,
+                                  color: primaryOrange,
+                                ),
+                                items: _movingFilters
                                     .map(
-                                      (n) => DropdownMenuItem(
-                                        value: n,
-                                        child: Text("$n / page"),
+                                      (e) => DropdownMenuItem(
+                                        value: e,
+                                        child: Text(e),
                                       ),
                                     )
                                     .toList(),
-                                onChanged: (v) => setState(() {
-                                  _rowsPerPage = v!;
-                                  _currentPage = 0;
-                                }),
+                                onChanged: (v) {
+                                  setState(() => _selectedMovingFilter = v!);
+                                  _applyFilters();
+                                },
                               ),
+                              const SizedBox(width: 4),
+                              DropdownButton<String>(
+                                value: _selectedGroupFilter,
+                                underline: const SizedBox(),
+                                icon: Icon(
+                                  Icons.category,
+                                  color: primaryOrange,
+                                ),
+                                items: _groupList
+                                    .map(
+                                      (g) => DropdownMenuItem(
+                                        value: g,
+                                        child: Text(
+                                          g == 'All' ? 'All Groups' : g,
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) {
+                                  setState(() => _selectedGroupFilter = v!);
+                                  _applyFilters();
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                              ElevatedButton.icon(
+                                onPressed: _downloadPdf,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.picture_as_pdf),
+                                label: const Text('PDF'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: bgOrange,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: lightOrange, width: 1.5),
+                          ),
+                          child: DropdownButton<String>(
+                            value: _selectedDateFilter,
+                            underline: const SizedBox(),
+                            icon: Icon(
+                              Icons.calendar_today,
+                              color: accentOrange,
                             ),
-                            IconButton(
-                              icon: Icon(Icons.chevron_right),
-                              onPressed:
-                                  (_currentPage + 1) * _rowsPerPage <
-                                      filteredData.length
-                                  ? () => setState(() => _currentPage++)
-                                  : null,
-                            ),
-                          ],
+                            items: _dateFilters
+                                .map(
+                                  (d) => DropdownMenuItem(
+                                    value: d,
+                                    child: Text(d),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) async {
+                              if (v == 'Custom') {
+                                final picked = await showDateRangePicker(
+                                  context: context,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime.now(),
+                                  initialDateRange: _customDateRange,
+                                );
+                                if (picked == null) return;
+                                _customDateRange = picked;
+                                _selectedDateFilter = 'Custom';
+                              } else {
+                                _selectedDateFilter = v!;
+                                _customDateRange = null;
+                              }
+                              _applyFilters();
+                            },
+                          ),
                         ),
                       ],
                     ),
                   ),
-              ],
-            ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            onPressed: _addOrUpdateItem,
-            heroTag: "add_item",
-            backgroundColor: Colors.orange[600],
-            icon: Icon(Icons.add, color: Colors.white, size: 20),
-            label: Text(
-              "Add Item",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w600,
+
+                  // TABLE
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: tableWidth,
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [primaryOrange, accentOrange],
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                children: [
+                                  _headerFlex('Sr', 1),
+                                  _headerFlex('Code', 2),
+                                  _headerFlex('Image', 2),
+                                  _headerFlex('Item Name', 3),
+                                  _headerFlex('Group', 2),
+                                  _headerFlex(
+                                    'Total Stock',
+                                    2,
+                                  ), // ✅ tumhara change
+                                  _headerFlex('Received', 2),
+                                  _headerFlex('Issue', 2),
+                                  _headerFlex('Stock In Hand', 2),
+                                  _headerFlex('Moving', 2),
+                                  _headerFlex('Date', 2),
+                                  _headerFlex('Actions', 3),
+                                  _headerFlex('Update', 2),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+
+                            Expanded(
+                              child: ListView.builder(
+                                itemCount: _paginatedData.length,
+                                itemBuilder: (ctx, i) {
+                                  final item = _paginatedData[i];
+                                  final located =
+                                      int.tryParse(
+                                        item['located']?.toString() ?? '0',
+                                      ) ??
+                                      0;
+                                  final received = item['received'] ?? 0;
+                                  final issue = item['issue'] ?? 0;
+                                  final stockInHand =
+                                      located + received - issue;
+
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        _cellFlex(
+                                          item['sr']?.toString() ??
+                                              '${(_currentPage * _rowsPerPage) + i + 1}',
+                                          1,
+                                        ),
+                                        _cellFlex(
+                                          item['code'] ?? '-',
+                                          2,
+                                          bold: true,
+                                        ),
+                                        _imageCellFlex(item, 2),
+                                        _cellFlex(
+                                          item['name'] ?? '-',
+                                          3,
+                                          bold: true,
+                                          color: Colors.blue[700],
+                                        ),
+                                        _cellFlex(item['group'] ?? '-', 2),
+                                        _cellFlex(located.toString(), 2),
+                                        _cellFlex(received.toString(), 2),
+                                        _cellFlex(issue.toString(), 2),
+                                        _cellFlex(
+                                          stockInHand.toString(),
+                                          2,
+                                          bold: true,
+                                          color: stockInHand <= 0
+                                              ? Colors.red[700]
+                                              : Colors.green[800],
+                                        ),
+                                        _statusCellFlex(
+                                          (item['moving'] ?? '-')
+                                              .toString()
+                                              .toUpperCase(),
+                                          2,
+                                        ),
+                                        _cellFlex(item['dateEdit'] ?? '-', 2),
+                                        _actionFlex(item, 3),
+                                        _updateFlex(item, 2),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // PAGINATION
+                  if (filteredData.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: accentOrange.withOpacity(0.1),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Showing ${(_currentPage * _rowsPerPage) + 1}–${((_currentPage + 1) * _rowsPerPage).clamp(0, filteredData.length)} of ${filteredData.length}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.chevron_left),
+                            onPressed: _currentPage > 0
+                                ? () => setState(() => _currentPage--)
+                                : null,
+                          ),
+                          DropdownButton<int>(
+                            value: _rowsPerPage,
+                            underline: const SizedBox(),
+                            items: [10, 20, 50]
+                                .map(
+                                  (n) => DropdownMenuItem(
+                                    value: n,
+                                    child: Text('$n / page'),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) => setState(() {
+                              _rowsPerPage = v!;
+                              _currentPage = 0;
+                            }),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.chevron_right),
+                            onPressed:
+                                (_currentPage + 1) * _rowsPerPage <
+                                    filteredData.length
+                                ? () => setState(() => _currentPage++)
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
             ),
-          ),
-          SizedBox(height: 0.5.h),
-          FloatingActionButton.extended(
-            onPressed: _uploadExcelFile,
-            heroTag: "upload_excel",
-            backgroundColor: Colors.green[600],
-            icon: Icon(Icons.upload_file, color: Colors.white, size: 20),
-            label: Text(
-              "Upload Excel",
-              style: TextStyle(
+
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 1, left: 20),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FloatingActionButton.extended(
+              onPressed: _addOrUpdateItem,
+              heroTag: 'add_store_item',
+              backgroundColor: accentOrange,
+              elevation: 8,
+              icon: Icon(
+                Icons.add_circle_outline,
                 color: Colors.white,
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w600,
+                size: 15.sp,
+              ),
+              label: Text(
+                'Add Item',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 5),
+            FloatingActionButton.extended(
+              heroTag: 'fix_codes_store',
+              backgroundColor: Colors.deepOrange,
+              icon: const Icon(Icons.auto_fix_high, color: Colors.white),
+              label: const Text(
+                'Fix Codes',
+                style: TextStyle(color: Colors.white),
+              ),
+              onPressed: _fixCodesSequentially,
+            ),
+            const SizedBox(width: 5),
+            FloatingActionButton.extended(
+              onPressed: _uploadExcelFile,
+              heroTag: 'upload_excel_store',
+              backgroundColor: primaryOrange,
+              elevation: 8,
+              icon: Icon(
+                Icons.upload_file_outlined,
+                color: Colors.white,
+                size: 15.sp,
+              ),
+              label: Text(
+                'Upload Excel',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

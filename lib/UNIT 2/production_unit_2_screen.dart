@@ -148,7 +148,10 @@ List<Map<String, dynamic>> _filterRigidBoxProducts(dynamic rawProducts) {
     products = [Map<String, dynamic>.from(rawProducts)];
   }
   return products
-      .where((p) => p['productCategory'] == 'Rigid Box (unit 2)')
+      .where((p) {
+  final cat = (p['productCategory'] ?? '').toString().trim().toLowerCase();
+  return cat.contains('rigid box');
+})
       .toList();
 }
 
@@ -990,8 +993,8 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
                   icon: Icons.vertical_align_top_rounded,
                   color: _AppColors.blue,
                   sizeController: topSizeController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                 inputFormatters: [],
+keyboardType: TextInputType.text,
                 ),
                 const SizedBox(height: 2),
                 _FormSection(
@@ -999,8 +1002,8 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
                   icon: Icons.vertical_align_bottom_rounded,
                   color: _AppColors.orange,
                   sizeController: bottomSizeController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  inputFormatters: [],
+keyboardType: TextInputType.text,
                 ),
                 const SizedBox(height: 2),
 

@@ -39,9 +39,13 @@ class _KappaProductionListScreenState
   }
 
   // ─── Count Kappa products in order ───────────────────────────
-  int _kappaCount(List products) =>
-      products.where((p) => (p['productCategory'] ?? '') == 'Kappa Box').length;
-
+ int _kappaCount(List products) =>
+    products.where((p) {
+      final cat = (p['productCategory'] ?? '')
+          .toString()
+          .toLowerCase();
+      return cat.contains('kappa');
+    }).length;
   // ─── Count completed stages across all Kappa products ────────
   int _completedStages(List products) {
     int done = 0;
@@ -53,9 +57,12 @@ class _KappaProductionListScreenState
       'quality_checking',
       'ready_for_dispatch',
     ];
-    for (final p in products) {
-      if ((p['productCategory'] ?? '') != 'Kappa Box') continue;
-      final prod = _kappaProduction(p);
+for (final p in products) {
+  final cat = (p['productCategory'] ?? '')
+      .toString()
+      .toLowerCase();
+
+  if (!cat.contains('kappa')) continue;     final prod = _kappaProduction(p);
       for (final s in stages) {
         if (prod[s]?['done'] == true) done++;
       }
@@ -297,11 +304,17 @@ class _KappaProductionListScreenState
         : '-';
 
     // collect Kappa product names
-    final kappaNames = products
-        .where((p) => (p['productCategory'] ?? '') == 'Kappa Box')
-        .map((p) => (p['productName'] ?? '').toString())
-        .where((n) => n.isNotEmpty)
-        .toList();
+  final kappaNames = products
+    .where((p) {
+      final cat = (p['productCategory'] ?? '')
+          .toString()
+          .toLowerCase();
+
+      return cat.contains('kappa');
+    })
+    .map((p) => (p['productName'] ?? '').toString())
+    .where((n) => n.isNotEmpty)
+    .toList();
 
     return GestureDetector(
       onTap: () => Navigator.push(

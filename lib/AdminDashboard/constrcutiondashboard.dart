@@ -1,3 +1,5 @@
+import 'package:dimple_erp/AdminDashboard/ContractorReportScreen.dart';
+import 'package:dimple_erp/AdminDashboard/ContractorReportScreendetails.dart';
 import 'package:dimple_erp/AdminDashboard/constrctlist.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
@@ -18,11 +20,7 @@ class _ConstrcutiondashboardState extends State<Constrcutiondashboard> {
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _header(),
-            const SizedBox(height: 30),
-            _grid(),
-          ],
+          children: [_header(), const SizedBox(height: 30), _grid()],
         ),
       ),
     );
@@ -41,7 +39,7 @@ class _ConstrcutiondashboardState extends State<Constrcutiondashboard> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-   Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -55,7 +53,7 @@ class _ConstrcutiondashboardState extends State<Constrcutiondashboard> {
               SizedBox(height: 0.5.h),
               Text(
                 "Manage Contractor",
-                style: TextStyle(fontSize: 14.sp,color: Colors.white70),
+                style: TextStyle(fontSize: 14.sp, color: Colors.white70),
               ),
             ],
           ),
@@ -100,8 +98,34 @@ class _ConstrcutiondashboardState extends State<Constrcutiondashboard> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>  ConstructionProductionListScreen(),
+                    builder: (_) => ConstructionProductionListScreen(),
                   ),
+                );
+              },
+            ),
+
+            _firestoreCard(
+              title: "Contractor report",
+              subtitle: "Contractor Management",
+              icon: Icons.description,
+              gradient: [Colors.teal.shade700, Colors.teal.shade500],
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ContractorReportScreen()),
+                );
+              },
+            ),
+
+            _firestoreCard(
+              title: "Contractor details",
+              subtitle: "Contractor Management",
+              icon: Icons.description,
+              gradient: [Colors.teal.shade700, Colors.teal.shade500],
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => ContractorReport()),
                 );
               },
             ),
@@ -123,9 +147,7 @@ class _ConstrcutiondashboardState extends State<Constrcutiondashboard> {
       onTap: onTap,
       child: Card(
         elevation: 8,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         child: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(colors: gradient),
@@ -152,10 +174,7 @@ class _ConstrcutiondashboardState extends State<Constrcutiondashboard> {
                   const SizedBox(height: 6),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontSize: 13.sp,
-                      color: Colors.white70,
-                    ),
+                    style: TextStyle(fontSize: 13.sp, color: Colors.white70),
                   ),
                 ],
               ),

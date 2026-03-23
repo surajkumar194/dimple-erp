@@ -14,8 +14,7 @@ class _C {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-}
-
+} 
 class _Stage {
   final String id;
   final String title;

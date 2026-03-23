@@ -11,12 +11,12 @@ class ConstructionProductionListScreen extends StatefulWidget {
 
 class _ConstructionProductionListScreenState
     extends State<ConstructionProductionListScreen> {
-      Map<String, String?> _productionTypeMap = {};
+  Map<String, String?> _productionTypeMap = {};
   String _search = '';
   List<String> _selectedTrayContractors = [];
   String? _selectedCuttingContractor;
   String? _selectedPastingContractor;
-String? _productionType; // employee or contract
+  String? _productionType; // employee or contract
   final TextEditingController _cuttingPriceController = TextEditingController();
   final TextEditingController _pastingPriceController = TextEditingController();
 
@@ -128,76 +128,76 @@ String? _productionType; // employee or contract
     );
   }
 
-Widget _productionTypeSelector(String orderId) {
+  Widget _productionTypeSelector(String orderId) {
+    String? selectedType = _productionTypeMap[orderId];
 
-  String? selectedType = _productionTypeMap[orderId];
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        "Production Type",
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-      ),
-      const SizedBox(height: 1),
-      Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _productionTypeMap[orderId] = "employee";
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: selectedType == "employee"
-                      ? _primary.withOpacity(0.15)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _primary),
-                ),
-                child: const Center(
-                  child: Text(
-                    "Employee",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Production Type",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        const SizedBox(height: 1),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _productionTypeMap[orderId] = "employee";
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: selectedType == "employee"
+                        ? _primary.withOpacity(0.15)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _primary),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      "Employee",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _productionTypeMap[orderId] = "Contractor";
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: selectedType == "Contractor"
-                      ? _primary.withOpacity(0.15)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _primary),
-                ),
-                child: const Center(
-                  child: Text(
-                    "Contractor",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _productionTypeMap[orderId] = "Contractor";
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: selectedType == "Contractor"
+                        ? _primary.withOpacity(0.15)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _primary),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      "Contractor",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    ],
-  );
-}
+          ],
+        ),
+      ],
+    );
+  }
+
   // ─── Helpers ──────────────────────────────────────────────────
   Color _pColor(String p) {
     if (p == 'High') return _warning;
@@ -266,144 +266,136 @@ Widget _productionTypeSelector(String orderId) {
     );
   }
 
-Widget _buildProductionForm(String orderId) {
+  Widget _buildProductionForm(String orderId) {
+    String? type = _productionTypeMap[orderId];
 
-  String? type = _productionTypeMap[orderId];
+    // 👇 Employee case
+    if (type == "employee") {
+      return Column(
+        children: [
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: const Icon(Icons.save),
+            label: const Text("Save"),
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('constructionProduction')
+                  .doc(orderId)
+                  .set({
+                    "productionType": "employee",
+                    "updatedAt": FieldValue.serverTimestamp(),
+                  }, SetOptions(merge: true));
 
-  // 👇 Employee case
-  if (type == "employee") {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Employee Production Saved")),
+              );
+            },
+          ),
+        ],
+      );
+    }
+
+    // 👇 Contractor case (poora form)
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+        GestureDetector(
+          onTap: _selectBoxContractors,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade400),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.person),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _selectedTrayContractors.isEmpty
+                        ? 'Select Box Contractor'
+                        : _selectedTrayContractors.join(', '),
+                  ),
+                ),
+                const Icon(Icons.arrow_drop_down),
+              ],
             ),
           ),
-          icon: const Icon(Icons.save),
-          label: const Text("Save"),
-          onPressed: () async {
+        ),
 
+        const SizedBox(height: 10),
+
+        _buildDropdown(
+          label: 'Cutting Contractor',
+          icon: Icons.person,
+          value: _selectedCuttingContractor,
+          items: _cuttingContractors,
+          onChanged: (v) => setState(() => _selectedCuttingContractor = v),
+        ),
+
+        const SizedBox(height: 10),
+
+        _buildPriceField(
+          controller: _cuttingPriceController,
+          label: 'Cutting Price',
+        ),
+
+        const SizedBox(height: 10),
+
+        _buildDropdown(
+          label: 'Pasting Contractor',
+          icon: Icons.person,
+          value: _selectedPastingContractor,
+          items: _pastingContractors,
+          onChanged: (v) => setState(() => _selectedPastingContractor = v),
+        ),
+
+        const SizedBox(height: 10),
+
+        _buildPriceField(
+          controller: _pastingPriceController,
+          label: 'Pasting Price',
+        ),
+
+        const SizedBox(height: 20),
+
+        ElevatedButton.icon(
+          icon: const Icon(Icons.save),
+          label: const Text("Save Production"),
+          onPressed: () async {
             await FirebaseFirestore.instance
                 .collection('constructionProduction')
                 .doc(orderId)
                 .set({
-                  "productionType": "employee",
+                  "orderId": orderId,
+                  "productionType": _productionTypeMap[orderId],
+
+                  "boxContractor": _selectedTrayContractors,
+                  "cuttingContractor": _selectedCuttingContractor,
+                  "cuttingPrice": _cuttingPriceController.text,
+
+                  "pastingContractor": _selectedPastingContractor,
+                  "pastingPrice": _pastingPriceController.text,
+
                   "updatedAt": FieldValue.serverTimestamp(),
                 }, SetOptions(merge: true));
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Employee Production Saved")),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text("Production Saved")));
           },
         ),
-
       ],
     );
   }
-
-  // 👇 Contractor case (poora form)
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-
-      GestureDetector(
-        onTap: _selectBoxContractors,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.person),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  _selectedTrayContractors.isEmpty
-                      ? 'Select Box Contractor'
-                      : _selectedTrayContractors.join(', '),
-                ),
-              ),
-              const Icon(Icons.arrow_drop_down),
-            ],
-          ),
-        ),
-      ),
-
-      const SizedBox(height: 10),
-
-      _buildDropdown(
-        label: 'Cutting Contractor',
-        icon: Icons.person,
-        value: _selectedCuttingContractor,
-        items: _cuttingContractors,
-        onChanged: (v) => setState(() => _selectedCuttingContractor = v),
-      ),
-
-      const SizedBox(height: 10),
-
-      _buildPriceField(
-        controller: _cuttingPriceController,
-        label: 'Cutting Price',
-      ),
-
-      const SizedBox(height: 10),
-
-      _buildDropdown(
-        label: 'Pasting Contractor',
-        icon: Icons.person,
-        value: _selectedPastingContractor,
-        items: _pastingContractors,
-        onChanged: (v) => setState(() => _selectedPastingContractor = v),
-      ),
-
-      const SizedBox(height: 10),
-
-      _buildPriceField(
-        controller: _pastingPriceController,
-        label: 'Pasting Price',
-      ),
-
-      const SizedBox(height: 20),
-
-      ElevatedButton.icon(
-        icon: const Icon(Icons.save),
-        label: const Text("Save Production"),
-     onPressed: () async {
-
-  await FirebaseFirestore.instance
-      .collection('constructionProduction')
-      .doc(orderId)
-      .set({
-
-    "orderId": orderId,
-    "productionType": _productionTypeMap[orderId],
-
-    "boxContractor": _selectedTrayContractors,
-    "cuttingContractor": _selectedCuttingContractor,
-    "cuttingPrice": _cuttingPriceController.text,
-
-    "pastingContractor": _selectedPastingContractor,
-    "pastingPrice": _pastingPriceController.text,
-
-    "updatedAt": FieldValue.serverTimestamp(),
-
-  }, SetOptions(merge: true));
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Production Saved")),
-  );
-}
-      ),
-    ],
-  );
-}
 
   Widget _infoChip(IconData icon, String label) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -459,20 +451,17 @@ Widget _buildProductionForm(String orderId) {
           .collection('constructionProduction')
           .doc(orderId)
           .get(),
-   builder: (context, snap) {
+      builder: (context, snap) {
+        bool productionSaved = false;
 
-  bool productionSaved = false;
+        List prod = products;
 
-  List prod = products;
+        if (snap.hasData && snap.data!.exists) {
+          productionSaved = true;
 
-  if (snap.hasData && snap.data!.exists) {
-    productionSaved = true;
-
-    final cData = snap.data!.data() as Map<String, dynamic>;
-    prod = cData['products'] ?? products;
-  }
-        
-     
+          final cData = snap.data!.data() as Map<String, dynamic>;
+          prod = cData['products'] ?? products;
+        }
 
         final doneStages = _completedStages(prod);
         final totalStages = _totalStages(prod);
@@ -673,32 +662,33 @@ Widget _buildProductionForm(String orderId) {
                           .toList(),
                     ),
                   ),
-                  
-_productionTypeSelector(orderId),
-if (productionSaved)
-  Container(
-    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Colors.green.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: const Row(
-      children: [
-        Icon(Icons.check_circle, color: Colors.green),
-        SizedBox(width: 8),
-        Text(
-          "Production Already Saved",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.green,
-          ),
-        ),
-      ],
-    ),
-  ),
+
+                _productionTypeSelector(orderId),
+                if (productionSaved)
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green),
+                        SizedBox(width: 8),
+                        Text(
+                          "Production Already Saved",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 // ── Expanded Production Form ──────────────────────
-if (isExpanded && !productionSaved)                Padding(
+                if (isExpanded && !productionSaved)
+                  Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Container(
                       padding: const EdgeInsets.all(16),

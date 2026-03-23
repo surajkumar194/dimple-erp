@@ -1,4 +1,12 @@
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'dart:typed_data';
 import 'package:sizer/sizer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +15,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html;
 
 class ReadyStockHajariScreen extends StatefulWidget {
   const ReadyStockHajariScreen({super.key});
@@ -14,7 +24,8 @@ class ReadyStockHajariScreen extends StatefulWidget {
   _ReadyStockHajariScreenState createState() => _ReadyStockHajariScreenState();
 }
 
-class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
+class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen>
+    with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
@@ -27,28 +38,70 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
   int _currentPage = 0;
   bool _isLoading = false;
 
+  String _selectedDateFilter = 'All';
+  String _selectedSalesFilter = 'All';
+  DateTimeRange? _customDateRange;
+  String _selectedTypeFilter = "All";
+
   String? _selectedGroup;
   List<String> _groupList = [];
 
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
+  static const Color primaryColor = Color(0xFF283593);
+  static const Color lightColor = Color(0xFF5C6BC0);
+  static const Color darkColor = Color(0xFF1A237E);
+  static const Color accentColor = Color(0xFF3F51B5);
+  static const Color bgColor = Color(0xFFE8EAF6);
+  static const Color cardColor = Color(0xFFF3F4FB);
+
+  final List<String> _stockTypes = [
+    'Regular', 'Dead Stock', 'Medium Moving', 'Slow Moving', 'Fast Moving',
+  ];
+
+  final List<String> _salesPersons = [
+    'Sunny ji', 'Hardeep ji', 'Krishna ji',
+    'Ashish Tandon (Shop)', 'MB Shop', 'Other',
+  ];
+
+  final List<String> _typeFilters = [
+    "All", "Regular", "Dead Stock", "Medium Moving", "Slow Moving", "Fast Moving",
+  ];
+
+  final List<String> _dateFilters = ['All', 'Today', 'Last 7 Days', 'Last 30 Days', 'Custom'];
+
   final List<String> _departments = [
-    'Production',
-    'Maintenance',
-    'QC',
-    'Packing',
-    'Store',
-    'Admin',
+    'Production', 'Maintenance', 'QC', 'Packing', 'Store', 'Admin',
   ];
+
   final List<String> _secondParties = [
-    'Vendor A',
-    'Vendor B',
-    'Supplier X',
-    'Client Y',
-    'Other',
+    'Vendor A', 'Vendor B', 'Supplier X', 'Client Y', 'Other',
   ];
+
+  List<String> get _salesFilterOptions {
+    final salesSet = <String>{};
+    for (var item in stockData) {
+      final sp = item['sales_person'];
+      if (sp != null && sp.toString().trim().isNotEmpty) {
+        salesSet.add(sp.toString());
+      }
+    }
+    final sortedList = salesSet.toList()..sort();
+    return ['All', ...sortedList];
+  }
 
   @override
   void initState() {
     super.initState();
+    _selectedDateFilter = 'All';
+    _selectedGroup = 'All';
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeInOut);
+    _animationController.forward();
     _loadDataFromFirebase();
     _searchController.addListener(_filterData);
   }
@@ -56,46 +109,116 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
+  // ==================== DATA OPERATIONS ====================
+
   Future<int> _getNextSrNumber() async {
     try {
-      final snapshot = await _firestore
-          .collection('readystock_hajari_items')
-          .orderBy('sr', descending: true)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isEmpty) return 1;
-      final lastSr = snapshot.docs.first.data()['sr'] as int?;
-      return (lastSr ?? 0) + 1;
+      final snapshot = await _firestore.collection('readystock_hajari_items').get();
+      int maxSr = 0;
+      for (var doc in snapshot.docs) {
+        final sr = doc.data()['sr'];
+        if (sr != null && sr is int && sr > maxSr) maxSr = sr;
+      }
+      return maxSr + 1;
     } catch (e) {
       return 1;
     }
   }
 
+  Future<String> _getNextAutoCode() async {
+    try {
+      final snapshot = await _firestore.collection('readystock_hajari_items').get();
+      if (snapshot.docs.isEmpty) return "HSP-HJ-01";
+      final List<int> numbers = [];
+      for (var doc in snapshot.docs) {
+        final code = doc.data()['code']?.toString();
+        if (code != null && code.startsWith("HSP-HJ-")) {
+          final parts = code.split('-');
+          if (parts.length == 3) {
+            final num = int.tryParse(parts[2]);
+            if (num != null) numbers.add(num);
+          }
+        }
+      }
+      numbers.sort();
+      int nextNumber = 1;
+      for (int n in numbers) {
+        if (n == nextNumber) {
+          nextNumber++;
+        } else if (n > nextNumber) {
+          break;
+        }
+      }
+      return "HSP-HJ-${nextNumber.toString().padLeft(3, '0')}";
+    } catch (e) {
+      return "HSP-HJ-01";
+    }
+  }
+
+  Future<void> _reorderSrNumbers() async {
+    final snapshot = await _firestore
+        .collection('readystock_hajari_items')
+        .orderBy('createdAt', descending: false)
+        .get();
+    WriteBatch batch = _firestore.batch();
+    int sr = 1;
+    for (var doc in snapshot.docs) {
+      batch.update(doc.reference, {'sr': sr});
+      sr++;
+    }
+    await batch.commit();
+  }
+
+  Future<void> _fixCodesSequentially() async {
+    final snapshot = await _firestore
+        .collection('readystock_hajari_items')
+        .orderBy('createdAt')
+        .get();
+    WriteBatch batch = _firestore.batch();
+    int counter = 1;
+    for (var doc in snapshot.docs) {
+      final newCode = "HSP-HJ-${counter.toString().padLeft(2, '0')}";
+      batch.update(doc.reference, {'code': newCode});
+      counter++;
+    }
+    await batch.commit();
+    await _loadDataFromFirebase();
+  }
+
   Future<void> _loadDataFromFirebase() async {
     setState(() => _isLoading = true);
     try {
-      final snapshot = await _firestore
-          .collection('readystock_hajari_items')
-          .orderBy('sr')
-          .get();
-
+      final snapshot = await _firestore.collection('readystock_hajari_items').get();
       stockData = snapshot.docs.map((doc) {
         final data = doc.data();
         data['docId'] = doc.id;
         return data;
       }).toList();
 
-      final groups =
-          stockData.map((e) => e['piller_no'] as String).toSet().toList()
-            ..sort();
+      stockData.sort((a, b) {
+        final aSr = a['sr'];
+        final bSr = b['sr'];
+        if (aSr != null && bSr != null && aSr is int && bSr is int) return aSr.compareTo(bSr);
+        final aCreated = a['createdAt'];
+        final bCreated = b['createdAt'];
+        if (aCreated is Timestamp && bCreated is Timestamp) return aCreated.compareTo(bCreated);
+        return 0;
+      });
+
+      final groups = stockData
+          .map((e) => (e['piller_no'] ?? '').toString())
+          .where((g) => g.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
       _groupList = ['All', ...groups];
       if (_selectedGroup == null || !_groupList.contains(_selectedGroup)) {
         _selectedGroup = 'All';
       }
-
       filteredData = List.from(stockData);
       _applyFilters();
     } catch (e) {
@@ -108,15 +231,44 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
 
   void _applyFilters() {
     final query = _searchController.text.toLowerCase();
+    final now = DateTime.now();
     setState(() {
       filteredData = stockData.where((item) {
         final matchesSearch =
             item["code"].toString().toLowerCase().contains(query) ||
             item["detail"].toString().toLowerCase().contains(query) ||
-            item["piller_no"].toString().toLowerCase().contains(query);
-        final matchesGroup =
-            _selectedGroup == 'All' || item['piller_no'] == _selectedGroup;
-        return matchesSearch && matchesGroup;
+            (item["piller_no"] ?? "").toString().toLowerCase().contains(query) ||
+            (item["design_no"] ?? "").toString().toLowerCase().contains(query);
+
+        bool matchesType = _selectedTypeFilter == "All" || item["stock_type"] == _selectedTypeFilter;
+        bool matchesSales = _selectedSalesFilter == "All" || item["sales_person"] == _selectedSalesFilter;
+        bool matchesGroup = _selectedGroup == 'All' || item['piller_no'] == _selectedGroup;
+
+        bool matchesDate = true;
+        try {
+          DateTime? itemDate;
+          if (item['dateEdit'] != null && item['dateEdit'].toString().isNotEmpty) {
+            itemDate = DateFormat('dd-MM-yyyy').parse(item['dateEdit']);
+          }
+          if (itemDate != null) {
+            if (_selectedDateFilter == 'Today') {
+              matchesDate = itemDate.year == now.year &&
+                  itemDate.month == now.month &&
+                  itemDate.day == now.day;
+            } else if (_selectedDateFilter == 'Last 7 Days') {
+              matchesDate = itemDate.isAfter(now.subtract(const Duration(days: 7)));
+            } else if (_selectedDateFilter == 'Last 30 Days') {
+              matchesDate = itemDate.isAfter(now.subtract(const Duration(days: 30)));
+            } else if (_selectedDateFilter == 'Custom' && _customDateRange != null) {
+              matchesDate = itemDate.isAfter(
+                      _customDateRange!.start.subtract(const Duration(days: 1))) &&
+                  itemDate.isBefore(_customDateRange!.end.add(const Duration(days: 1)));
+            }
+          }
+        } catch (e) {
+          matchesDate = true;
+        }
+        return matchesSearch && matchesType && matchesSales && matchesGroup && matchesDate;
       }).toList();
       _currentPage = 0;
     });
@@ -128,17 +280,113 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
     return filteredData.sublist(start, end);
   }
 
+  // ==================== PDF DOWNLOAD ====================
+
+  Future<Uint8List?> _networkImageToBytes(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) return response.bodyBytes;
+    } catch (e) {}
+    return null;
+  }
+
+  Future<void> _downloadPdf() async {
+    final pdf = pw.Document();
+    Uint8List logoBytes;
+    try {
+      final data = await rootBundle.load('assets/logo.png');
+      logoBytes = data.buffer.asUint8List();
+    } catch (e) {
+      logoBytes = Uint8List(0);
+    }
+    final logoImage = logoBytes.isNotEmpty ? pw.MemoryImage(logoBytes) : null;
+    final data = filteredData;
+    List<List<dynamic>> tableData = [];
+
+    for (var item in data) {
+      Uint8List? imageBytes;
+      if (item['image'] != null && item['image'].toString().isNotEmpty) {
+        imageBytes = await _networkImageToBytes(item['image']);
+      }
+      tableData.add([
+        item["code"] ?? "",
+        item["piller_no"] ?? "",
+        item["size"] ?? "",
+        item["detail"] ?? "",
+        item["stock_type"] ?? "",
+        imageBytes != null
+            ? pw.Image(pw.MemoryImage(imageBytes), width: 40, height: 40)
+            : pw.Text("No Image"),
+        item["bal"]?.toString() ?? "0",
+        item["sales_person"] ?? "",
+        item["dateEdit"] ?? "",
+      ]);
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        build: (context) => [
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              if (logoImage != null)
+                pw.Container(width: 80, height: 80, child: pw.Image(logoImage)),
+              pw.SizedBox(width: 15),
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.Text('DIMPLE PACKAGING PVT. LTD.',
+                    style: pw.TextStyle(
+                        fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo900)),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                  'Grand Trunk Rd, near Navdeep Resorts, adjoining Sidak Resorts,\n'
+                  'West, Bhattian Ludhiana, Punjab - 141008\nContact No.: 9872518000, 7888696774',
+                  style: const pw.TextStyle(fontSize: 10),
+                ),
+                pw.SizedBox(height: 3),
+                pw.Text('GST No.: 03AADCD5371K1ZP     PAN No.: AADCD5371K',
+                    style: const pw.TextStyle(fontSize: 10)),
+              ]),
+            ],
+          ),
+          pw.SizedBox(height: 1),
+          pw.Divider(thickness: 1),
+          pw.Text("Hajari Stock Report",
+              style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 20),
+          pw.Table.fromTextArray(
+            headers: ["Code", "Group", "Size", "Item", "Type", "Image", "Stock In Hand", "Sales Person", "Date"],
+            data: tableData,
+          ),
+        ],
+      ),
+    );
+
+    final bytes = await pdf.save();
+    if (kIsWeb) {
+      final blob = html.Blob([bytes]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute("download", "hajari_stock_report.pdf")
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    } else {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File("${dir.path}/hajari_stock_report.pdf");
+      await file.writeAsBytes(bytes);
+      await OpenFile.open(file.path);
+    }
+    _showSnackBar("PDF Generated");
+  }
+
+  // ==================== IMAGE OPERATIONS ====================
+
   Future<String?> _uploadImage(XFile imageFile) async {
     try {
       final Uint8List imageBytes = await imageFile.readAsBytes();
       final String fileName = 'hajari_${DateTime.now().millisecondsSinceEpoch}';
-      final Reference ref = _storage.ref().child(
-        'readystock_hajari_images/$fileName.png',
-      );
-      final uploadTask = await ref.putData(
-        imageBytes,
-        SettableMetadata(contentType: 'image/png'),
-      );
+      final Reference ref = _storage.ref().child('readystock_hajari_images/$fileName.png');
+      final uploadTask = await ref.putData(imageBytes, SettableMetadata(contentType: 'image/png'));
       final downloadUrl = await uploadTask.ref.getDownloadURL();
       return downloadUrl;
     } catch (e) {
@@ -150,71 +398,155 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
   void _showImageZoom(String imageUrl) {
     showDialog(
       context: context,
+      barrierColor: Colors.black87,
       builder: (ctx) => Dialog(
-        backgroundColor: Colors.black87,
-        child: Stack(
-          children: [
-            Center(
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.contain,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
-                        color: Colors.blue,
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            color: Colors.red[300],
-                            size: 60,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Failed to load image',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(children: [
+          Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Hero(
+                tag: imageUrl,
+                child: Image.network(imageUrl, fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                      color: accentColor,
+                    ),
+                  );
+                }, errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    padding: const EdgeInsets.all(40),
+                    decoration:
+                        BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(20)),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.error_outline, color: Colors.red[300], size: 80),
+                      const SizedBox(height: 16),
+                      const Text('Failed to load image',
+                          style: TextStyle(color: Colors.white, fontSize: 18)),
+                    ]),
+                  );
+                }),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 40,
+            right: 20,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.pop(ctx),
+                borderRadius: BorderRadius.circular(30),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: Colors.white24, width: 2),
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 28),
                 ),
               ),
             ),
-            Positioned(
-              top: 40,
-              right: 20,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white, size: 32),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ]),
       ),
     );
   }
 
+  Widget _imageCellFlex(Map<String, dynamic> item, int flex) {
+    final url = item['image'];
+    return Expanded(
+      flex: flex,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(right: BorderSide(color: Colors.grey.shade200, width: 1)),
+        ),
+        child: url != null && url.toString().isNotEmpty
+            ? GestureDetector(
+                onTap: () => _showImageZoom(url),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: lightColor, width: 1.5),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: Image.network(url, width: 50, height: 50, fit: BoxFit.cover),
+                  ),
+                ),
+              )
+            : Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: lightColor, width: 1.5),
+                ),
+                child: Icon(Icons.image, color: Colors.grey[400], size: 24),
+              ),
+      ),
+    );
+  }
+
+  Widget _imagePickerBox({XFile? imageFile, String? imageUrl, required VoidCallback onPick}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: onPick,
+          child: Container(
+            width: 150,
+            height: 150,
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: accentColor, width: 2),
+              boxShadow: [BoxShadow(color: accentColor.withOpacity(0.2), blurRadius: 12, offset: const Offset(0, 4))],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: imageFile != null
+                  ? (kIsWeb
+                      ? FutureBuilder<Uint8List>(
+                          future: imageFile.readAsBytes(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                            return Image.memory(snapshot.data!, fit: BoxFit.cover);
+                          })
+                      : Image.file(File(imageFile.path), fit: BoxFit.cover))
+                  : imageUrl != null && imageUrl.isNotEmpty
+                      ? Image.network(imageUrl, fit: BoxFit.cover)
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.cloud_upload_outlined, size: 50, color: accentColor),
+                            const SizedBox(height: 8),
+                            Text("Upload Image",
+                                style: TextStyle(fontWeight: FontWeight.w600, color: primaryColor, fontSize: 13)),
+                          ],
+                        ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ==================== ✅ FIXED: STOCK OPERATIONS ====================
+
+  /// ✅ FIX: Firestore se fresh data read karke issue karo
   void _issueStockWithDepartment(Map<String, dynamic> item) {
     String? selectedDept;
     final qtyCtrl = TextEditingController();
@@ -223,64 +555,83 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Icon(Icons.remove_circle, color: Colors.red[700]),
-              const SizedBox(width: 8),
-              Text(
-                "Issue Stock",
-                style: TextStyle(
-                  color: Colors.red[700],
-                  fontWeight: FontWeight.bold,
-                ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.red.shade400, Colors.red.shade600],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-            ],
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
+            ),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.remove_circle_outline, color: Colors.white, size: 28),
+              ),
+              const SizedBox(width: 16),
+              const Text("Issue Stock",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22)),
+            ]),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedDept,
-                hint: const Text("Select Department"),
-                items: _departments
-                    .map((d) => DropdownMenuItem(value: d, child: Text(d)))
-                    .toList(),
-                onChanged: (v) => setStateDialog(() => selectedDept = v),
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: DropdownButtonFormField<String>(
+                  value: selectedDept,
+                  hint: const Text("Select Department"),
+                  items: _departments.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                  onChanged: (v) => setStateDialog(() => selectedDept = v),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    prefixIcon: Icon(Icons.business, color: Colors.red[700]),
                   ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
                 ),
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: qtyCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: "Quantity",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: TextField(
+                  controller: qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: "Quantity",
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    prefixIcon: Icon(Icons.numbers, color: Colors.red[700]),
                   ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
                 ),
               ),
-            ],
+            ]),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel"),
+              child: Text("Cancel", style: TextStyle(color: Colors.grey[600], fontSize: 16)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red[600],
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 2,
               ),
               onPressed: selectedDept == null || qtyCtrl.text.isEmpty
                   ? null
@@ -290,39 +641,65 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
                         _showSnackBar("Enter valid quantity", isError: true);
                         return;
                       }
-                      final newBal = (item['bal'] ?? 0) - qty;
-                      if (newBal < 0) {
-                        _showSnackBar("Not enough stock!", isError: true);
+
+                      // ✅ FIX: Firestore se fresh doc read karo — cached map pe depend mat karo
+                      final docId = item['docId']?.toString() ?? '';
+                      if (docId.isEmpty) {
+                        _showSnackBar("Invalid item reference", isError: true);
                         return;
                       }
 
-                      await _firestore
-                          .collection('readystock_hajari_transactions')
-                          .add({
-                            'itemId': item['docId'],
-                            'type': 'issue',
-                            'department': selectedDept,
-                            'quantity': qty,
-                            'timestamp': FieldValue.serverTimestamp(),
-                          });
+                      final freshDoc = await _firestore
+                          .collection('readystock_hajari_items')
+                          .doc(docId)
+                          .get();
 
+                      if (!freshDoc.exists) {
+                        _showSnackBar("Item not found!", isError: true);
+                        return;
+                      }
+
+                      final freshData = freshDoc.data()!;
+
+                      // ✅ FIX: Safe int parse — handles String/int/null from Firestore
+                      final currentBal = int.tryParse(freshData['bal']?.toString() ?? '0') ?? 0;
+                      final currentOut = int.tryParse(freshData['out']?.toString() ?? '0') ?? 0;
+
+                      if (qty > currentBal) {
+                        _showSnackBar("Not enough stock! Available: $currentBal", isError: true);
+                        return;
+                      }
+
+                      final newBal = currentBal - qty;
+                      final newOut = currentOut + qty;
+
+                      await _firestore.collection('readystock_hajari_transactions').add({
+                        'itemId': docId,
+                        'type': 'issue',
+                        'department': selectedDept,
+                        'quantity': qty,
+                        'timestamp': FieldValue.serverTimestamp(),
+                      });
+
+                      // ✅ FIX: Sahi values update ho rahi hain
                       await _firestore
                           .collection('readystock_hajari_items')
-                          .doc(item['docId'])
+                          .doc(docId)
                           .update({
-                            'bal': newBal,
-                            'out': (item['out'] ?? 0) + qty,
-                            'dateEdit': DateFormat(
-                              'dd-MM-yyyy',
-                            ).format(DateTime.now()),
-                            'updatedAt': FieldValue.serverTimestamp(),
-                          });
+                        'bal': newBal,
+                        'out': newOut,
+                        'dateEdit': DateFormat('dd-MM-yyyy').format(DateTime.now()),
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      });
 
                       await _loadDataFromFirebase();
-                      _showSnackBar("Issued $qty to $selectedDept");
-                      Navigator.pop(ctx);
+                      if (mounted) {
+                        _showSnackBar("✓ Issued $qty to $selectedDept | Remaining: $newBal");
+                        Navigator.pop(ctx);
+                      }
                     },
-              child: const Text("Continue Issue"),
+              child: const Text("Issue Stock",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -330,6 +707,7 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
     );
   }
 
+  /// ✅ FIX: Add stock bhi fresh Firestore data se
   void _addAdditionalWithParty(Map<String, dynamic> item) {
     String? selectedParty;
     final qtyCtrl = TextEditingController();
@@ -338,64 +716,83 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Icon(Icons.add_box, color: Colors.green[700]),
-              const SizedBox(width: 8),
-              Text(
-                "Add Additional Stock",
-                style: TextStyle(
-                  color: Colors.green[700],
-                  fontWeight: FontWeight.bold,
-                ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [lightColor, accentColor],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-            ],
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
+            ),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.add_box_outlined, color: Colors.white, size: 28),
+              ),
+              const SizedBox(width: 16),
+              const Text("Add Stock",
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22)),
+            ]),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedParty,
-                hint: const Text("Select Second Party"),
-                items: _secondParties
-                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                    .toList(),
-                onChanged: (v) => setStateDialog(() => selectedParty = v),
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+          content: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: lightColor),
+                ),
+                child: DropdownButtonFormField<String>(
+                  value: selectedParty,
+                  hint: const Text("Select Second Party"),
+                  items: _secondParties.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                  onChanged: (v) => setStateDialog(() => selectedParty = v),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    prefixIcon: Icon(Icons.people, color: primaryColor),
                   ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
                 ),
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: qtyCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: "Quantity",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+              Container(
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: lightColor),
+                ),
+                child: TextField(
+                  controller: qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: "Quantity",
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    prefixIcon: Icon(Icons.numbers, color: primaryColor),
                   ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
                 ),
               ),
-            ],
+            ]),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel"),
+              child: Text("Cancel", style: TextStyle(color: Colors.grey[600], fontSize: 16)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[600],
+                backgroundColor: accentColor,
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 2,
               ),
               onPressed: selectedParty == null || qtyCtrl.text.isEmpty
                   ? null
@@ -405,35 +802,60 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
                         _showSnackBar("Enter valid quantity", isError: true);
                         return;
                       }
-                      final newBal = (item['bal'] ?? 0) + qty;
 
-                      await _firestore
-                          .collection('readystock_hajari_transactions')
-                          .add({
-                            'itemId': item['docId'],
-                            'type': 'received',
-                            'party': selectedParty,
-                            'quantity': qty,
-                            'timestamp': FieldValue.serverTimestamp(),
-                          });
+                      // ✅ FIX: Fresh Firestore doc read
+                      final docId = item['docId']?.toString() ?? '';
+                      if (docId.isEmpty) {
+                        _showSnackBar("Invalid item reference", isError: true);
+                        return;
+                      }
 
+                      final freshDoc = await _firestore
+                          .collection('readystock_hajari_items')
+                          .doc(docId)
+                          .get();
+
+                      if (!freshDoc.exists) {
+                        _showSnackBar("Item not found!", isError: true);
+                        return;
+                      }
+
+                      final freshData = freshDoc.data()!;
+
+                      // ✅ FIX: Safe int parse
+                      final currentBal = int.tryParse(freshData['bal']?.toString() ?? '0') ?? 0;
+                      final currentIn = int.tryParse(freshData['in']?.toString() ?? '0') ?? 0;
+
+                      final newBal = currentBal + qty;
+                      final newIn = currentIn + qty;
+
+                      await _firestore.collection('readystock_hajari_transactions').add({
+                        'itemId': docId,
+                        'type': 'received',
+                        'party': selectedParty,
+                        'quantity': qty,
+                        'timestamp': FieldValue.serverTimestamp(),
+                      });
+
+                      // ✅ FIX: Correct updated values
                       await _firestore
                           .collection('readystock_hajari_items')
-                          .doc(item['docId'])
+                          .doc(docId)
                           .update({
-                            'bal': newBal,
-                            'incoming': (item['incoming'] ?? 0) + qty,
-                            'dateEdit': DateFormat(
-                              'dd-MM-yyyy',
-                            ).format(DateTime.now()),
-                            'updatedAt': FieldValue.serverTimestamp(),
-                          });
+                        'bal': newBal,
+                        'in': newIn,
+                        'dateEdit': DateFormat('dd-MM-yyyy').format(DateTime.now()),
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      });
 
                       await _loadDataFromFirebase();
-                      _showSnackBar("Received $qty from $selectedParty");
-                      Navigator.pop(ctx);
+                      if (mounted) {
+                        _showSnackBar("✓ Received $qty from $selectedParty | New Balance: $newBal");
+                        Navigator.pop(ctx);
+                      }
                     },
-              child: const Text("Continue Received"),
+              child: const Text("Add Stock",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -444,743 +866,454 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
   void _showUpdateOptions(Map<String, dynamic> item) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              "Update Stock",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.indigo[700],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _issueStockWithDepartment(item);
-                  },
-                  icon: const Icon(Icons.remove_circle, color: Colors.white),
-                  label: const Text("Issue Stock"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[600],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _addAdditionalWithParty(item);
-                  },
-                  icon: const Icon(Icons.add_box, color: Colors.white),
-                  label: const Text("Add Additional"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[600],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -5))],
         ),
-      ),
-    );
-  }
-
-  Future<double> _calculateAverageStock(String itemId) async {
-    try {
-      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
-      final snapshot = await _firestore
-          .collection('readystock_hajari_transactions')
-          .where('itemId', isEqualTo: itemId)
-          .where('timestamp', isGreaterThan: Timestamp.fromDate(thirtyDaysAgo))
-          .orderBy('timestamp')
-          .get();
-
-      if (snapshot.docs.isEmpty) return 0.0;
-
-      final itemDoc = await _firestore
-          .collection('readystock_hajari_items')
-          .doc(itemId)
-          .get();
-      int currentBal = itemDoc.exists ? (itemDoc['bal'] ?? 0) : 0;
-
-      Map<String, int> dailyBal = {};
-      DateTime? lastDate;
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final timestamp = (data['timestamp'] as Timestamp).toDate();
-        final dateKey = DateFormat('yyyy-MM-dd').format(timestamp);
-        final qty = data['quantity'] as int;
-        final type = data['type'];
-
-        if (lastDate != null) {
-          var fillDate = lastDate.add(const Duration(days: 1));
-          while (fillDate.isBefore(timestamp)) {
-            final fillKey = DateFormat('yyyy-MM-dd').format(fillDate);
-            dailyBal[fillKey] = currentBal;
-            fillDate = fillDate.add(const Duration(days: 1));
-          }
-        }
-
-        if (type == 'issue') currentBal -= qty;
-        if (type == 'received') currentBal += qty;
-
-        dailyBal[dateKey] = currentBal;
-        lastDate = timestamp;
-      }
-
-      final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      dailyBal[todayKey] = dailyBal[todayKey] ?? currentBal;
-
-      if (dailyBal.isEmpty) return 0.0;
-      final total = dailyBal.values.reduce((a, b) => a + b);
-      return total / dailyBal.length;
-    } catch (e) {
-      return 0.0;
-    }
-  }
-
-  void _showAverageStockDialog(Map<String, dynamic> item) async {
-    final avg = await _calculateAverageStock(item['docId']);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.bar_chart, color: Colors.purple[700]),
-            const SizedBox(width: 8),
-            Text(
-              "1-Month Average",
-              style: TextStyle(color: Colors.purple[700]),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              "Item: ${item['detail']}",
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text("Code: ${item['code']}"),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.purple[50],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    "Average Stock (30 Days)",
-                    style: TextStyle(fontSize: 12, color: Colors.purple[700]),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    avg.toStringAsFixed(2),
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.purple[900],
-                    ),
-                  ),
-                  Text(
-                    "units",
-                    style: TextStyle(fontSize: 12, color: Colors.purple[600]),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text("Close", style: TextStyle(color: Colors.purple[700])),
+        padding: const EdgeInsets.all(28),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 60,
+            height: 6,
+            decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
           ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showGroupWiseAverageDialog() async {
-    final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
-    final itemSnapshot = await _firestore
-        .collection('readystock_hajari_items')
-        .get();
-    final transSnapshot = await _firestore
-        .collection('readystock_hajari_transactions')
-        .where('timestamp', isGreaterThan: Timestamp.fromDate(thirtyDaysAgo))
-        .get();
-
-    Map<String, List<Map<String, dynamic>>> groupItems = {};
-    for (var doc in itemSnapshot.docs) {
-      final data = doc.data();
-      final group = data['piller_no'] ?? 'Unknown';
-      groupItems[group] ??= [];
-      groupItems[group]!.add({...data, 'docId': doc.id});
-    }
-
-    Map<String, double> groupAverages = {};
-    for (var entry in groupItems.entries) {
-      final group = entry.key;
-      final items = entry.value;
-      double totalStockDays = 0;
-      int totalDays = 0;
-
-      for (var item in items) {
-        final itemId = item['docId'];
-        int currentBal = item['bal'] ?? 0;
-        final itemTrans =
-            transSnapshot.docs.where((t) => t['itemId'] == itemId).toList()
-              ..sort(
-                (a, b) => (a['timestamp'] as Timestamp).compareTo(
-                  b['timestamp'] as Timestamp,
-                ),
-              );
-
-        DateTime? lastDate;
-        for (var trans in itemTrans) {
-          final timestamp = (trans['timestamp'] as Timestamp).toDate();
-          final qty = trans['quantity'] as int;
-          final type = trans['type'];
-
-          if (lastDate != null) {
-            var fillDate = lastDate.add(const Duration(days: 1));
-            while (fillDate.isBefore(timestamp)) {
-              totalStockDays += currentBal;
-              totalDays++;
-              fillDate = fillDate.add(const Duration(days: 1));
-            }
-          }
-
-          if (type == 'issue') currentBal -= qty;
-          if (type == 'received') currentBal += qty;
-
-          totalStockDays += currentBal;
-          totalDays++;
-          lastDate = timestamp;
-        }
-        totalStockDays += currentBal;
-        totalDays++;
-      }
-      groupAverages[group] = totalDays > 0 ? totalStockDays / totalDays : 0.0;
-    }
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.bar_chart, color: Colors.purple[700]),
-            const SizedBox(width: 8),
-            Text(
-              "Group-wise 30-Day Average",
-              style: TextStyle(color: Colors.purple[700]),
+          const SizedBox(height: 24),
+          Text("Update Stock",
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: primaryColor)),
+          const SizedBox(height: 8),
+          Text(item['detail'] ?? '',
+              style: TextStyle(fontSize: 15, color: Colors.grey[600]), textAlign: TextAlign.center),
+          const SizedBox(height: 28),
+          Row(children: [
+            Expanded(
+              child: _buildUpdateButton(
+                icon: Icons.remove_circle_outline,
+                label: "Issue Stock",
+                color: Colors.red,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _issueStockWithDepartment(item);
+                },
+              ),
             ),
-          ],
-        ),
-        content: Container(
-          width: double.maxFinite,
-          constraints: BoxConstraints(maxHeight: 60.h),
-          child: groupAverages.isEmpty
-              ? const Center(child: Text("No data in last 30 days"))
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: groupAverages.length,
-                  itemBuilder: (context, i) {
-                    final group = groupAverages.keys.elementAt(i);
-                    final avg = groupAverages[group]!;
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.purple[100],
-                          child: Text(
-                            group[0],
-                            style: TextStyle(color: Colors.purple[900]),
-                          ),
-                        ),
-                        title: Text(
-                          group,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        trailing: Text(
-                          avg.toStringAsFixed(2),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.purple[900],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text("Close", style: TextStyle(color: Colors.purple[700])),
-          ),
-        ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildUpdateButton(
+                icon: Icons.add_box_outlined,
+                label: "Add Stock",
+                color: accentColor,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _addAdditionalWithParty(item);
+                },
+              ),
+            ),
+          ]),
+          const SizedBox(height: 20),
+        ]),
       ),
     );
   }
+
+  Widget _buildUpdateButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: color.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withOpacity(0.3), width: 2),
+          ),
+          child: Column(children: [
+            Icon(icon, color: color, size: 42),
+            const SizedBox(height: 10),
+            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // ==================== ADD / EDIT ITEM ====================
 
   void _addOrUpdateItem({Map<String, dynamic>? existingItem}) async {
     final isEdit = existingItem != null;
+    String? selectedStockType;
+    String? selectedSalesPerson;
+    TextEditingController otherSalesCtrl = TextEditingController();
 
-    final codeCtrl = TextEditingController(
-      text: isEdit ? existingItem["code"] : '',
-    );
-    final detailCtrl = TextEditingController(
-      text: isEdit ? existingItem["detail"] : '',
-    );
-    final pillerCtrl = TextEditingController(
-      text: isEdit ? existingItem["piller_no"] : '',
-    );
+    if (isEdit) {
+      selectedSalesPerson = existingItem['sales_person']?.toString();
+      if (selectedSalesPerson != null && !_salesPersons.contains(selectedSalesPerson)) {
+        otherSalesCtrl.text = selectedSalesPerson;
+        selectedSalesPerson = "Other";
+      }
+      selectedStockType = existingItem['stock_type']?.toString();
+    }
+
+    final codeCtrl = TextEditingController();
+    if (!isEdit) {
+      final autoCode = await _getNextAutoCode();
+      codeCtrl.text = autoCode;
+    } else {
+      codeCtrl.text = existingItem["code"];
+    }
+
+    final detailCtrl = TextEditingController(text: isEdit ? existingItem["detail"] : '');
+    final pillerCtrl = TextEditingController(text: isEdit ? (existingItem["piller_no"] ?? '') : '');
     final inCtrl = TextEditingController(
-      text: isEdit ? existingItem["in"].toString() : '0',
+      text: isEdit ? (existingItem["in"] ?? 0).toString() : '0',
     );
-    final incomingCtrl = TextEditingController(
-      text: isEdit ? existingItem["incoming"].toString() : '0',
-    );
-    final outCtrl = TextEditingController(
-      text: isEdit ? existingItem["out"].toString() : '0',
-    );
-    final balCtrl = TextEditingController(
-      text: isEdit ? existingItem["bal"].toString() : '0',
-    );
-    final remarkCtrl = TextEditingController(
-      text: isEdit ? (existingItem["remark1"] ?? '') : '',
-    );
+    final outCtrl = TextEditingController(text: '0');
+    final balCtrl = TextEditingController();
+    final remarkCtrl = TextEditingController(text: isEdit ? (existingItem["remark1"] ?? '') : '');
+    final sizeCtrl = TextEditingController(text: isEdit ? (existingItem["size"] ?? "") : "");
+    final designNoCtrl = TextEditingController(text: isEdit ? (existingItem["design_no"] ?? "") : "");
 
     String? imageUrl = isEdit ? existingItem["image"] : null;
     XFile? selectedImage;
+
+    void calcBal() {
+      final i = int.tryParse(inCtrl.text) ?? 0;
+      final o = int.tryParse(outCtrl.text) ?? 0;
+      balCtrl.text = (i - o).toString();
+    }
+
+    inCtrl.addListener(calcBal);
+    outCtrl.addListener(calcBal);
+    calcBal();
+
     bool isUploading = false;
-    int nextSr = isEdit ? existingItem["sr"] : await _getNextSrNumber();
+    int nextSr = isEdit
+        ? (existingItem["sr"] is int ? existingItem["sr"] : await _getNextSrNumber())
+        : await _getNextSrNumber();
     final String currentDate = DateFormat('dd-MM-yyyy').format(DateTime.now());
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
           child: Container(
-            width: 600,
-            constraints: BoxConstraints(maxHeight: 80.h),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.indigo[700]!, Colors.indigo[500]!],
-                    ),
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
+            width: 100.w,
+            constraints: BoxConstraints(maxHeight: 88.h),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                      colors: [primaryColor, accentColor],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                  boxShadow: [BoxShadow(color: accentColor.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                ),
+                child: Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(14)),
+                    child: Icon(isEdit ? Icons.edit_note : Icons.add_circle_outline,
+                        color: Colors.white, size: 32),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isEdit ? Icons.edit : Icons.add_circle,
-                        color: Colors.white,
-                        size: 28,
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(isEdit ? "Edit Hajari Item" : "Add New Hajari",
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 24)),
+                      const SizedBox(height: 4),
+                      Text(isEdit ? "Update item details" : "Create new stock entry",
+                          style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 13)),
+                    ]),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ]),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Center(
+                      child: _imagePickerBox(
+                        imageFile: selectedImage,
+                        imageUrl: imageUrl,
+                        onPick: () async {
+                          final img = await _picker.pickImage(source: ImageSource.gallery);
+                          if (img != null) setDialogState(() => selectedImage = img);
+                        },
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        isEdit ? "Edit Hajari Item" : "Add New Hajari",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontSize: 20,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildModernField(codeCtrl, "Code${!isEdit ? " (Auto-generated)" : ""}", Icons.qr_code_2,
+                        required: true, readOnly: !isEdit),
+                    const SizedBox(height: 16),
+                    _buildModernField(pillerCtrl, "Group / Category", Icons.category_outlined, required: true),
+                    const SizedBox(height: 16),
+                    _buildModernField(sizeCtrl, "Size", Icons.straighten),
+                    const SizedBox(height: 16),
+                    _buildModernField(designNoCtrl, "Design Number", Icons.design_services_outlined),
+                    const SizedBox(height: 16),
+                    _buildModernField(detailCtrl, "Item / Party Name", Icons.inventory_2_outlined, required: true),
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: lightColor, width: 1.5),
+                      ),
+                      child: DropdownButtonFormField<String>(
+                        value: _stockTypes.contains(selectedStockType) ? selectedStockType : null,
+                        items: _stockTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                        onChanged: (v) => setDialogState(() => selectedStockType = v),
+                        decoration: InputDecoration(
+                          labelText: "Stock Type *",
+                          labelStyle: TextStyle(color: primaryColor),
+                          prefixIcon: Icon(Icons.trending_up, color: primaryColor),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                         ),
                       ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        onPressed: () => Navigator.pop(ctx),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: lightColor, width: 1.5),
                       ),
+                      child: DropdownButtonFormField<String>(
+                        value: _salesPersons.contains(selectedSalesPerson) ? selectedSalesPerson : null,
+                        items: _salesPersons.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                        onChanged: (v) => setDialogState(() => selectedSalesPerson = v),
+                        decoration: InputDecoration(
+                          labelText: "Sales Person *",
+                          labelStyle: TextStyle(color: primaryColor),
+                          prefixIcon: Icon(Icons.person, color: primaryColor),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        ),
+                      ),
+                    ),
+                    if (selectedSalesPerson == "Other") ...[
+                      const SizedBox(height: 12),
+                      _buildModernField(otherSalesCtrl, "Enter Sales Person Name", Icons.edit, required: true),
                     ],
-                  ),
-                ),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Center(
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 150,
-                                height: 150,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.indigo[200]!,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: selectedImage != null
-                                    ? FutureBuilder<Uint8List>(
-                                        future: selectedImage!.readAsBytes(),
-                                        builder: (context, snapshot) {
-                                          if (snapshot.hasData) {
-                                            return ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              child: Image.memory(
-                                                snapshot.data!,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            );
-                                          }
-                                          return const Center(
-                                            child: CircularProgressIndicator(),
-                                          );
-                                        },
-                                      )
-                                    : imageUrl != null && imageUrl!.isNotEmpty
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(10),
-                                        child: Image.network(
-                                          imageUrl!,
-                                          fit: BoxFit.cover,
-                                          loadingBuilder:
-                                              (
-                                                context,
-                                                child,
-                                                loadingProgress,
-                                              ) {
-                                                if (loadingProgress == null) {
-                                                  return child;
-                                                }
-                                                return const Center(
-                                                  child:
-                                                      CircularProgressIndicator(),
-                                                );
-                                              },
-                                          errorBuilder:
-                                              (context, error, stack) {
-                                                return Icon(
-                                                  Icons.broken_image,
-                                                  size: 60,
-                                                  color: Colors.grey[400],
-                                                );
-                                              },
-                                        ),
-                                      )
-                                    : Icon(
-                                        Icons.image,
-                                        size: 60,
-                                        color: Colors.grey[400],
-                                      ),
-                              ),
-                              const SizedBox(height: 12),
-                              ElevatedButton.icon(
-                                onPressed: isUploading
-                                    ? null
-                                    : () async {
-                                        final XFile? image = await _picker
-                                            .pickImage(
-                                              source: ImageSource.gallery,
-                                            );
-                                        if (image != null) {
-                                          setDialogState(
-                                            () => selectedImage = image,
-                                          );
-                                        }
-                                      },
-                                icon: const Icon(Icons.upload_file, size: 18),
-                                label: Text(
-                                  selectedImage != null
-                                      ? "Change Image"
-                                      : "Upload Image",
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.indigo[600],
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        _buildModernField(
-                          codeCtrl,
-                          "Hosiery Code",
-                          Icons.qr_code,
-                          required: true,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildModernField(
-                          detailCtrl,
-                          "Hosiery Name",
-                          Icons.inventory_2,
-                          required: true,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildModernField(
-                          pillerCtrl,
-                          "Group/Category",
-                          Icons.category,
-                          required: true,
-                        ),
-
-                        const SizedBox(height: 24),
-                        Text(
-                          "Stock Information",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.indigo[800],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildModernField(
-                                inCtrl,
-                                "IN",
-                                Icons.add_box,
-                                isNumber: true,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildModernField(
-                                incomingCtrl,
-                                "Incoming",
-                                Icons.input,
-                                isNumber: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildModernField(
-                                outCtrl,
-                                "OUT",
-                                Icons.remove_circle,
-                                isNumber: true,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildModernField(
-                                balCtrl,
-                                "Balance",
-                                Icons.account_balance,
-                                isNumber: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildModernField(remarkCtrl, "Remark", Icons.note),
-
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 20,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.indigo[50],
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today,
-                                      color: Colors.indigo[700],
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      "Date Edit: $currentDate",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.indigo[900],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(20),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text(
-                          "Cancel",
-                          style: TextStyle(fontSize: 16),
-                        ),
+                    const SizedBox(height: 18),
+                    Divider(color: Colors.grey[300], thickness: 1),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(12)),
+                        child: Icon(Icons.inventory_2_outlined, color: primaryColor, size: 24),
                       ),
                       const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo[600],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 14,
+                      Text("Stock Information",
+                          style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: primaryColor)),
+                    ]),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: bgColor.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(children: [
+                        _buildModernField(inCtrl, "IN", Icons.add_box, isNumber: true),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Expanded(child: _buildModernField(outCtrl, "OUT", Icons.remove_circle, isNumber: true)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: balCtrl,
+                              readOnly: true,
+                              decoration: InputDecoration(
+                                labelText: "Balance",
+                                filled: true,
+                                fillColor: Colors.grey[200],
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                                prefixIcon: Icon(Icons.account_balance, color: primaryColor),
+                              ),
+                            ),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        onPressed: isUploading
-                            ? null
-                            : () async {
-                                final code = codeCtrl.text.trim();
-                                final detail = detailCtrl.text.trim();
-                                final piller = pillerCtrl.text.trim();
-                                if (code.isEmpty ||
-                                    detail.isEmpty ||
-                                    piller.isEmpty) {
-                                  _showSnackBar(
-                                    "Please fill all required fields",
-                                    isError: true,
-                                  );
-                                  return;
-                                }
-                                setDialogState(() => isUploading = true);
+                        ]),
+                      ]),
+                    ),
+                    const SizedBox(height: 18),
+                    _buildModernField(remarkCtrl, "Remark", Icons.note_alt_outlined),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [bgColor, cardColor]),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: lightColor, width: 1.5),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.calendar_today, color: primaryColor),
+                        const SizedBox(width: 14),
+                        Text("Date: $currentDate",
+                            style: TextStyle(fontWeight: FontWeight.w600, color: darkColor, fontSize: 16)),
+                      ]),
+                    ),
+                  ]),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
+                      child: Text("Cancel", style: TextStyle(fontSize: 16, color: Colors.grey[700])),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 2,
+                      ),
+                      onPressed: isUploading
+                          ? null
+                          : () async {
+                              setDialogState(() => isUploading = true);
+                              try {
                                 if (selectedImage != null) {
                                   imageUrl = await _uploadImage(selectedImage!);
                                 }
+                                final code = codeCtrl.text.trim();
+                                final detail = detailCtrl.text.trim();
+                                final piller = pillerCtrl.text.trim();
 
-                                final inVal = int.tryParse(inCtrl.text) ?? 0;
-                                final incomingVal =
-                                    int.tryParse(incomingCtrl.text) ?? 0;
-                                final outVal = int.tryParse(outCtrl.text) ?? 0;
-                                final balVal =
-                                    int.tryParse(balCtrl.text) ??
-                                    (inVal + incomingVal - outVal);
+                                if (code.isEmpty || detail.isEmpty || piller.isEmpty) {
+                                  _showSnackBar("Please fill all required fields", isError: true);
+                                  setDialogState(() => isUploading = false);
+                                  return;
+                                }
+
+                                var existing = await _firestore
+                                    .collection('readystock_hajari_items')
+                                    .where('code', isEqualTo: code)
+                                    .get();
+
+                                if (!isEdit && existing.docs.isNotEmpty) {
+                                  _showSnackBar("Code already exists!", isError: true);
+                                  setDialogState(() => isUploading = false);
+                                  return;
+                                }
+
+                                if (selectedStockType == null) {
+                                  _showSnackBar("Please select Stock Type", isError: true);
+                                  setDialogState(() => isUploading = false);
+                                  return;
+                                }
+
+                                int newOutInput = int.tryParse(outCtrl.text) ?? 0;
+                                int previousOut = isEdit ? (int.tryParse(existingItem?["out"]?.toString() ?? '0') ?? 0) : 0;
+                                int previousBal = isEdit ? (int.tryParse(existingItem?["bal"]?.toString() ?? '0') ?? 0) : 0;
+                                int finalOut = previousOut + newOutInput;
+                                int finalBal = previousBal - newOutInput;
+
+                                if (finalBal < 0) {
+                                  _showSnackBar("Not enough stock!", isError: true);
+                                  setDialogState(() => isUploading = false);
+                                  return;
+                                }
+
+                                String finalSalesPerson = selectedSalesPerson ?? "";
+                                if (selectedSalesPerson == "Other") {
+                                  if (otherSalesCtrl.text.trim().isEmpty) {
+                                    _showSnackBar("Please enter Sales Person name", isError: true);
+                                    setDialogState(() => isUploading = false);
+                                    return;
+                                  }
+                                  finalSalesPerson = otherSalesCtrl.text.trim();
+                                }
 
                                 final newItem = {
-                                  "sr": nextSr,
                                   "code": code,
                                   "image": imageUrl ?? "",
                                   "detail": detail,
                                   "piller_no": piller,
-                                  "in": inVal,
-                                  "incoming": incomingVal,
-                                  "out": outVal,
-                                  "bal": balVal,
+                                  "size": sizeCtrl.text.trim(),
+                                  "design_no": designNoCtrl.text.trim(),
+                                  "stock_type": selectedStockType,
+                                  "sales_person": finalSalesPerson,
+                                  "in": int.tryParse(inCtrl.text) ?? 0,
+                                  "out": finalOut,
+                                  "bal": finalBal,
                                   "remark1": remarkCtrl.text.trim(),
                                   "dateEdit": currentDate,
                                   "updatedAt": FieldValue.serverTimestamp(),
                                 };
 
-                                try {
-                                  if (isEdit) {
-                                    await _firestore
-                                        .collection('readystock_hajari_items')
-                                        .doc(existingItem["docId"])
-                                        .update(newItem);
-                                    _showSnackBar("Item updated successfully");
-                                  } else {
-                                    newItem["createdAt"] =
-                                        FieldValue.serverTimestamp();
-                                    await _firestore
-                                        .collection('readystock_hajari_items')
-                                        .add(newItem);
-                                    _showSnackBar("Item added successfully!");
-                                  }
-                                  await _loadDataFromFirebase();
-                                  Navigator.pop(ctx);
-                                } catch (e) {
-                                  _showSnackBar(
-                                    "Error saving item: $e",
-                                    isError: true,
-                                  );
-                                } finally {
-                                  setDialogState(() => isUploading = false);
+                                if (isEdit) {
+                                  await _firestore
+                                      .collection('readystock_hajari_items')
+                                      .doc(existingItem["docId"])
+                                      .update(newItem);
+                                  _showSnackBar("✓ Item updated successfully");
+                                } else {
+                                  newItem["sr"] = nextSr;
+                                  newItem["createdAt"] = FieldValue.serverTimestamp();
+                                  await _firestore.collection('readystock_hajari_items').add(newItem);
+                                  _showSnackBar("✓ Item added successfully");
                                 }
-                              },
-                        icon: isUploading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Icon(isEdit ? Icons.check : Icons.add),
-                        label: Text(
-                          isEdit ? "Update Item" : "Add Item",
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ),
-                    ],
-                  ),
+
+                                await _loadDataFromFirebase();
+                                Navigator.pop(ctx);
+                              } catch (e) {
+                                _showSnackBar("Error saving item: $e", isError: true);
+                              } finally {
+                                setDialogState(() => isUploading = false);
+                              }
+                            },
+                      icon: isUploading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : Icon(isEdit ? Icons.check : Icons.add),
+                      label: Text(isEdit ? "Update Item" : "Add Item",
+                          style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ]),
           ),
         ),
       ),
     );
   }
+
+  // ==================== EXCEL UPLOAD ====================
 
   Future<void> _uploadExcelFile() async {
     setState(() => _isLoading = true);
@@ -1201,7 +1334,6 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
         setState(() => _isLoading = false);
         return;
       }
-
       var excel = Excel.decodeBytes(fileBytes as List<int>);
       if (excel.tables.isEmpty) {
         _showSnackBar("Excel file is empty", isError: true);
@@ -1215,31 +1347,20 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
         setState(() => _isLoading = false);
         return;
       }
-
       var headerRow = rows[0]
           .map((cell) => cell?.value?.toString().trim().toLowerCase() ?? '')
           .toList();
-
-      bool hasRequired = [
-        'code',
-        'detail',
-        'piller_no',
-      ].every((h) => headerRow.contains(h));
+      bool hasRequired = ['code', 'detail'].every((h) => headerRow.contains(h));
       if (!hasRequired) {
-        _showSnackBar(
-          "Missing required columns: code, detail, piller_no",
-          isError: true,
-        );
+        _showSnackBar("Missing required columns: code, detail", isError: true);
         setState(() => _isLoading = false);
         return;
       }
-
       List<Map<String, dynamic>> importedItems = [];
       final String today = DateFormat('dd-MM-yyyy').format(DateTime.now());
-
       for (int i = 1; i < rows.length; i++) {
         var row = rows[i];
-        if (row.length < 3) continue;
+        if (row.length < 2) continue;
         Map<String, dynamic> item = {};
         for (int j = 0; j < headerRow.length && j < row.length; j++) {
           var header = headerRow[j];
@@ -1247,49 +1368,34 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
           var value = cell?.value;
           if (value == null) continue;
           switch (header) {
-            case 'sr':
-            case 'in':
-            case 'incoming':
-            case 'out':
-            case 'bal':
+            case 'sr': break;
+            case 'in': case 'out': case 'bal':
               item[header] = int.tryParse(value.toString()) ?? 0;
               break;
-            case 'code':
-            case 'detail':
-            case 'piller_no':
-            case 'image':
-            case 'remark1':
+            case 'code': case 'detail': case 'piller_no': case 'image':
               item[header] = value.toString().trim();
+              break;
+            case 'remark': case 'remark1':
+              item['remark1'] = value.toString().trim();
               break;
           }
         }
-        if (item['code'] == null ||
-            item['detail'] == null ||
-            item['piller_no'] == null) {
-          continue;
-        }
-
+        if (item['code'] == null || item['detail'] == null) continue;
         item['in'] = item['in'] ?? 0;
-        item['incoming'] = item['incoming'] ?? 0;
         item['out'] = item['out'] ?? 0;
-        item['bal'] =
-            item['bal'] ?? (item['in'] + item['incoming'] - item['out']);
+        item['bal'] = item['bal'] ?? (item['in'] - item['out']);
         item['image'] = item['image'] ?? '';
         item['remark1'] = item['remark1'] ?? '';
+        item['piller_no'] = item['piller_no'] ?? '';
         item['dateEdit'] = today;
-
-        if (item['sr'] == null || item['sr'] == 0) {
-          item['sr'] = await _getNextSrNumber();
-        }
+        item['sr'] = await _getNextSrNumber();
         importedItems.add(item);
       }
-
       if (importedItems.isEmpty) {
         _showSnackBar("No valid data found in Excel", isError: true);
         setState(() => _isLoading = false);
         return;
       }
-
       WriteBatch batch = _firestore.batch();
       int batchCount = 0;
       for (var item in importedItems) {
@@ -1298,13 +1404,9 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
             .where('code', isEqualTo: item['code'])
             .limit(1)
             .get();
-
         if (existingQuery.docs.isNotEmpty) {
           var docRef = existingQuery.docs.first.reference;
-          batch.update(docRef, {
-            ...item,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+          batch.update(docRef, {...item, 'updatedAt': FieldValue.serverTimestamp()});
         } else {
           var docRef = _firestore.collection('readystock_hajari_items').doc();
           item['createdAt'] = FieldValue.serverTimestamp();
@@ -1319,48 +1421,37 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
         }
       }
       if (batchCount > 0) await batch.commit();
-
       await _loadDataFromFirebase();
-      _showSnackBar(
-        "Excel imported successfully! ${importedItems.length} items processed.",
-      );
+      _showSnackBar("✓ Excel imported! ${importedItems.length} items processed.");
     } catch (e) {
       _showSnackBar("Import failed: $e", isError: true);
     }
     setState(() => _isLoading = false);
   }
 
-  void _deleteItem(String docId, int sr) {
+  // ==================== DELETE ITEM ====================
+
+  void _deleteItem(String docId) {
+    if (docId.isEmpty) {
+      _showSnackBar("Invalid document reference", isError: true);
+      return;
+    }
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber, color: Colors.red[700], size: 28),
-            const SizedBox(width: 12),
-            Text("Delete Item?", style: TextStyle(color: Colors.red[700])),
-          ],
-        ),
-        content: const Text("This action cannot be undone. Are you sure?"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text("Delete Item?"),
+        content: const Text("This action cannot be undone. Are you sure you want to delete this item?"),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[600],
-              foregroundColor: Colors.white,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () async {
               try {
-                await _firestore
-                    .collection('readystock_hajari_items')
-                    .doc(docId)
-                    .delete();
+                await _firestore.collection('readystock_hajari_items').doc(docId).delete();
+                await _reorderSrNumbers();
                 await _loadDataFromFirebase();
-                _showSnackBar("Item deleted");
+                _showSnackBar("✓ Item deleted");
               } catch (e) {
                 _showSnackBar("Error: $e", isError: true);
               }
@@ -1373,15 +1464,35 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
     );
   }
 
+  // ==================== UI HELPERS ====================
+
   void _showSnackBar(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red[600] : Colors.green[600],
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 20,
+        left: 20,
+        right: 20,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: isError ? Colors.red : accentColor,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))],
+            ),
+            child: Row(children: [
+              Icon(isError ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
+            ]),
+          ),
+        ),
       ),
     );
+    overlay.insert(overlayEntry);
+    Future.delayed(const Duration(seconds: 3)).then((_) => overlayEntry.remove());
   }
 
   Widget _buildModernField(
@@ -1390,572 +1501,474 @@ class _ReadyStockHajariScreenState extends State<ReadyStockHajariScreen> {
     IconData icon, {
     bool isNumber = false,
     bool required = false,
+    bool readOnly = false,
   }) {
-    return TextField(
-      controller: controller,
-      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label + (required ? " *" : ""),
-        prefixIcon: Icon(icon, color: Colors.indigo[700]),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.indigo[200]!),
+    return Container(
+      decoration: BoxDecoration(
+        color: readOnly ? Colors.grey[100] : bgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: readOnly ? Colors.grey[300]! : lightColor, width: 1.5),
+      ),
+      child: TextField(
+        controller: controller,
+        readOnly: readOnly,
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        inputFormatters: isNumber ? [FilteringTextInputFormatter.digitsOnly] : null,
+        decoration: InputDecoration(
+          labelText: label + (required ? " *" : ""),
+          labelStyle: TextStyle(color: primaryColor),
+          prefixIcon: Icon(icon, color: primaryColor),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.indigo[600]!, width: 2),
-        ),
-        filled: true,
-        fillColor: Colors.indigo[50],
       ),
     );
   }
 
-  Widget _header(String text, double width) => SizedBox(
-    width: width,
-    child: Text(
-      text,
-      style: const TextStyle(
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
-        fontSize: 12,
-      ),
-      textAlign: TextAlign.center,
-      maxLines: 2,
-      overflow: TextOverflow.visible,
-      softWrap: true,
-    ),
-  );
-
-  Widget _cell(
-    String text,
-    double width, {
-    Color? color,
-    bool bold = false,
-    double fontSize = 13,
-  }) => SizedBox(
-    width: width,
-    child: Text(
-      text,
-      style: TextStyle(
-        color: color ?? Colors.black87,
-        fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
-        fontSize: fontSize,
-      ),
-      textAlign: TextAlign.center,
-      overflow: TextOverflow.ellipsis,
-    ),
-  );
-
-  Widget _cellImage(String? url, double width) {
-    if (url == null || url.isEmpty) return _placeholderImage(width);
-    return SizedBox(
-      width: width,
+  Widget _headerFlex(String text, int flex) {
+    return Expanded(
+      flex: flex,
       child: Center(
-        child: GestureDetector(
-          onTap: () => _showImageZoom(url.trim()),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              url.trim(),
-              width: 55,
-              height: 55,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  width: 55,
-                  height: 55,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (_, __, ___) => _errorImage(width),
-            ),
+        child: Text(text,
+            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14),
+            textAlign: TextAlign.center),
+      ),
+    );
+  }
+
+  Widget _cellFlex(String text, int flex, {bool bold = false, Color? color}) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(right: BorderSide(color: Colors.grey.shade200, width: 1)),
+        ),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
+          style: TextStyle(
+            fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+            color: color ?? Colors.grey[800],
+            fontSize: 12,
           ),
         ),
       ),
     );
   }
 
-  Widget _placeholderImage(double width) => SizedBox(
-    width: width,
-    child: Center(
+  Widget _actionFlex(Map<String, dynamic> item, int flex) {
+    return Expanded(
+      flex: flex,
       child: Container(
-        width: 55,
-        height: 55,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(8),
+          border: Border(right: BorderSide(color: Colors.grey.shade200, width: 1)),
         ),
-        child: Icon(Icons.image, size: 28, color: Colors.grey[500]),
-      ),
-    ),
-  );
-
-  Widget _errorImage(double width) => SizedBox(
-    width: width,
-    child: Center(
-      child: Container(
-        width: 55,
-        height: 55,
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.broken_image, size: 24, color: Colors.red[400]),
-            Text(
-              "Error",
-              style: TextStyle(fontSize: 8, color: Colors.red[600]),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            decoration: BoxDecoration(color: accentColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            child: IconButton(
+              icon: Icon(Icons.edit_outlined, color: primaryColor, size: 18),
+              onPressed: () => _addOrUpdateItem(existingItem: item),
+              tooltip: "Edit",
             ),
-          ],
+          ),
+          const SizedBox(width: 1),
+          Container(
+            decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            child: IconButton(
+              icon: Icon(Icons.delete_outline, color: Colors.red[400], size: 18),
+              onPressed: () => _deleteItem(item["docId"] ?? ''),
+              tooltip: "Delete",
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _updateFlex(Map<String, dynamic> item, int flex) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        alignment: Alignment.center,
+        child: ElevatedButton(
+          onPressed: () => _showUpdateOptions(item),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: accentColor,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            elevation: 2,
+          ),
+          child: const Text("Update", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
         ),
       ),
-    ),
-  );
+    );
+  }
 
-  Widget _actionButtons(Map<String, dynamic> item, double width) => SizedBox(
-    width: width,
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        IconButton(
-          icon: Icon(Icons.edit, color: Colors.indigo[700], size: 20),
-          onPressed: () => _addOrUpdateItem(existingItem: item),
-          tooltip: "Edit",
-        ),
-        IconButton(
-          icon: Icon(Icons.delete, color: Colors.red[700], size: 20),
-          onPressed: () => _deleteItem(item["docId"] ?? '', item["sr"]),
-          tooltip: "Delete",
-        ),
-      ],
-    ),
-  );
-
-  Widget _updateButton(Map<String, dynamic> item, double width) => SizedBox(
-    width: width,
-    child: Center(
-      child: ElevatedButton(
-        onPressed: () => _showUpdateOptions(item),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue[600],
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Text(
-          "Update",
-          style: TextStyle(fontSize: 12, color: Colors.white),
-        ),
-      ),
-    ),
-  );
+  // ==================== BUILD UI ====================
 
   @override
   Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    double tableWidth = screenWidth < 1200 ? 1600 : screenWidth;
+
     return Scaffold(
-    appBar: PreferredSize(
-  preferredSize: const Size.fromHeight(60),
-  child: AppBar(
-    automaticallyImplyLeading: false,
-    elevation: 0,
-    backgroundColor: Colors.transparent,
-    flexibleSpace: Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.purple.shade600,
-            Colors.blue.shade600,
-            Colors.teal.shade600,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: AppBar(
+          automaticallyImplyLeading: false,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.purple.shade600, Colors.blue.shade600, Colors.teal.shade600],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Row(children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                child: Image.asset('assets/dpl.png', height: 36),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('Ready Stock - Hajari',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white)),
+                    SizedBox(height: 2),
+                    Text('Manage ready stock hajari items',
+                        style: TextStyle(fontSize: 12, color: Colors.white70)),
+                  ],
+                ),
+              ),
+            ]),
+          ),
         ),
       ),
-    ),
-    titleSpacing: 0,
-    title: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Image.asset('assets/dpl.png', height: 36),
-          ),
-
-          const SizedBox(width: 8),
-
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Ready stock - hajari',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: Colors.white,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'Manage ready stock items',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  ),
-),
       body: _isLoading
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(color: Colors.indigo[600]),
-                  const SizedBox(height: 16),
-                  Text(
-                    "Loading hosiery stock...",
-                    style: TextStyle(color: Colors.indigo[700]),
-                  ),
+                  CircularProgressIndicator(color: accentColor, strokeWidth: 3),
+                  const SizedBox(height: 28),
+                  Text("Loading hajari stock...",
+                      style: TextStyle(color: primaryColor, fontSize: 17, fontWeight: FontWeight.w500)),
                 ],
               ),
             )
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.indigo.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              hintText:
-                                  "Search by Code, Hosiery Name or Group...",
-                              hintStyle: TextStyle(color: Colors.grey[400]),
-                              border: InputBorder.none,
-                              prefixIcon: Icon(
-                                Icons.search,
-                                color: Colors.indigo[600],
-                                size: 24,
-                              ),
-                            ),
+          : FadeTransition(
+              opacity: _fadeAnimation,
+              child: Column(children: [
+                // SEARCH & FILTER BAR
+                Container(
+                  margin: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: accentColor.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                  ),
+                  child: Row(children: [
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: lightColor, width: 1.5),
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: "Search by Code, Item Name, or Group...",
+                            hintStyle: TextStyle(color: Colors.grey[500]),
+                            border: InputBorder.none,
+                            prefixIcon: Icon(Icons.search, color: accentColor, size: 17.sp),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.indigo.withOpacity(0.1),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                        child: DropdownButton<String>(
-                          value: _selectedGroup,
-                          hint: const Text("Filter Group"),
-                          items: _groupList
-                              .map(
-                                (g) => DropdownMenuItem(
-                                  value: g,
-                                  child: Text(g == 'All' ? 'All Groups' : g),
-                                ),
-                              )
-                              .toList(),
+                    ),
+                    const SizedBox(width: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: lightColor, width: 1.5),
+                      ),
+                      child: DropdownButton<String>(
+                        value: _selectedGroup,
+                        underline: const SizedBox(),
+                        hint: const Text("Group"),
+                        icon: Icon(Icons.category, color: accentColor),
+                        items: _groupList
+                            .map((g) => DropdownMenuItem(value: g, child: Text(g == 'All' ? 'All Groups' : g)))
+                            .toList(),
+                        onChanged: (v) {
+                          setState(() => _selectedGroup = v!);
+                          _applyFilters();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red, width: 1.5),
+                      ),
+                      child: Row(children: [
+                        DropdownButton<String>(
+                          value: _selectedTypeFilter,
+                          underline: const SizedBox(),
+                          icon: const Icon(Icons.filter_list, color: Colors.red),
+                          items: _typeFilters.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                           onChanged: (v) {
-                            setState(() => _selectedGroup = v!);
+                            setState(() => _selectedTypeFilter = v!);
                             _applyFilters();
                           },
+                        ),
+                        const SizedBox(width: 2),
+                        DropdownButton<String>(
+                          value: _selectedSalesFilter,
                           underline: const SizedBox(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-               SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-                  child: Container(     width: 1500,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 14,
-                      horizontal: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.indigo[600]!, Colors.indigo[400]!],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.indigo.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        _header("Sr No.", 70),
-                        _header("CODE", 100),
-                        _header("IMAGE", 110),
-                        _header("ITEM/PARTY NAME", 160),
-                        _header("GROUP", 110),
-                        _header("STOCK LOCATED", 100),
-                        _header("RECEIVED STOCK", 100),
-                        _header("ISSUE STOCK", 90),
-                        _header("STOCK IN HAND", 90),
-                        _header("DATE EDIT", 90),
-                        _header("MOVING ITEMS", 130),
-                        _header("ACTIONS", 100),
-                        _header("UPDATE", 100),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                Expanded(
-                  child: stockData.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.inventory_2_outlined,
-                                size: 80,
-                                color: Colors.grey[300],
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                "No Hosiery items found",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                "Click + to add or upload Excel",
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: _paginatedData.length,
-                          itemBuilder: (ctx, i) {
-                            final item = _paginatedData[i];
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  _cell(item["sr"].toString(), 70),
-                                  _cell(item["code"], 100, bold: true),
-                                  _cellImage(item["image"], 110),
-                                  _cell(
-                                    item["detail"],
-                                    160,
-                                    bold: true,
-                                    color: Colors.indigo[700],
-                                  ),
-                                  _cell(item["piller_no"], 110),
-                                  _cell(item["in"].toString(), 100),
-                                  _cell(item["incoming"].toString(), 100),
-                                  _cell(
-                                    item["out"].toString(),
-                                    90,
-                                    color: Colors.red[700],
-                                  ),
-                                  _cell(
-                                    item["bal"].toString(),
-                                    90,
-                                    color: Colors.green[900],
-                                    bold: true,
-                                    fontSize: 16.sp,
-                                  ),
-                                  _cell(item["dateEdit"]?.toString() ?? "", 90),
-                                  _cell("–", 130),
-                                  _actionButtons(item, 100),
-                                  _updateButton(item, 100),
-                                ],
-                              ),
-                            );
+                          icon: Icon(Icons.person, color: accentColor),
+                          items: _salesFilterOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                          onChanged: (v) {
+                            setState(() => _selectedSalesFilter = v!);
+                            _applyFilters();
                           },
                         ),
+                        const SizedBox(width: 4),
+                        ElevatedButton.icon(
+                          onPressed: _downloadPdf,
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                          icon: const Icon(Icons.picture_as_pdf),
+                          label: const Text("PDF"),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(width: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: lightColor, width: 1.5),
+                      ),
+                      child: DropdownButton<String>(
+                        value: _selectedDateFilter,
+                        underline: const SizedBox(),
+                        icon: Icon(Icons.calendar_today, color: accentColor),
+                        items: _dateFilters.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                        onChanged: (v) async {
+                          if (v == 'Custom') {
+                            final picked = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                              initialDateRange: _customDateRange,
+                            );
+                            if (picked == null) return;
+                            _customDateRange = picked;
+                            _selectedDateFilter = 'Custom';
+                          } else {
+                            _selectedDateFilter = v!;
+                            _customDateRange = null;
+                          }
+                          _applyFilters();
+                        },
+                      ),
+                    ),
+                  ]),
                 ),
 
-                if (stockData.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 16),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Page ${_currentPage + 1} of ${((filteredData.length - 1) / _rowsPerPage).ceil()}",
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                // TABLE
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [primaryColor, accentColor]),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(children: [
+                            _headerFlex("Sr", 1),
+                            _headerFlex("Code", 2),
+                            _headerFlex("Group", 2),
+                            _headerFlex("Size", 2),
+                            _headerFlex("Design No", 2),
+                            _headerFlex("Image", 2),
+                            _headerFlex("Item/Party", 3),
+                            _headerFlex("Type", 2),
+                            _headerFlex("Total Stock", 2),
+                            _headerFlex("Issue Stock", 2),
+                            _headerFlex("Stock in Hand", 2),
+                            _headerFlex("Sales Person", 2),
+                            _headerFlex("Date", 2),
+                            _headerFlex("Remarks", 3),
+                            _headerFlex("Actions", 3),
+                            _headerFlex("Update", 2),
+                          ]),
                         ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.chevron_left),
-                              onPressed: _currentPage > 0
-                                  ? () => setState(() => _currentPage--)
-                                  : null,
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: DropdownButton<int>(
-                                value: _rowsPerPage,
-                                underline: const SizedBox(),
-                                items: [5, 10, 20, 50]
-                                    .map(
-                                      (n) => DropdownMenuItem(
-                                        value: n,
-                                        child: Text("$n / page"),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (v) => setState(() {
-                                  _rowsPerPage = v!;
-                                  _currentPage = 0;
-                                }),
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.chevron_right),
-                              onPressed:
-                                  (_currentPage + 1) * _rowsPerPage <
-                                      filteredData.length
-                                  ? () => setState(() => _currentPage++)
-                                  : null,
-                            ),
-                          ],
+                        const SizedBox(height: 5),
+                        Expanded(
+                          child: filteredData.isEmpty
+                              ? Center(
+                                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                    Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey[300]),
+                                    const SizedBox(height: 16),
+                                    const Text("No Hajari items found",
+                                        style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500)),
+                                    const SizedBox(height: 8),
+                                    const Text("Click + to add or upload Excel",
+                                        style: TextStyle(color: Colors.grey)),
+                                  ]),
+                                )
+                              : ListView.builder(
+                                  itemCount: _paginatedData.length,
+                                  itemBuilder: (ctx, i) {
+                                    final item = _paginatedData[i];
+                                    // ✅ FIX: bal color - red if 0 or negative
+                                    final bal = int.tryParse(item["bal"]?.toString() ?? '0') ?? 0;
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                          color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                                      child: Row(children: [
+                                        _cellFlex(item["sr"]?.toString() ?? "${i + 1}", 1),
+                                        _cellFlex(item["code"] ?? "-", 2),
+                                        _cellFlex(item["piller_no"] ?? "-", 2),
+                                        _cellFlex(item["size"] ?? "-", 2),
+                                        _cellFlex(item["design_no"] ?? "-", 2),
+                                        _imageCellFlex(item, 2),
+                                        _cellFlex(item["detail"] ?? "-", 3),
+                                        _cellFlex(item["stock_type"] ?? "-", 2),
+                                        _cellFlex("${item["in"] ?? 0}", 2),
+                                        _cellFlex("${item["out"] ?? 0}", 2),
+                                        // ✅ FIX: Red if 0 or negative, green otherwise
+                                        _cellFlex("$bal", 2,
+                                            bold: true,
+                                            color: bal <= 0 ? Colors.red[700] : Colors.indigo[800]),
+                                        _cellFlex(item["sales_person"] ?? "-", 2),
+                                        _cellFlex(item["dateEdit"] ?? "", 2),
+                                        _cellFlex(item["remark1"] ?? "-", 3),
+                                        _actionFlex(item, 3),
+                                        _updateFlex(item, 2),
+                                      ]),
+                                    );
+                                  },
+                                ),
                         ),
-                      ],
+                      ]),
                     ),
                   ),
-              ],
+                ),
+
+                // PAGINATION
+                if (filteredData.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.start, children: [
+                      Text("Page ${_currentPage + 1} of ${(filteredData.length / _rowsPerPage).ceil()}",
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_left),
+                        onPressed: _currentPage > 0 ? () => setState(() => _currentPage--) : null,
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: DropdownButton<int>(
+                          value: _rowsPerPage,
+                          underline: const SizedBox(),
+                          items: [5, 10, 20, 50]
+                              .map((n) => DropdownMenuItem(value: n, child: Text("$n / page")))
+                              .toList(),
+                          onChanged: (v) => setState(() {
+                            _rowsPerPage = v!;
+                            _currentPage = 0;
+                          }),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right),
+                        onPressed: (_currentPage + 1) * _rowsPerPage < filteredData.length
+                            ? () => setState(() => _currentPage++)
+                            : null,
+                      ),
+                    ]),
+                  ),
+              ]),
             ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 1, left: 20),
+        child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
           FloatingActionButton.extended(
             onPressed: _addOrUpdateItem,
-            heroTag: "add_hosiery",
-            backgroundColor: Colors.indigo[600],
-            icon: const Icon(Icons.add, color: Colors.white, size: 20),
-            label: Text(
-              "Add Hosiery",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            heroTag: "add_hajari",
+            backgroundColor: accentColor,
+            elevation: 8,
+            icon: Icon(Icons.add_circle_outline, color: Colors.white, size: 15.sp),
+            label: Text("Add Hajari",
+                style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.w600)),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(width: 5),
+          FloatingActionButton.extended(
+            heroTag: "fix_codes_hajari",
+            backgroundColor: Colors.orange,
+            icon: const Icon(Icons.auto_fix_high, color: Colors.white),
+            label: const Text("Fix Codes", style: TextStyle(color: Colors.white)),
+            onPressed: _fixCodesSequentially,
+          ),
+          const SizedBox(width: 5),
           FloatingActionButton.extended(
             onPressed: _uploadExcelFile,
             heroTag: "upload_excel_hajari",
-            backgroundColor: Colors.green[600],
-            icon: const Icon(Icons.upload_file, color: Colors.white, size: 20),
-            label: Text(
-              "Upload Excel",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            backgroundColor: primaryColor,
+            elevation: 8,
+            icon: Icon(Icons.upload_file_outlined, color: Colors.white, size: 15.sp),
+            label: Text("Upload Excel",
+                style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.w600)),
           ),
-        ],
+        ]),
       ),
     );
   }

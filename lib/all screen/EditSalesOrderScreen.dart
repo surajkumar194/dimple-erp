@@ -96,13 +96,9 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
     );
   }
 
-  final List<String> _productCategories = [
-    'MDF',
-    'Kappa Box',
-    'Packaging',
-    'Rigid Box (unit 2)',
-    'Others',
-  ];
+  final List<String> _productCategories =['MDF', 'Kappa Box (Gora)', 'Packaging', 'Shagun Envelope', 'Rigid Box (unit 2 Hussainpura)', 'Others'];
+
+  
   final TextEditingController _otherSalesPersonController =
       TextEditingController();
   final List<String> _salesPersons = [
@@ -235,32 +231,38 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
           'Tray':
               hasValue(sections['trayDetail']) ||
               hasValue(sections['trayQty']) ||
-              hasValue(sections['trayPrice']),
+              hasValue(sections['trayPrice']) ||
+  hasValue(sections['tray']), 
 
           'Salophin':
               hasValue(sections['salophinDetail']) ||
               hasValue(sections['salophinQty']) ||
-              hasValue(sections['salophinPrice']),
+              hasValue(sections['salophinPrice']) ||
+  hasValue(sections['salophin']),
 
           'Box Cover':
               hasValue(sections['boxCoverDetail']) ||
               hasValue(sections['boxCoverQty']) ||
-              hasValue(sections['boxCoverPrice']),
+              hasValue(sections['boxCoverPrice']) 
+            ||  hasValue(sections['boxCover']),
 
           'Inner':
               hasValue(sections['innerDetail']) ||
               hasValue(sections['innerQty']) ||
-              hasValue(sections['innerPrice']),
+              hasValue(sections['innerPrice']) ||
+  hasValue(sections['inner']),
 
           'Bottom':
               hasValue(sections['bottomDetail']) ||
               hasValue(sections['bottomQty']) ||
-              hasValue(sections['bottomPrice']),
+              hasValue(sections['bottomPrice'])||
+  hasValue(sections['bottom']),
 
           'Die':
               hasValue(sections['dieDetail']) ||
               hasValue(sections['dieQty']) ||
-              hasValue(sections['diePrice']),
+              hasValue(sections['diePrice'])||
+  hasValue(sections['die']),
 
           'Others':
               hasValue(sections['otherDetail']) ||
@@ -270,8 +272,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
         },
 
         'trayDetailController': TextEditingController(
-          text: sections['trayDetail'] ?? '',
-        ),
+text: sections['trayDetail'] ?? sections['tray'] ?? '',        ),
         'trayQtyController': TextEditingController(
           text: sections['trayQty']?.toString() ?? '',
         ),
@@ -279,8 +280,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
           text: sections['trayPrice'] ?? '',
         ),
         'salophinDetailController': TextEditingController(
-          text: sections['salophinDetail'] ?? '',
-        ),
+text: sections['salophinDetail'] ?? sections['salophin'] ?? '',        ),
         'salophinQtyController': TextEditingController(
           text: sections['salophinQty']?.toString() ?? '',
         ),
@@ -288,8 +288,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
           text: sections['salophinPrice'] ?? '',
         ),
         'boxCoverDetailController': TextEditingController(
-          text: sections['boxCoverDetail'] ?? '',
-        ),
+text: sections['boxCoverDetail'] ?? sections['boxCover'] ?? '',        ),
         'boxCoverQtyController': TextEditingController(
           text: sections['boxCoverQty']?.toString() ?? '',
         ),
@@ -297,8 +296,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
           text: sections['boxCoverPrice'] ?? '',
         ),
         'innerDetailController': TextEditingController(
-          text: sections['innerDetail'] ?? '',
-        ),
+text: sections['innerDetail'] ?? sections['inner'] ?? '',        ),
         'innerQtyController': TextEditingController(
           text: sections['innerQty']?.toString() ?? '',
         ),
@@ -306,8 +304,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
           text: sections['innerPrice'] ?? '',
         ),
         'bottomDetailController': TextEditingController(
-          text: sections['bottomDetail'] ?? '',
-        ),
+text: sections['bottomDetail'] ?? sections['bottom'] ?? '',        ),
         'bottomQtyController': TextEditingController(
           text: sections['bottomQty']?.toString() ?? '',
         ),
@@ -909,47 +906,54 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
       setState(() => _isSaving = false);
     }
   }
+Future<void> _saveToUnit2IfRigid(
+  List<Map<String, dynamic>> productsData,
+) async {
+  try {
+    final rigidProducts = productsData.where((p) {
+      final cat = (p['productCategory'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
 
-  Future<void> _saveToUnit2IfRigid(
-    List<Map<String, dynamic>> productsData,
-  ) async {
-    try {
-      // check agar rigid box product hai
-      final rigidProducts = productsData
-          .where((p) => p['productCategory'] == 'Rigid Box (unit 2)')
-          .toList();
+      return cat.contains('rigid box');
+    }).toList();
 
-      if (rigidProducts.isEmpty) return;
-
-      // save / update unit2JobCards
-      await FirebaseFirestore.instance.collection('unit2JobCards').add({
-        //  'orderId': orderNo,
-        // 'salesOrderNo': orderNo,
-        'orderId': widget.orderId,
-        'isJobCardCreated': false, // ⭐ ADD THIS
-        'customerName': _customerController.text.trim(),
-        'companyName': _companyController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'location': _locationController.text.trim(),
-        'salesPerson': _selectedSalesPerson == 'Others'
-            ? _customSalesPerson
-            : _selectedSalesPerson,
-        'priority': _priority,
-        'deliveryDate': Timestamp.fromDate(_deliveryDate),
-        'createdDate': Timestamp.fromDate(_orderDate),
-
-        // ⭐ only rigid products
-        'products': rigidProducts,
-
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      print("✅ Saved to unit2JobCards");
-    } catch (e) {
-      print("🔥 unit2 save error: $e");
+    // ❌ agar rigid nahi hai → delete
+    if (rigidProducts.isEmpty) {
+      await FirebaseFirestore.instance
+          .collection('unit2JobCards')
+          .doc(widget.orderId)
+          .delete();
+      return;
     }
-  }
 
+    // ✅ same doc update (no duplicate)
+    await FirebaseFirestore.instance
+        .collection('unit2JobCards')
+        .doc(widget.orderId)
+        .set({
+      'orderId': widget.orderId,
+      'isJobCardCreated': false,
+      'customerName': _customerController.text.trim(),
+      'companyName': _companyController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'location': _locationController.text.trim(),
+      'salesPerson': _selectedSalesPerson == 'Others'
+          ? _customSalesPerson
+          : _selectedSalesPerson,
+      'priority': _priority,
+      'deliveryDate': Timestamp.fromDate(_deliveryDate),
+      'createdDate': Timestamp.fromDate(_orderDate),
+      'products': rigidProducts,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    print("✅ Unit2 synced properly");
+  } catch (e) {
+    print("🔥 unit2 save error: $e");
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1526,7 +1530,8 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
                 sectionSelected['Tray'] =
                     hasValue(sections['trayDetail']) ||
                     hasValue(sections['trayQty']) ||
-                    hasValue(sections['trayPrice']);
+                    hasValue(sections['trayPrice'])||
+    hasValue(sections['tray']);
                 (product['trayDetailController'] as TextEditingController)
                         .text =
                     sections['trayDetail'] ?? sections['tray'] ?? '';
@@ -1537,7 +1542,8 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
                 sectionSelected['Salophin'] =
                     hasValue(sections['salophinDetail']) ||
                     hasValue(sections['salophinQty']) ||
-                    hasValue(sections['salophinPrice']);
+                    hasValue(sections['salophinPrice']) ||
+                    hasValue(sections['salophin']);
                 (product['salophinDetailController'] as TextEditingController)
                         .text =
                     sections['salophinDetail'] ?? sections['salophin'] ?? '';
@@ -1550,7 +1556,8 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
                 sectionSelected['Box Cover'] =
                     hasValue(sections['boxCoverDetail']) ||
                     hasValue(sections['boxCoverQty']) ||
-                    hasValue(sections['boxCoverPrice']);
+                    hasValue(sections['boxCoverPrice']) ||
+                    hasValue(sections['boxCover']);
                 (product['boxCoverDetailController'] as TextEditingController)
                         .text =
                     sections['boxCoverDetail'] ?? sections['boxCover'] ?? '';
@@ -1563,7 +1570,8 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
                 sectionSelected['Inner'] =
                     hasValue(sections['innerDetail']) ||
                     hasValue(sections['innerQty']) ||
-                    hasValue(sections['innerPrice']);
+                    hasValue(sections['innerPrice']) ||
+                    hasValue(sections['inner']);
                 (product['innerDetailController'] as TextEditingController)
                         .text =
                     sections['innerDetail'] ?? sections['inner'] ?? '';
@@ -1575,7 +1583,8 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
                 sectionSelected['Bottom'] =
                     hasValue(sections['bottomDetail']) ||
                     hasValue(sections['bottomQty']) ||
-                    hasValue(sections['bottomPrice']);
+                    hasValue(sections['bottomPrice']) ||
+                    hasValue(sections['bottom']);
                 (product['bottomDetailController'] as TextEditingController)
                         .text =
                     sections['bottomDetail'] ?? sections['bottom'] ?? '';
@@ -1587,7 +1596,8 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
                 sectionSelected['Die'] =
                     hasValue(sections['dieDetail']) ||
                     hasValue(sections['dieQty']) ||
-                    hasValue(sections['diePrice']);
+                    hasValue(sections['diePrice']) ||
+                    hasValue(sections['die']);
                 (product['dieDetailController'] as TextEditingController).text =
                     sections['dieDetail'] ?? sections['die'] ?? '';
                 (product['dieQtyController'] as TextEditingController).text =
@@ -1598,6 +1608,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
                     hasValue(sections['otherDetail']) ||
                     hasValue(sections['otherQty']) ||
                     hasValue(sections['otherPrice']) ||
+                    hasValue(sections['other'])||
                     (data['customExtraSections'] as List?)?.isNotEmpty == true;
                 (product['otherDetailController'] as TextEditingController)
                         .text =

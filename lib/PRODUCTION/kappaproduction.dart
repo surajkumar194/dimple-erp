@@ -126,8 +126,10 @@ class _KappaProductionScreenState extends State<KappaProductionScreen>
       final all = rawList is List ? rawList : [];
 
       _kappaProducts = all
-          .where((p) => (p['productCategory'] ?? '') == 'Kappa Box')
-          .map<Map<String, dynamic>>((p) => Map<String, dynamic>.from(p))
+.where((p) =>
+  (p['productCategory'] == 'Kappa Box' ||
+   p['productCategory'] == 'Kappa Box (Gora)')
+)          .map<Map<String, dynamic>>((p) => Map<String, dynamic>.from(p))
           .toList();
     }
 
@@ -192,7 +194,8 @@ class _KappaProductionScreenState extends State<KappaProductionScreen>
       final allProducts = (_orderData['products'] as List? ?? []);
       int idx = 0;
       final merged = allProducts.map((p) {
-        if ((p['productCategory'] ?? '') == 'Kappa Box') return updated[idx++];
+        if (p['productCategory'] == 'Kappa Box' ||
+    p['productCategory'] == 'Kappa Box (Gora)') return updated[idx++];
         return p;
       }).toList();
 

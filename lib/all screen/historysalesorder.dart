@@ -2885,7 +2885,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     'Meena Bazar',
     'College Road',
   ];
-  final List<String> _productCategories = ['MDF', 'Kappa Box', 'Packaging', 'Rigid Box (unit 2)', 'Others'];
+  final List<String> _productCategories = ['MDF', 'Kappa Box (Gora)', 'Packaging', 'Shagun Envelope', 'Rigid Box (unit 2 Hussainpura)', 'Others'];
   final List<String> _salesPersons = [
     "Abhijit Sinha",
     "Komal Sir",
