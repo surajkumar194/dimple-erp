@@ -1,17 +1,19 @@
 import 'package:dimple_erp/AdminDashboard/ContractorReportScreen.dart';
 import 'package:dimple_erp/AdminDashboard/ContractorReportScreendetails.dart';
+import 'package:dimple_erp/AdminDashboard/client.dart';
+import 'package:dimple_erp/AdminDashboard/clienthistory.dart';
 import 'package:dimple_erp/AdminDashboard/constrctlist.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
-class contractordashboard extends StatefulWidget {
-  const contractordashboard({super.key});
+class Clientdashboard extends StatefulWidget {
+  const Clientdashboard({super.key});
 
   @override
-  State<contractordashboard> createState() => _contractordashboardState();
+  State<Clientdashboard> createState() => _ClientdashboardState();
 }
 
-class _contractordashboardState extends State<contractordashboard> {
+class _ClientdashboardState extends State<Clientdashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -43,7 +45,7 @@ class _contractordashboardState extends State<contractordashboard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "Contractor ",
+                "Customer Dashboard",
                 style: TextStyle(
                   fontSize: 18.sp,
                   fontWeight: FontWeight.bold,
@@ -52,7 +54,7 @@ class _contractordashboardState extends State<contractordashboard> {
               ),
               SizedBox(height: 0.5.h),
               Text(
-                "Manage Contractor",
+                "Manage Customer",
                 style: TextStyle(fontSize: 14.sp, color: Colors.white70),
               ),
             ],
@@ -90,45 +92,45 @@ class _contractordashboardState extends State<contractordashboard> {
           childAspectRatio: childAspectRatio,
           children: [
             _firestoreCard(
-              title: "Contractor production list",
-              subtitle: "Contractor Management",
+              title: "Add Customer Details",
+              subtitle: "Customer Management system",
               icon: Icons.description,
-              gradient: [Colors.teal.shade700, Colors.teal.shade500],
+              gradient: [const Color.fromARGB(255, 239, 138, 14), const Color.fromARGB(255, 239, 138, 14)],
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ConstructionProductionListScreen(),
+                    builder: (_) => ClientFormPage(),
                   ),
                 );
               },
             ),
 
             _firestoreCard(
-              title: "Contractor Pdf report",
-              subtitle: "Contractor pdf",
+              title: "Customer History",
+              subtitle: "Customer history details",
               icon: Icons.description,
-              gradient: [const Color.fromARGB(255, 39, 153, 233), const Color.fromARGB(255, 39, 153, 233)],
+              gradient: [const Color.fromARGB(255, 239, 29, 10), const Color.fromARGB(255, 239, 29, 10)],
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => ContractorPdfReportScreen()),
+                  MaterialPageRoute(builder: (_) => HistoryPage()),
                 );
               },
             ),
 
-            _firestoreCard(
-              title: "Contractor dashboard",
-              subtitle: "Contractor all details",
-              icon: Icons.description,
-              gradient: [const Color.fromARGB(255, 244, 78, 216), const Color.fromARGB(255, 244, 78, 216)],
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => ConstructionProductionDashboard()),
-                );
-              },
-            ),
+            // _firestoreCard(
+            //   title: "Contractor dashboard",
+            //   subtitle: "Contractor all details",
+            //   icon: Icons.description,
+            //   gradient: [const Color.fromARGB(255, 244, 78, 216), const Color.fromARGB(255, 244, 78, 216)],
+            //   onTap: () {
+            //     Navigator.push(
+            //       context,
+            //       MaterialPageRoute(builder: (_) => ConstructionProductionDashboard()),
+            //     );
+            //   },
+            // ),
           ],
         );
       },

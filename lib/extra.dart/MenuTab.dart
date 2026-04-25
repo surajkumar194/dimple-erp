@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
-
 class MenuTab extends StatefulWidget {
   final String title;
   final Map<String, List<String>> items;
@@ -15,14 +14,11 @@ class _MenuTabState extends State<MenuTab> {
   OverlayEntry? _mainMenuOverlay;
   OverlayEntry? _subMenuOverlay;
   final LayerLink _layerLink = LayerLink();
-
   String? _hoveredItem;
-
   void _showMainMenu() {
     _mainMenuOverlay = _buildMainMenu();
     Overlay.of(context).insert(_mainMenuOverlay!);
   }
-
   void _removeMainMenu() {
     _mainMenuOverlay?.remove();
     _mainMenuOverlay = null;
@@ -31,13 +27,11 @@ class _MenuTabState extends State<MenuTab> {
       _hoveredItem = null;
     });
   }
-
   void _showSubMenu(String parentItem, Offset offset) {
     _removeSubMenu();
     _subMenuOverlay = _buildSubMenu(parentItem, offset);
     Overlay.of(context).insert(_subMenuOverlay!);
   }
-
   void _removeSubMenu() {
     _subMenuOverlay?.remove();
     _subMenuOverlay = null;

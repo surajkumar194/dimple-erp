@@ -14,7 +14,8 @@ class JobCardHistoryTab extends StatefulWidget {
   State<JobCardHistoryTab> createState() => _JobCardHistoryTabState();
 }
 
-class _JobCardHistoryTabState extends State<JobCardHistoryTab>with SingleTickerProviderStateMixin {
+class _JobCardHistoryTabState extends State<JobCardHistoryTab>
+    with SingleTickerProviderStateMixin {
   String _searchText = '';
   DateTimeRange? _selectedDateRange;
   String _selectedDateFilter = 'All';
@@ -66,7 +67,6 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>with SingleTickerP
     bool hasDie = false;
     bool hasOther = false;
     bool hasExtra = false;
-
     for (var product in products) {
       final sections = product['sections'] as Map<String, dynamic>? ?? {};
       if (sections['trayDetail'] != null &&
@@ -109,14 +109,11 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>with SingleTickerP
     bool includeDie = hasDie;
     bool includeOther = hasOther;
     bool includeExtra = hasExtra;
-
-    // ✅ Individual Terms & Conditions checkboxes
     bool includePaymentTerms = true;
     bool include50PercentAdvance = false;
     bool includeFreightTerms = true;
     bool includePackingTerms = true;
     bool includeGSTTerms = true;
-
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -685,10 +682,9 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>with SingleTickerP
       );
       final jobNo = job['jobCardNumber'] ?? job['jobNo'] ?? 'N/A';
 
-      await Printing.sharePdf(
-        bytes: pdfData,
-        filename: 'ProformaInvoice_$jobNo.pdf',
-      );
+    await Printing.layoutPdf(
+  onLayout: (PdfPageFormat format) async => pdfData,
+);
 
       if (buttonContext.mounted) {
         ScaffoldMessenger.of(buttonContext).showSnackBar(
@@ -787,11 +783,11 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>with SingleTickerP
     }
 
     double grandTotal = 0;
-final double deliveryCharges =
-    double.tryParse(job['deliveryCharges']?.toString() ?? '0') ?? 0;
+    final double deliveryCharges =
+        double.tryParse(job['deliveryCharges']?.toString() ?? '0') ?? 0;
 
-final double advanceAmount =
-    double.tryParse(job['advanceAmount']?.toString() ?? '0') ?? 0;
+    final double advanceAmount =
+        double.tryParse(job['advanceAmount']?.toString() ?? '0') ?? 0;
 
     for (var product in productsWithImages) {
       // ✅ MAIN PRODUCT AMOUNT (ALWAYS ADD)
@@ -1000,6 +996,10 @@ final double advanceAmount =
                           ),
                         ),
                         _buildPdfRow('Status', job['status'] ?? 'Pending'),
+                        _buildPdfRow(
+                          'Dispatch Type',
+                          job['dispatchType'] ?? 'N/A',
+                        ),
                         _buildPdfRow('Order Location', job['unit'] ?? 'N/A'),
                       ],
                     ),
@@ -2188,7 +2188,29 @@ final double advanceAmount =
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 20),
+
+                                  const SizedBox(height: 12),
+
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildModernDetailBox(
+                                          icon: Icons.local_shipping,
+                                          label: 'Dispatch',
+                                          value:
+                                              (data['dispatchType'] ?? '')
+                                                  .toString()
+                                                  .isEmpty
+                                              ? 'N/A'
+                                              : data['dispatchType'],
+                                          colors: [
+                                            Colors.purple.shade400,
+                                            Colors.purple.shade700,
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                   Container(
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(

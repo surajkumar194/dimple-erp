@@ -2,12 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dimple_erp/ready stock/DispatchSweetsStockScreen.dart';
 import 'package:dimple_erp/ready stock/Readystock.dart';
 import 'package:dimple_erp/ready stock/storestock.dart';
+import 'package:dimple_erp/ready%20stock/kappa_transactions.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
-
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
@@ -73,21 +73,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         },
                       ),
 
-                      //    _firestoreCard(
-                      //   title: "Paper / Stock",
-                      //   subtitle: "Manage Paper Stock",
-                      //   icon: Icons.shopping_cart_checkout_sharp,
-                      //   gradient: [const Color.fromARGB(255, 87, 147, 232)!, const Color.fromARGB(255, 94, 143, 211)!],
-                      //   collection: "paper_stock_items",
-                      //   onTap: () {
-                      //     Navigator.push(
-                      //       context,
-                      //       MaterialPageRoute(
-                      //         builder: (_) => const PaperStockScreen(),
-                      //       ),
-                      //     );
-                      //   },
-                      // ),
                       _firestoreCard(
                         title: "Mdf / Boxes Ready Stock",
                         subtitle: "Ready stock dashboard",
@@ -115,6 +100,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const DispatchSweetsStockScreen(),
+                            ),
+                          );
+                        },
+                      ),
+
+                      _firestoreCard(
+                        title: "Paper /kappa Stock",
+                        subtitle: "Manage kappa Stock",
+                        icon: Icons.shopping_cart_checkout_sharp,
+                        gradient: [
+                          const Color.fromARGB(255, 87, 147, 232)!,
+                          const Color.fromARGB(255, 94, 143, 211)!,
+                        ],
+                        collection: "kappa_items",
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const KappaTransactions(),
                             ),
                           );
                         },

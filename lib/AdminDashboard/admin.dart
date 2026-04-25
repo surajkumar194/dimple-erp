@@ -156,7 +156,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-           Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -170,8 +170,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               SizedBox(height: 0.5.h),
               Text(
                 "Control your data",
-                style: TextStyle(fontSize: 14.sp,
-                  color: Colors.white70),
+                style: TextStyle(fontSize: 14.sp, color: Colors.white70),
               ),
             ],
           ),
@@ -180,7 +179,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ),
     );
   }
-
 
   // ================= ADMIN CARD =================
   Widget _adminCard({

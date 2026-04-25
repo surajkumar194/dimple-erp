@@ -666,14 +666,14 @@ class _KappaProductionScreenState extends State<KappaProductionScreen>
                     fontSize: 13)),
           ]),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 5),
         const Divider(height: 1),
-        const SizedBox(height: 14),
+        const SizedBox(height: 5),
         row('Product Name', sv(p['productName'])),
         row('Quantity', sv(p['quantity'])),
-        row('Price',
-            sv(p['price']).isNotEmpty ? '₹ ${sv(p['price'])}' : ''),
-        row('Size (L×H×W)', size),
+        // row('Price',
+        //     sv(p['price']).isNotEmpty ? '₹ ${sv(p['price'])}' : ''),
+        // row('Size (L×H×W)', size),
         row('Remarks', sv(p['remarks'])),
 
         if (chips.isNotEmpty) ...[
@@ -705,13 +705,13 @@ class _KappaProductionScreenState extends State<KappaProductionScreen>
         ],
 
         if (images.isNotEmpty) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 5),
           const Text('Reference Images:',
               style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey,
                   fontWeight: FontWeight.w600)),
-          const SizedBox(height: 10),
+          const SizedBox(height: 5),
           SizedBox(
             height: 90,
             child: ListView.separated(

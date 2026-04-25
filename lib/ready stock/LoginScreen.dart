@@ -74,7 +74,9 @@ class _LoginScreenState extends State<LoginScreen> {
             'master': true,
             'unit2 stock': true,
             'unit2 sales': true,
-            'Contractor': true,
+            'contractor': true,
+            'customer': true,
+            'paymentapproval': true,
           }),
         );
 
@@ -125,10 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const MainScreen()),
-    );
+  
 
     _showSnackBar("Login successful!");
 

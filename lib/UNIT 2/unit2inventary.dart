@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dimple_erp/UNIT%202/Unit2ProductSimpleScreen.dart';
 import 'package:flutter/material.dart';
-
 const _kGreen900 = Color(0xFF0A3D1F);
 const _kGreen700 = Color(0xFF1B6B3A);
 const _kGreen500 = Color(0xFF2ECC71);
@@ -9,29 +9,26 @@ const _kBg = Color(0xFFF3F7F4);
 const _kCard = Colors.white;
 const _kText = Color(0xFF1A2E22);
 const _kSubText = Color(0xFF6B8F71);
-
 class Unit2InventoryScreen extends StatefulWidget {
   const Unit2InventoryScreen({super.key});
   @override
   State<Unit2InventoryScreen> createState() => _Unit2InventoryScreenState();
 }
-
 class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
   final _searchCtrl = TextEditingController();
-final ValueNotifier<String> _query = ValueNotifier('');
+  final ValueNotifier<String> _query = ValueNotifier('');
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
   }
-@override
-void initState() {
-  super.initState();
-
-  _searchCtrl.addListener(() {
-    _query.value = _searchCtrl.text;
-  });
-}
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() {
+      _query.value = _searchCtrl.text;
+    });
+  }
 
   int _totalQty(List<QueryDocumentSnapshot> docs, String productName) {
     int total = 0;
@@ -87,6 +84,7 @@ void initState() {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             child: Row(
               children: [
+                // 🔙 BACK BUTTON
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Container(
@@ -102,7 +100,10 @@ void initState() {
                     ),
                   ),
                 ),
+
                 const SizedBox(width: 10),
+
+                // 🏷️ LOGO
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -111,7 +112,10 @@ void initState() {
                   ),
                   child: Image.asset('assets/dpl.png', height: 36),
                 ),
+
                 const SizedBox(width: 8),
+
+                // 📝 TITLE
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,6 +135,30 @@ void initState() {
                         style: TextStyle(fontSize: 12, color: Colors.white70),
                       ),
                     ],
+                  ),
+                ),
+
+                // 🕘 HISTORY ICON
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const Unit2ProductSimpleScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.history,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                 ),
               ],
@@ -157,224 +185,221 @@ void initState() {
 
           if (allDocs.isEmpty) return const _EmptyState();
 
-return ValueListenableBuilder<String>(
-  valueListenable: _query,
-  builder: (context, query, _) {
+          return ValueListenableBuilder<String>(
+            valueListenable: _query,
+            builder: (context, query, _) {
+              final hasQuery = query.trim().isNotEmpty;
 
-    final hasQuery = query.trim().isNotEmpty;
+              // Qty summary
+              final summaryQty = hasQuery
+                  ? _totalQty(allDocs, query.trim())
+                  : _grandTotal(allDocs);
+              final summaryLabel = hasQuery
+                  ? 'Total qty — "${query.trim()}"'
+                  : 'Total Qty (All Products)';
 
-          // Qty summary
-          final summaryQty = hasQuery
-              ? _totalQty(allDocs, query.trim())
-              : _grandTotal(allDocs);
-          final summaryLabel = hasQuery
-              ? 'Total qty — "${query.trim()}"'
-              : 'Total Qty (All Products)';
+              // Filter cards
+              final filteredDocs = hasQuery
+                  ? allDocs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final products = List<Map<String, dynamic>>.from(
+                        data['products'] ?? [],
+                      );
+                      return products.any(
+                        (p) => (p['productName'] ?? '')
+                            .toString()
+                            .toLowerCase()
+                            .contains(query.trim().toLowerCase()),
+                      );
+                    }).toList()
+                  : allDocs;
 
-          // Filter cards
-          final filteredDocs = hasQuery
-              ? allDocs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final products = List<Map<String, dynamic>>.from(
-                    data['products'] ?? [],
-                  );
-                  return products.any(
-                    (p) => (p['productName'] ?? '')
-                        .toString()
-                        .toLowerCase()
-                        .contains(query.trim().toLowerCase()),
-                  );
-                }).toList()
-              : allDocs;
-
-          return Column(
-            children: [
-              // ── Search bar ──────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 10,
-                      ),
-                    ],
-                  ),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      hintText: 'Search by product name...',
-                      hintStyle: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.search_rounded,
-                        color: _kGreen700.withOpacity(0.7),
-                      ),
-                      suffixIcon: query.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(
-                                Icons.clear,
-                                color: Colors.grey.shade400,
-                              ),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                              },
-                            )
-                          : null,
-                      border: OutlineInputBorder(
+              return Column(
+                children: [
+                  // ── Search bar ──────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 10,
+                          ),
+                        ],
                       ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'Search by product name...',
+                          hintStyle: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 14,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search_rounded,
+                            color: _kGreen700.withOpacity(0.7),
+                          ),
+                          suffixIcon: query.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(
+                                    Icons.clear,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                  },
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // ── Qty Summary banner ──────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 16,
-                        vertical: 14,
+                        vertical: 12,
                       ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── Qty Summary banner ──────────────────────────────
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: hasQuery
-                          ? [Colors.blue.shade700, Colors.blue.shade500]
-                          : [_kGreen900, _kGreen700],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (hasQuery ? Colors.blue : _kGreen700)
-                            .withOpacity(0.25),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: hasQuery
+                              ? [Colors.blue.shade700, Colors.blue.shade500]
+                              : [_kGreen900, _kGreen700],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        child: Icon(
-                          hasQuery
-                              ? Icons.filter_alt_rounded
-                              : Icons.inventory_2_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          summaryLabel,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (hasQuery ? Colors.blue : _kGreen700)
+                                .withOpacity(0.25),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
-                        ),
+                        ],
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.4),
-                          ),
-                        ),
-                        child: Text(
-                          '$summaryQty',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ── Cards list ──────────────────────────────────────
-              Expanded(
-                child: filteredDocs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.search_off_rounded,
-                              size: 56,
-                              color: Colors.grey.shade300,
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No results for "$query"',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
+                            child: Icon(
+                              hasQuery
+                                  ? Icons.filter_alt_rounded
+                                  : Icons.inventory_2_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              summaryLabel,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 32),
-                        itemCount: filteredDocs.length,
-                        itemBuilder: (context, index) {
-                          final data =
-                              filteredDocs[index].data()
-                                  as Map<String, dynamic>;
-                          return _InventoryCard(
-                            data: data,
-                            docId: filteredDocs[index].id,
-                          );
-                        },
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.4),
+                              ),
+                            ),
+                            child: Text(
+                              '$summaryQty',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-              ),
-            ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // ── Cards list ──────────────────────────────────────
+                  Expanded(
+                    child: filteredDocs.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.search_off_rounded,
+                                  size: 56,
+                                  color: Colors.grey.shade300,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No results for "$query"',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade500,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 32),
+                            itemCount: filteredDocs.length,
+                            itemBuilder: (context, index) {
+                              final data =
+                                  filteredDocs[index].data()
+                                      as Map<String, dynamic>;
+                              return _InventoryCard(
+                                data: data,
+                                docId: filteredDocs[index].id,
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              );
+            },
           );
         },
-      );
-    },
-  ),
-);
+      ),
+    );
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Helpers
-// ─────────────────────────────────────────────────────────────
+
 class _FullLoader extends StatelessWidget {
   const _FullLoader();
   @override
@@ -422,9 +447,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Main Inventory Card
-// ─────────────────────────────────────────────────────────────
+
 class _InventoryCard extends StatefulWidget {
   final Map<String, dynamic> data;
   final String docId;
@@ -432,7 +455,6 @@ class _InventoryCard extends StatefulWidget {
   @override
   State<_InventoryCard> createState() => _InventoryCardState();
 }
-
 class _InventoryCardState extends State<_InventoryCard> {
   int? expandedIndex;
 
@@ -441,11 +463,6 @@ class _InventoryCardState extends State<_InventoryCard> {
     final products = List<Map<String, dynamic>>.from(
       widget.data['products'] ?? [],
     );
-    final parts = Map<String, dynamic>.from(widget.data['parts'] ?? {});
-    final topPart = Map<String, dynamic>.from(parts['topPart'] ?? {});
-    final trayPart = Map<String, dynamic>.from(parts['tray'] ?? {});
-    final bottomPart = Map<String, dynamic>.from(parts['bottomPart'] ?? {});
-
     final jobCardNumber = widget.data['jobCardNumber'] ?? '';
     final companyName = widget.data['companyName'] ?? '';
     final customerName = widget.data['customerName'] ?? '';
@@ -474,7 +491,6 @@ class _InventoryCardState extends State<_InventoryCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Gradient Header ──────────────────────────────────
           Container(
             padding: const EdgeInsets.all(16),
             decoration: const BoxDecoration(
@@ -526,18 +542,7 @@ class _InventoryCardState extends State<_InventoryCard> {
             ),
           ),
 
-          // ── Products + Parts Info Table ──────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-            child: _ProductPartsTable(
-              products: products,
-              topPart: topPart,
-              trayPart: trayPart,
-              bottomPart: bottomPart,
-            ),
-          ),
-
-          // ── Process Checklist (expandable per product) ────────
+     
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -679,321 +684,6 @@ class _InventoryCardState extends State<_InventoryCard> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Product Table  —  Product | Size | Top Part | Qty | Image
-// ─────────────────────────────────────────────────────────────
-class _ProductPartsTable extends StatelessWidget {
-  final List<Map<String, dynamic>> products;
-  final Map<String, dynamic> topPart;
-  final Map<String, dynamic> trayPart;
-  final Map<String, dynamic> bottomPart;
-
-  const _ProductPartsTable({
-    required this.products,
-    required this.topPart,
-    required this.trayPart,
-    required this.bottomPart,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Top part label: size + material combined
-    final topSize = topPart['size']?.toString() ?? '';
-    final topMat = topPart['material']?.toString() ?? '';
-    final topLabel = [topSize, topMat].where((s) => s.isNotEmpty).join(' • ');
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header bar ──────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: _kGreen700.withOpacity(0.07),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(14),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.table_chart_rounded,
-                  size: 15,
-                  color: _kGreen700,
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Product Details',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                    color: _kGreen700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Table ───────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-            child: Column(
-              children: [
-                // Column headers
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _kGreen700.withOpacity(0.09),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: const Row(
-                    children: [
-                      Expanded(flex: 4, child: _HCell('Product')),
-                      Expanded(flex: 3, child: _HCell('Size')),
-                      Expanded(flex: 3, child: _HCell('Top Part')),
-                      Expanded(flex: 2, child: _HCell('Qty')),
-                      SizedBox(width: 48, child: _HCell('Image', center: true)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                // One row per product
-                ...products.asMap().entries.map(
-                  (e) => _row(context, e.key, e.value, topLabel),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _row(
-    BuildContext ctx,
-    int i,
-    Map<String, dynamic> p,
-    String topLabel,
-  ) {
-    final name = p['productName']?.toString() ?? '-';
-
-    // Size from L×H×W
-    final l = p['length']?.toString().trim() ?? '';
-    final h = p['height']?.toString().trim() ?? '';
-    final w = p['width']?.toString().trim() ?? '';
-    final sp = [l, h, w].where((s) => s.isNotEmpty && s != '0').toList();
-    final sizeStr = sp.isNotEmpty
-        ? sp.join('×')
-        : (p['size']?.toString() ?? '-');
-
-    // Quantity directly from product
-    final qty = p['quantity']?.toString() ?? '-';
-
-    // First image from product
-    final imgs =
-        (p['images'] as List?)
-            ?.map((e) => e.toString())
-            .where((e) => e.isNotEmpty)
-            .toList() ??
-        [];
-    final firstImg = imgs.isNotEmpty ? imgs.first : null;
-
-    final isEven = i % 2 == 0;
-
-    return Container(
-      margin: const EdgeInsets.only(top: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: isEven ? Colors.white : _kGreen100.withOpacity(0.45),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Product name
-          Expanded(
-            flex: 4,
-            child: Text(
-              name,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: _kText,
-              ),
-            ),
-          ),
-          // Size
-          Expanded(
-            flex: 3,
-            child: Text(
-              sizeStr,
-              style: const TextStyle(
-                fontSize: 12,
-                color: _kSubText,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          // Top Part
-          Expanded(
-            flex: 3,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.withOpacity(0.3)),
-              ),
-              child: Text(
-                topLabel.isNotEmpty ? topLabel : '-',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.blue,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          // Qty
-          Expanded(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              decoration: BoxDecoration(
-                color: _kGreen700.withOpacity(0.09),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                qty,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: _kGreen700,
-                ),
-              ),
-            ),
-          ),
-          // Image
-          SizedBox(
-            width: 48,
-            child: Center(
-              child: firstImg != null
-                  ? GestureDetector(
-                      onTap: () => _openImages(ctx, imgs),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          firstImg,
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Icon(
-                            Icons.broken_image_rounded,
-                            size: 24,
-                            color: Colors.grey.shade400,
-                          ),
-                        ),
-                      ),
-                    )
-                  : Icon(
-                      Icons.image_not_supported_rounded,
-                      size: 22,
-                      color: Colors.grey.shade300,
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openImages(BuildContext context, List<String> urls) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          children: [
-            PageView(
-              children: urls
-                  .map(
-                    (url) => InteractiveViewer(
-                      minScale: 1,
-                      maxScale: 4,
-                      child: Center(
-                        child: Image.network(url, fit: BoxFit.contain),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-            Positioned(
-              top: 40,
-              right: 16,
-              child: GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.close_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Const header cell ──────────────────────────────────────────
-class _HCell extends StatelessWidget {
-  final String text;
-  final bool center;
-  const _HCell(this.text, {this.center = false});
-  @override
-  Widget build(BuildContext context) => Text(
-    text,
-    textAlign: center ? TextAlign.center : TextAlign.left,
-    style: const TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.w800,
-      color: _kGreen700,
-    ),
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-//  Status Badge
-// ─────────────────────────────────────────────────────────────
 class _StatusBadge extends StatelessWidget {
   final String label;
   final Color color;
@@ -1031,9 +721,7 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Process Checklist (unchanged logic, same as original)
-// ─────────────────────────────────────────────────────────────
+
 class _ProcessChecklist extends StatefulWidget {
   final String jobCardId;
   final int productQty;
@@ -1087,15 +775,12 @@ class _ProcessChecklistState extends State<_ProcessChecklist> {
         bool trayDone = processStatus['tray']?['done'] == true;
         bool grovingDone = processStatus['groving']?['done'] == true;
         bool pvcDone = processStatus['pvc/butter']?['done'] == true;
-        bool allDone =
-            kappaDone && labelDone && trayDone && grovingDone && pvcDone;
-
+        bool allDone =kappaDone && labelDone && trayDone && grovingDone && pvcDone;
         bool kappaEnabled = !isAlreadyDispatched;
         bool labelEnabled = kappaDone && !isAlreadyDispatched;
         bool trayEnabled = labelDone && !isAlreadyDispatched;
         bool grovingEnabled = trayDone && !isAlreadyDispatched;
         bool pvcEnabled = grovingDone && !isAlreadyDispatched;
-
         int trayQty = labelPassQty > 0 ? labelPassQty : widget.productQty;
         int grovingQty =
             int.tryParse(processStatus['tray']?['qty']?.toString() ?? '') ??
@@ -1103,7 +788,6 @@ class _ProcessChecklistState extends State<_ProcessChecklist> {
         int pvcQty =
             int.tryParse(processStatus['groving']?['qty']?.toString() ?? '') ??
             grovingQty;
-
         int doneCount = [
           kappaDone,
           labelDone,
@@ -1369,9 +1053,7 @@ class _ProcessChecklistState extends State<_ProcessChecklist> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Label Split Row (unchanged)
-// ─────────────────────────────────────────────────────────────
+
 class _LabelSplitRow extends StatefulWidget {
   final bool enabled;
   final bool isAlreadyDispatched;
@@ -1719,9 +1401,6 @@ class _LabelSplitRowState extends State<_LabelSplitRow> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Label Sub Card (unchanged)
-// ─────────────────────────────────────────────────────────────
 class _LabelSubCard extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -1963,9 +1642,7 @@ class _LabelSubCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Summary Chip
-// ─────────────────────────────────────────────────────────────
+
 class _SummaryChip extends StatelessWidget {
   final String label;
   final String value;
@@ -2000,9 +1677,6 @@ class _SummaryChip extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Process Row (unchanged)
-// ─────────────────────────────────────────────────────────────
 class _ProcessRow extends StatelessWidget {
   final String label;
   final IconData icon;

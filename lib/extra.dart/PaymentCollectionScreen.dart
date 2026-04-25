@@ -15,6 +15,7 @@ class _PaymentCollectionScreenState extends State<PaymentCollectionScreen>
     with TickerProviderStateMixin {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+
   void _receivePayment(String docId, Map<String, dynamic> data) {
     final amountController = TextEditingController();
     final animCtrl = AnimationController(
@@ -33,67 +34,99 @@ class _PaymentCollectionScreenState extends State<PaymentCollectionScreen>
             subtitle: data['customerName'] ?? '',
             orderNo: data['salesOrderNo'] ?? '',
             amountController: amountController,
-
             total: (data['grandTotal'] ?? 0).toDouble(),
             advance: (data['advanceAmount'] ?? 0).toDouble(),
             paid: (data['paidAmount'] ?? 0).toDouble(),
-
             confirmLabel: "Confirm Payment",
             confirmColors: [Colors.green.shade400, Colors.green.shade700],
-            onConfirm: (String receivedBy, String? customName) async {
-              final amount = double.tryParse(amountController.text) ?? 0;
-              if (amount <= 0) return;
-              final total = (data['grandTotal'] ?? 0).toDouble();
-              final advance = (data['advanceAmount'] ?? 0).toDouble();
-              final paid = (data['paidAmount'] ?? 0).toDouble();
-              final newPaid = paid + amount;
+            onConfirm:
+                (
+                  String receivedBy,
+                  String? customName,
+                  double extraAmount,
+                  String remark,
+                ) async {
+                  try {
+  final amount = double.tryParse(amountController.text) ?? 0;
 
-              if (newPaid > total) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Payment cannot exceed total amount"),
-                  ),
-                );
-                return;
-              }
+  if (amount <= 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Enter valid amount")),
+    );
+    return;
+  }
 
-              final pending = total - newPaid;
-              final now = DateTime.now();
-              final formattedDateTime = DateFormat(
-                'dd MMM yyyy, hh:mm a',
-              ).format(now);
+  final total = (data['grandTotal'] ?? 0).toDouble();
+  final paid = (data['paidAmount'] ?? 0).toDouble();
+final advance = (data['advanceAmount'] ?? 0).toDouble();
+  // ✅ IMPORTANT CHANGE
+final finalAmount = advance + amount + extraAmount;
+  final newPaid = paid + amount;
 
-              final String finalReceivedBy = receivedBy == 'Other'
-                  ? (customName ?? 'Other')
-                  : receivedBy;
-              await FirebaseFirestore.instance.collection("payments").add({
-                "orderId": docId,
-                "salesOrderNo": data['salesOrderNo'],
-                "customerName": data['customerName'],
-                "location": data['unit'],
-                "amount": amount,
-                "receivedBy": finalReceivedBy,
-                "receivedAt": formattedDateTime,
-                "createdAt": FieldValue.serverTimestamp(),
-              });
-              await FirebaseFirestore.instance
-                  .collection("orders")
-                  .doc(docId)
-                  .update({
-                    "paidAmount": newPaid,
-                    "pendingAmount": pending,
-                    "lastReceivedBy": finalReceivedBy,
-                    "lastReceivedAt": formattedDateTime,
-                  });
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
+  // ✅ validation
+  if (newPaid > total) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Payment cannot exceed total amount")),
+    );
+    return;
+  }
+
+  final pending = total - newPaid;
+  final now = DateTime.now();
+  final formattedDateTime =
+      DateFormat('dd MMM yyyy, hh:mm a').format(now);
+
+  final String finalReceivedBy = receivedBy == 'Other'
+      ? (customName ?? 'Other')
+      : receivedBy;
+
+  print("Saving payment...");
+
+  // ✅ SAVE PAYMENT
+  await FirebaseFirestore.instance.collection("payments").add({
+    "orderId": docId,
+    "salesOrderNo": data['salesOrderNo'],
+    "customerName": data['customerName'],
+    "location": data['unit'],
+    "advanceAmount": advance, 
+    "amount": amount,
+    "extraAmount": extraAmount, // sirf store hoga
+    "finalAmount": finalAmount,
+    "remark": remark,
+    "receivedBy": finalReceivedBy,
+    "receivedAt": formattedDateTime,
+    "createdAt": FieldValue.serverTimestamp(),
+  });
+
+  // ✅ UPDATE ORDER
+  await FirebaseFirestore.instance
+      .collection("orders")
+      .doc(docId)
+      .update({
+    "paidAmount": newPaid,
+    "pendingAmount": pending,
+    "lastReceivedBy": finalReceivedBy,
+    "lastReceivedAt": formattedDateTime,
+  });
+
+  print("Saved successfully ✅");
+
+  if (ctx.mounted) Navigator.pop(ctx);
+
+} catch (e) {
+  print("Error: $e");
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text("Error: $e")),
+  );
+}
+                },
           ),
         );
       },
     );
   }
 
-  // ─── Edit Payment Dialog ─────────────────────────────────────────────────────
   void _editPayment(String docId, Map<String, dynamic> data) {
     final animCtrl = AnimationController(
       vsync: this,
@@ -113,7 +146,6 @@ class _PaymentCollectionScreenState extends State<PaymentCollectionScreen>
     );
   }
 
-  // ─── Build ───────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -207,7 +239,6 @@ class _PaymentCollectionScreenState extends State<PaymentCollectionScreen>
     );
   }
 
-  // ─── Search Bar ───────────────────────────────────────────────────────────────
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -274,7 +305,6 @@ class _PaymentCollectionScreenState extends State<PaymentCollectionScreen>
     );
   }
 
-  // ─── Order List ───────────────────────────────────────────────────────────────
   Widget _buildOrderList() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -457,7 +487,6 @@ class _OrderCardState extends State<_OrderCard>
     final paid = (data['paidAmount'] ?? 0).toDouble();
     final pending = total - paid;
 
-    // ── Last received info ─────────────────────────────────────────────────────
     final lastReceivedBy = data['lastReceivedBy'] ?? '';
     final lastReceivedAt = data['lastReceivedAt'] ?? '';
 
@@ -511,13 +540,12 @@ class _OrderCardState extends State<_OrderCard>
           ),
           child: Column(
             children: [
-              // ── Top Row ───────────────────────────────────────────────────
+              // ── Top Row
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Avatar
                     Container(
                       width: 48,
                       height: 48,
@@ -551,7 +579,6 @@ class _OrderCardState extends State<_OrderCard>
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Name & Order No
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -602,7 +629,6 @@ class _OrderCardState extends State<_OrderCard>
                         ],
                       ),
                     ),
-                    // Status Badge
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -633,7 +659,7 @@ class _OrderCardState extends State<_OrderCard>
                 ),
               ),
 
-              // ── Progress Bar ──────────────────────────────────────────────
+              // ── Progress Bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
@@ -682,7 +708,7 @@ class _OrderCardState extends State<_OrderCard>
 
               const SizedBox(height: 14),
 
-              // ── Amount Chips ──────────────────────────────────────────────
+              // ── Amount Chips
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -719,7 +745,7 @@ class _OrderCardState extends State<_OrderCard>
                 ),
               ),
 
-              // ── Last Received By Info ─────────────────────────────────────
+              // ── Last Received By
               if (lastReceivedBy.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Padding(
@@ -795,7 +821,6 @@ class _OrderCardState extends State<_OrderCard>
 
               const SizedBox(height: 14),
 
-              // ── Divider ───────────────────────────────────────────────────
               Container(
                 height: 1,
                 decoration: BoxDecoration(
@@ -809,7 +834,7 @@ class _OrderCardState extends State<_OrderCard>
                 ),
               ),
 
-              // ── Action Buttons ────────────────────────────────────────────
+              // ── Action Buttons
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -817,7 +842,6 @@ class _OrderCardState extends State<_OrderCard>
                 ),
                 child: Row(
                   children: [
-                    // Edit Button
                     Expanded(
                       child: GestureDetector(
                         onTap: widget.onEdit,
@@ -843,7 +867,7 @@ class _OrderCardState extends State<_OrderCard>
                                 color: Colors.grey.shade600,
                                 size: 15,
                               ),
-                             SizedBox(width: 6),
+                              const SizedBox(width: 6),
                               Text(
                                 "Advance / Edit",
                                 style: TextStyle(
@@ -858,7 +882,6 @@ class _OrderCardState extends State<_OrderCard>
                       ),
                     ),
                     const SizedBox(width: 10),
-                    // Receive Button
                     Expanded(
                       flex: 2,
                       child: GestureDetector(
@@ -986,10 +1009,8 @@ class _AmountChip extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PAYMENT DIALOG  (with Received By + Date/Time)
+// RECEIVER NAMES
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// Names list
 const List<String> kReceiverNames = [
   'Pankaj Sir',
   'Komal Sir',
@@ -998,6 +1019,9 @@ const List<String> kReceiverNames = [
   'Other',
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PAYMENT DIALOG — Receive Payment with Extra Amount & Final Amount preview
+// ═══════════════════════════════════════════════════════════════════════════════
 class _PaymentDialog extends StatefulWidget {
   final String title;
   final String subtitle;
@@ -1008,7 +1032,13 @@ class _PaymentDialog extends StatefulWidget {
   final TextEditingController amountController;
   final String confirmLabel;
   final List<Color> confirmColors;
-  final Future<void> Function(String receivedBy, String? customName) onConfirm;
+  final Future<void> Function(
+    String receivedBy,
+    String? customName,
+    double extraAmount,
+    String remark,
+  )
+  onConfirm;
 
   const _PaymentDialog({
     required this.title,
@@ -1030,363 +1060,424 @@ class _PaymentDialog extends StatefulWidget {
 class _PaymentDialogState extends State<_PaymentDialog> {
   String _selectedReceiver = kReceiverNames[0];
   final TextEditingController _otherNameController = TextEditingController();
+  final TextEditingController _remarkCtrl = TextEditingController();
+  final TextEditingController _extraCtrl = TextEditingController();
   bool _isLoading = false;
-  // Live date-time display
   String get _nowFormatted =>
       DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
+
+  // Live final amount calculation
+  double get _enteredAmount =>
+      double.tryParse(widget.amountController.text) ?? 0;
+  double get _extraAmount => double.tryParse(_extraCtrl.text) ?? 0;
+  double get _finalAmount => _enteredAmount + _extraAmount;
 
   @override
   void dispose() {
     _otherNameController.dispose();
+    _remarkCtrl.dispose();
+    _extraCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-      final pending = (widget.total - widget.paid).clamp(0, double.infinity);
+    final pending = (widget.total - widget.paid)
+        .clamp(0, double.infinity)
+        .toDouble();
 
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.white,
-              Colors.purple.shade50.withOpacity(0.4),
-              Colors.blue.shade50.withOpacity(0.3),
+      child: SingleChildScrollView(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.white,
+                Colors.purple.shade50.withOpacity(0.4),
+                Colors.blue.shade50.withOpacity(0.3),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.9),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.purple.withOpacity(0.2),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
             ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withOpacity(0.9), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.purple.withOpacity(0.2),
-              blurRadius: 30,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Header ──────────────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.purple.shade50.withOpacity(0.5),
-                    Colors.blue.shade50.withOpacity(0.3),
-                  ],
-                ),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: widget.confirmColors),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: widget.confirmColors[0].withOpacity(0.4),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ShaderMask(
-                          shaderCallback: (bounds) => LinearGradient(
-                            colors: [
-                              Colors.purple.shade700,
-                              Colors.blue.shade700,
-                            ],
-                          ).createShader(bounds),
-                          child: Text(
-                            widget.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          "${widget.subtitle} · ${widget.orderNo}",
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.close_rounded,
-                        color: Colors.grey.shade600,
-                        size: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Body ─────────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Grand Total"),
-                            Text("₹${widget.total.toStringAsFixed(0)}"),
-                          ],
-                        ),
-                        // Row(
-                        //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        //   children: [
-                        //     const Text("Advance"),
-                        //     Text("₹${widget.advance.toStringAsFixed(0)}"),
-                        //   ],
-                        // ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Advance"),
-                            Text("₹${widget.paid.toStringAsFixed(0)}"),
-                          ],
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Pending"),
-                            Text("₹${pending.toStringAsFixed(0)}"),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-                  Text(
-                    "Amount (₹)",
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                 TextField(
-  controller: widget.amountController,
-  keyboardType: TextInputType.number,
-  inputFormatters: [
-    FilteringTextInputFormatter.digitsOnly,
-  ],
-  onChanged: (val) {
-    final entered = double.tryParse(val) ?? 0;
-    final pending = widget.total - widget.paid;
-
-    if (entered > pending) {
-      widget.amountController.text = pending.toStringAsFixed(0);
-
-      widget.amountController.selection = TextSelection.fromPosition(
-        TextPosition(offset: widget.amountController.text.length),
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Amount cannot exceed pending payment"),
-        ),
-      );
-    }
-  },
-                    style: TextStyle(
-                      color: Colors.grey.shade800,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: "0",
-                      hintStyle: TextStyle(
-                        color: Colors.grey.shade300,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      prefixText: "₹ ",
-                      prefixStyle: TextStyle(
-                        color: widget.confirmColors[0],
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                          color: widget.confirmColors[0],
-                          width: 1.5,
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  // ── Received By Label ────────────────────────────────────
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: widget.confirmColors,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.person_outline_rounded,
-                          color: Colors.white,
-                          size: 13,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        "Received By",
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Header
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.purple.shade50.withOpacity(0.5),
+                      Colors.blue.shade50.withOpacity(0.3),
                     ],
                   ),
-                  const SizedBox(height: 10),
-
-                  // ── Name Chips (Wrap) ────────────────────────────────────
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: kReceiverNames.map((name) {
-                      final bool isSelected = _selectedReceiver == name;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedReceiver = name),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: isSelected
-                                ? LinearGradient(colors: widget.confirmColors)
-                                : null,
-                            color: isSelected ? null : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected
-                                  ? Colors.transparent
-                                  : Colors.grey.shade300,
-                              width: 1.2,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: widget.confirmColors[0]
-                                          .withOpacity(0.35),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                          child: Text(
-                            name,
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Colors.white
-                                  : Colors.grey.shade600,
-                              fontSize: 12,
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
                   ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: widget.confirmColors),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: widget.confirmColors[0].withOpacity(0.4),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ShaderMask(
+                            shaderCallback: (bounds) => LinearGradient(
+                              colors: [
+                                Colors.purple.shade700,
+                                Colors.blue.shade700,
+                              ],
+                            ).createShader(bounds),
+                            child: Text(
+                              widget.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            "${widget.subtitle} · ${widget.orderNo}",
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: Colors.grey.shade600,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-                  // ── "Other" custom name input ────────────────────────────
-                  if (_selectedReceiver == 'Other') ...[
-                    const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Summary box
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        children: [
+                          _summaryRow(
+                            "Grand Total",
+                            "₹${widget.total.toStringAsFixed(0)}",
+                          ),
+                          _summaryRow(
+                            "Already Paid",
+                            "₹${widget.paid.toStringAsFixed(0)}",
+                          ),
+                          _summaryRow(
+                            "Pending",
+                            "₹${pending.toStringAsFixed(0)}",
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── Main Amount field
+                    Text(
+                      "Amount (₹)",
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     TextField(
-                      controller: _otherNameController,
+                      controller: widget.amountController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (val) {
+                        final entered = double.tryParse(val) ?? 0;
+                        final pendingAmt = widget.total - widget.paid;
+                        if (entered > pendingAmt) {
+                          widget.amountController.text = pendingAmt
+                              .toStringAsFixed(0);
+                          widget.amountController.selection =
+                              TextSelection.fromPosition(
+                                TextPosition(
+                                  offset: widget.amountController.text.length,
+                                ),
+                              );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(backgroundColor: Colors.white,
+                              content: Text( 
+                                "Amount cannot exceed pending payment",
+                              ),
+                            ),
+                          );
+                        }
+                        setState(() {});
+                      },
                       style: TextStyle(
                         color: Colors.grey.shade800,
-                        fontSize: 14,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
                       ),
                       decoration: InputDecoration(
-                        hintText: "Enter name...",
+                        hintText: "0",
                         hintStyle: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 14,
+                          color: Colors.grey.shade300,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
-                        prefixIcon: Icon(
-                          Icons.edit_outlined,
-                          color: Colors.grey.shade400,
-                          size: 18,
+                        prefixText: "₹ ",
+                        prefixStyle: TextStyle(
+                          color: widget.confirmColors[0],
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: widget.confirmColors[0],
+                            width: 1.5,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── Extra Amount field
+                    Text(
+                      "Extra Amount (Optional)",
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _extraCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (_) => setState(() {}),
+                      style: TextStyle(
+                        color: Colors.grey.shade800,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: "0",
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade300,
+                          fontSize: 20,
+                        ),
+                        prefixText: "₹ ",
+                        prefixStyle: TextStyle(
+                          color: Colors.orange.shade400,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: Colors.orange.shade400,
+                            width: 1.5,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // ── Final Amount Preview Box (live update)
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.green.shade400.withOpacity(0.12),
+                            Colors.teal.shade400.withOpacity(0.08),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.green.shade300,
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.green.shade400,
+                                      Colors.teal.shade500,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.calculate_outlined,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Final Amount",
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    _extraAmount > 0
+                                        ? "₹${_enteredAmount.toStringAsFixed(0)} + ₹${_extraAmount.toStringAsFixed(0)}"
+                                        : "Amount entered above",
+                                    style: TextStyle(
+                                      color: const Color.fromARGB(255, 14, 32, 237),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          ShaderMask(
+                            shaderCallback: (bounds) => LinearGradient(
+                              colors: [
+                                const Color.fromARGB(255, 245, 2, 2),
+                                const Color.fromARGB(255, 251, 1, 1),
+                              ],
+                            ).createShader(bounds),
+                            child: Text(
+                              "₹${_finalAmount.toStringAsFixed(0)}",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── Remark field
+                    Text(
+                      "Remark",
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _remarkCtrl,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        hintText: "Enter remark...",
                         filled: true,
                         fillColor: Colors.white,
                         border: OutlineInputBorder(
@@ -1404,163 +1495,313 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                             width: 1.5,
                           ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
                       ),
                     ),
-                  ],
 
-                  const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
-                  // ── Date-Time Display ────────────────────────────────────
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200, width: 1),
-                    ),
-                    child: Row(
+                    // ── Received By
+                    Row(
                       children: [
-                        Icon(
-                          Icons.calendar_today_outlined,
-                          color: widget.confirmColors[0],
-                          size: 15,
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: widget.confirmColors,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.person_outline_rounded,
+                            color: Colors.white,
+                            size: 13,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          "Date & Time: ",
+                          "Received By",
                           style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
-                          ),
-                        ),
-                        Text(
-                          _nowFormatted,
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade600,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // ── Buttons ──────────────────────────────────────────────
-                  Row(
-                    children: [
-                      // Cancel
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => Navigator.pop(context),
-                          child: Container(
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: Colors.grey.shade300),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: kReceiverNames.map((name) {
+                        final bool isSelected = _selectedReceiver == name;
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedReceiver = name),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
                             ),
-                            child: Center(
-                              child: Text(
-                                "Cancel",
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
+                            decoration: BoxDecoration(
+                              gradient: isSelected
+                                  ? LinearGradient(colors: widget.confirmColors)
+                                  : null,
+                              color: isSelected ? null : Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.transparent
+                                    : Colors.grey.shade300,
+                                width: 1.2,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: widget.confirmColors[0]
+                                            .withOpacity(0.35),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: Text(
+                              name,
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.grey.shade600,
+                                fontSize: 12,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+
+                    if (_selectedReceiver == 'Other') ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _otherNameController,
+                        style: TextStyle(
+                          color: Colors.grey.shade800,
+                          fontSize: 14,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: "Enter name...",
+                          hintStyle: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 14,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.edit_outlined,
+                            color: Colors.grey.shade400,
+                            size: 18,
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: widget.confirmColors[0],
+                              width: 1.5,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 14),
+
+                    // ── Date-Time
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.grey.shade200,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            color: widget.confirmColors[0],
+                            size: 15,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Date & Time: ",
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            _nowFormatted,
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ── Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  "Cancel",
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Confirm
-                      Expanded(
-                        flex: 2,
-                        child: GestureDetector(
-                          onTap: _isLoading
-                              ? null
-                              : () async {
-                                  setState(() => _isLoading = true);
-                                  await widget.onConfirm(
-                                    _selectedReceiver,
-                                    _selectedReceiver == 'Other'
-                                        ? _otherNameController.text.trim()
-                                        : null,
-                                  );
-                                  if (mounted) {
-                                    setState(() => _isLoading = false);
-                                  }
-                                },
-                          child: Container(
-                            height: 50,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: _isLoading
-                                    ? [
-                                        Colors.grey.shade400,
-                                        Colors.grey.shade500,
-                                      ]
-                                    : widget.confirmColors,
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: GestureDetector(
+                            onTap: _isLoading
+                                ? null
+                                : () async {
+                                    setState(() => _isLoading = true);
+                                    await widget.onConfirm(
+                                      _selectedReceiver,
+                                      _selectedReceiver == 'Other'
+                                          ? _otherNameController.text.trim()
+                                          : null,
+                                      _extraAmount,
+                                      _remarkCtrl.text.trim(),
+                                    );
+                                    if (mounted) {
+                                      setState(() => _isLoading = false);
+                                    }
+                                  },
+                            child: Container(
+                              height: 50,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: _isLoading
+                                      ? [
+                                          Colors.grey.shade400,
+                                          Colors.grey.shade500,
+                                        ]
+                                      : widget.confirmColors,
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: _isLoading
+                                    ? []
+                                    : [
+                                        BoxShadow(
+                                          color: widget.confirmColors[0]
+                                              .withOpacity(0.4),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
                               ),
-                              borderRadius: BorderRadius.circular(14),
-                              boxShadow: _isLoading
-                                  ? []
-                                  : [
-                                      BoxShadow(
-                                        color: widget.confirmColors[0]
-                                            .withOpacity(0.4),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 5),
+                              child: Center(
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : Text(
+                                        widget.confirmLabel,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ],
-                            ),
-                            child: Center(
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2.5,
-                                      ),
-                                    )
-                                  : Text(
-                                      widget.confirmLabel,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: Colors.grey.shade800,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EDIT PAYMENT DIALOG  — Advance + Full Payment fields
+// EDIT PAYMENT DIALOG — Advance + Remark
 // ═══════════════════════════════════════════════════════════════════════════════
 class _EditPaymentDialog extends StatefulWidget {
   final String docId;
@@ -1574,7 +1815,7 @@ class _EditPaymentDialog extends StatefulWidget {
 
 class _EditPaymentDialogState extends State<_EditPaymentDialog> {
   late TextEditingController _advanceCtrl;
-
+  final TextEditingController _remarkCtrl = TextEditingController();
   String _receivedBy = 'Pankaj Sir';
 
   final List<String> _names = [
@@ -1586,20 +1827,25 @@ class _EditPaymentDialogState extends State<_EditPaymentDialog> {
   ];
 
   final TextEditingController _otherNameCtrl = TextEditingController();
-
   bool _isLoading = false;
-
   final List<Color> _colors = [Colors.purple.shade400, Colors.blue.shade600];
 
   @override
   void initState() {
     super.initState();
-
+    _remarkCtrl.text = widget.data['remark'] ?? '';
     final advanceVal = (widget.data['advanceAmount'] ?? 0).toDouble();
-
     _advanceCtrl = TextEditingController(
       text: advanceVal > 0 ? advanceVal.toStringAsFixed(0) : '',
     );
+  }
+
+  @override
+  void dispose() {
+    _advanceCtrl.dispose();
+    _remarkCtrl.dispose();
+    _otherNameCtrl.dispose();
+    super.dispose();
   }
 
   String get _nowFormatted =>
@@ -1612,10 +1858,8 @@ class _EditPaymentDialogState extends State<_EditPaymentDialog> {
         : _receivedBy;
     final advance = double.tryParse(_advanceCtrl.text) ?? 0;
     final total = (widget.data['grandTotal'] ?? 0).toDouble();
-
     final oldPaid = (widget.data['paidAmount'] ?? 0).toDouble();
     final oldAdvance = (widget.data['advanceAmount'] ?? 0).toDouble();
-
     final newPaid = oldPaid - oldAdvance + advance;
     final pending = total - newPaid;
 
@@ -1628,6 +1872,7 @@ class _EditPaymentDialogState extends State<_EditPaymentDialog> {
           "pendingAmount": pending,
           "receivedBy": finalName,
           "editedAt": _nowFormatted,
+          "remark": _remarkCtrl.text.trim(),
         });
 
     if (mounted) Navigator.pop(context);
@@ -1639,458 +1884,488 @@ class _EditPaymentDialogState extends State<_EditPaymentDialog> {
     final orderNo = widget.data['salesOrderNo'] ?? '';
     final total = (widget.data['grandTotal'] ?? 0).toDouble();
     final advance = double.tryParse(_advanceCtrl.text) ?? 0;
-
     final oldPaid = (widget.data['paidAmount'] ?? 0).toDouble();
     final oldAdvance = (widget.data['advanceAmount'] ?? 0).toDouble();
-
     final newPaid = oldPaid - oldAdvance + advance;
     final pending = total - newPaid;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.white,
-              Colors.purple.shade50.withOpacity(0.4),
-              Colors.blue.shade50.withOpacity(0.3),
+      child: SingleChildScrollView(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.white,
+                Colors.purple.shade50.withOpacity(0.4),
+                Colors.blue.shade50.withOpacity(0.3),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.9),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.purple.withOpacity(0.2),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
             ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withOpacity(0.9), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.purple.withOpacity(0.2),
-              blurRadius: 30,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Header ────────────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.purple.shade50.withOpacity(0.6),
-                    Colors.blue.shade50.withOpacity(0.4),
-                  ],
-                ),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: _colors),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _colors[0].withOpacity(0.4),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.edit_note_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Header
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.purple.shade50.withOpacity(0.6),
+                      Colors.blue.shade50.withOpacity(0.4),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ShaderMask(
-                          shaderCallback: (bounds) => LinearGradient(
-                            colors: [
-                              Colors.purple.shade700,
-                              Colors.blue.shade700,
-                            ],
-                          ).createShader(bounds),
-                          child: const Text(
-                            "Advance Payment",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          "$customer · $orderNo",
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
                   ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(8),
+                        gradient: LinearGradient(colors: _colors),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _colors[0].withOpacity(0.4),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      child: Icon(
-                        Icons.close_rounded,
-                        color: Colors.grey.shade600,
-                        size: 16,
+                      child: const Icon(
+                        Icons.edit_note_rounded,
+                        color: Colors.white,
+                        size: 20,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── Body ──────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Grand Total (read-only)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.grey.shade100, Colors.grey.shade50],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.receipt_long_outlined,
-                              color: Colors.grey.shade500,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              "Grand Total",
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ShaderMask(
+                            shaderCallback: (bounds) => LinearGradient(
+                              colors: [
+                                Colors.purple.shade700,
+                                Colors.blue.shade700,
+                              ],
+                            ).createShader(bounds),
+                            child: const Text(
+                              "Advance Payment",
                               style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ],
-                        ),
-                        ShaderMask(
-                          shaderCallback: (bounds) => LinearGradient(
-                            colors: _colors,
-                          ).createShader(bounds),
-                          child: Text(
-                            "₹${total.toStringAsFixed(0)}",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Advance Amount
-                  _buildFieldLabel(
-                    icon: Icons.currency_rupee_rounded,
-                    label: "Advance Amount",
-                    color: Colors.orange.shade500,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildAmountField(
-                    controller: _advanceCtrl,
-                    hint: "Enter advance amount",
-                    accentColor: Colors.orange.shade400,
-                    onChanged: (val) {
-                      final total = (widget.data['grandTotal'] ?? 0).toDouble();
-                      final value = double.tryParse(val) ?? 0;
-
-                      if (value > total) {
-                        _advanceCtrl.text = total.toStringAsFixed(0);
-                        _advanceCtrl.selection = TextSelection.fromPosition(
-                          TextPosition(offset: _advanceCtrl.text.length),
-                        );
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              "Advance cannot be greater than Grand Total",
+                          Text(
+                            "$customer · $orderNo",
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 12,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        );
-                      }
-
-                      setState(() {});
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildFieldLabel(
-                    icon: Icons.person,
-                    label: "Received By",
-                    color: Colors.blue,
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  DropdownButtonFormField<String>(
-                    value: _receivedBy,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        ],
                       ),
                     ),
-                    items: _names.map((name) {
-                      return DropdownMenuItem(value: name, child: Text(name));
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _receivedBy = value!;
-                      });
-                    },
-                  ),
-                  if (_receivedBy == 'Other') ...[
-                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: Colors.grey.shade600,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Body
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Grand Total read-only
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.grey.shade100, Colors.grey.shade50],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.receipt_long_outlined,
+                                color: Colors.grey.shade500,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "Grand Total",
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          ShaderMask(
+                            shaderCallback: (bounds) => LinearGradient(
+                              colors: _colors,
+                            ).createShader(bounds),
+                            child: Text(
+                              "₹${total.toStringAsFixed(0)}",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    _buildFieldLabel(
+                      icon: Icons.currency_rupee_rounded,
+                      label: "Advance Amount",
+                      color: Colors.orange.shade500,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildAmountField(
+                      controller: _advanceCtrl,
+                      hint: "Enter advance amount",
+                      accentColor: Colors.orange.shade400,
+                      onChanged: (val) {
+                        final value = double.tryParse(val) ?? 0;
+                        if (value > total) {
+                          _advanceCtrl.text = total.toStringAsFixed(0);
+                          _advanceCtrl.selection = TextSelection.fromPosition(
+                            TextPosition(offset: _advanceCtrl.text.length),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "Advance cannot be greater than Grand Total",
+                              ),
+                            ),
+                          );
+                        }
+                        setState(() {});
+                      },
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    _buildFieldLabel(
+                      icon: Icons.note_alt_outlined,
+                      label: "Remark",
+                      color: Colors.purple,
+                    ),
+                    const SizedBox(height: 8),
                     TextField(
-                      controller: _otherNameCtrl,
+                      controller: _remarkCtrl,
+                      maxLines: 2,
                       decoration: InputDecoration(
-                        hintText: "Enter name...",
+                        hintText: "Enter remark...",
                         filled: true,
                         fillColor: Colors.white,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Colors.purple,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 16),
 
-                  // Full Paid Amount
+                    const SizedBox(height: 16),
 
-                  // Live pending preview
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
+                    _buildFieldLabel(
+                      icon: Icons.person,
+                      label: "Received By",
+                      color: Colors.blue,
                     ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          (pending > 0
-                                  ? Colors.red.shade400
-                                  : Colors.green.shade400)
-                              .withOpacity(0.08),
-                          (pending > 0
-                                  ? Colors.red.shade300
-                                  : Colors.green.shade300)
-                              .withOpacity(0.05),
-                        ],
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _receivedBy,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: pending > 0
-                            ? Colors.red.shade200
-                            : Colors.green.shade200,
-                      ),
+                      items: _names.map((name) {
+                        return DropdownMenuItem(value: name, child: Text(name));
+                      }).toList(),
+                      onChanged: (value) =>
+                          setState(() => _receivedBy = value!),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              pending > 0
-                                  ? Icons.hourglass_bottom_rounded
-                                  : Icons.check_circle_outline_rounded,
-                              color: pending > 0
-                                  ? Colors.red.shade400
-                                  : Colors.green.shade500,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              pending > 0
-                                  ? "Remaining Pending"
-                                  : "Fully Paid ✓",
-                              style: TextStyle(
-                                color: pending > 0
-                                    ? Colors.red.shade500
-                                    : Colors.green.shade600,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                    if (_receivedBy == 'Other') ...[
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _otherNameCtrl,
+                        decoration: InputDecoration(
+                          hintText: "Enter name...",
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 16),
+
+                    // Pending preview
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            (pending > 0
+                                    ? Colors.red.shade400
+                                    : Colors.green.shade400)
+                                .withOpacity(0.08),
+                            (pending > 0
+                                    ? Colors.red.shade300
+                                    : Colors.green.shade300)
+                                .withOpacity(0.05),
                           ],
                         ),
-                        Text(
-                          "₹${pending.clamp(0, double.infinity).toStringAsFixed(0)}",
-                          style: TextStyle(
-                            color: pending > 0
-                                ? Colors.red.shade500
-                                : Colors.green.shade600,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: pending > 0
+                              ? Colors.red.shade200
+                              : Colors.green.shade200,
                         ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Date-time
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200, width: 1),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.calendar_today_outlined,
-                          color: _colors[0],
-                          size: 14,
-                        ),
-                       SizedBox(width: 8),
-                        Text(
-                          "Advance Edit Date: ",
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 13.sp,
-                          ),
-                        ),
-                        Text(
-                          _nowFormatted,
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => Navigator.pop(context),
-                          child: Container(
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: Center(
-                              child: Text(
-                                "Cancel",
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                pending > 0
+                                    ? Icons.hourglass_bottom_rounded
+                                    : Icons.check_circle_outline_rounded,
+                                color: pending > 0
+                                    ? Colors.red.shade400
+                                    : Colors.green.shade500,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                pending > 0
+                                    ? "Remaining Pending"
+                                    : "Fully Paid ✓",
                                 style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 14,
+                                  color: pending > 0
+                                      ? Colors.red.shade500
+                                      : Colors.green.shade600,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            "₹${pending.clamp(0, double.infinity).toStringAsFixed(0)}",
+                            style: TextStyle(
+                              color: pending > 0
+                                  ? Colors.red.shade500
+                                  : Colors.green.shade600,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Date-time
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.grey.shade200,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            color: _colors[0],
+                            size: 14,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Advance Edit Date: ",
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            _nowFormatted,
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  "Cancel",
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: GestureDetector(
-                          onTap: _isLoading ? null : _save,
-                          child: Container(
-                            height: 50,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: _isLoading
-                                    ? [
-                                        Colors.grey.shade400,
-                                        Colors.grey.shade500,
-                                      ]
-                                    : _colors,
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: GestureDetector(
+                            onTap: _isLoading ? null : _save,
+                            child: Container(
+                              height: 50,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: _isLoading
+                                      ? [
+                                          Colors.grey.shade400,
+                                          Colors.grey.shade500,
+                                        ]
+                                      : _colors,
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: _isLoading
+                                    ? []
+                                    : [
+                                        BoxShadow(
+                                          color: _colors[0].withOpacity(0.4),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
                               ),
-                              borderRadius: BorderRadius.circular(14),
-                              boxShadow: _isLoading
-                                  ? []
-                                  : [
-                                      BoxShadow(
-                                        color: _colors[0].withOpacity(0.4),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 5),
+                              child: Center(
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : const Text(
+                                        "Save Changes",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ],
-                            ),
-                            child: Center(
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2.5,
-                                      ),
-                                    )
-                                  : const Text(
-                                      "Save Changes",
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

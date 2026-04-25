@@ -102,7 +102,10 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
       }).toList();
 
       final groups =
-          stockData.map((e) => (e['piller_no'] ?? '').toString()).toSet().toList()
+          stockData
+              .map((e) => (e['piller_no'] ?? '').toString())
+              .toSet()
+              .toList()
             ..sort();
       _groupList = ['All', ...groups];
       if (_selectedGroup == null || !_groupList.contains(_selectedGroup)) {
@@ -146,8 +149,9 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
     try {
       final Uint8List imageBytes = await imageFile.readAsBytes();
       final String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      final Reference ref =
-          _storage.ref().child('ready_stock_images/$fileName.png');
+      final Reference ref = _storage.ref().child(
+        'ready_stock_images/$fileName.png',
+      );
       final uploadTask = await ref.putData(
         imageBytes,
         SettableMetadata(contentType: 'image/png'),
@@ -194,11 +198,16 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text("Issue Stock",
-              style: TextStyle(
-                  color: Colors.red[700], fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            "Issue Stock",
+            style: TextStyle(
+              color: Colors.red[700],
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -211,10 +220,10 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                       .toList(),
                   onChanged: (v) => setStateDialog(() => selectedDept = v),
                   decoration: InputDecoration(
-                    prefixIcon:
-                        Icon(Icons.work, color: Colors.red[700]),
+                    prefixIcon: Icon(Icons.work, color: Colors.red[700]),
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -223,10 +232,10 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: "Enter Quantity to Issue",
-                    prefixIcon:
-                        Icon(Icons.inventory, color: Colors.red[700]),
+                    prefixIcon: Icon(Icons.inventory, color: Colors.red[700]),
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ],
@@ -238,12 +247,10 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
               child: const Text("Cancel"),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red[600]),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600]),
               onPressed: () async {
                 if (selectedDept == null) {
-                  _showSnackBar("Please select a Department",
-                      isError: true);
+                  _showSnackBar("Please select a Department", isError: true);
                   return;
                 }
                 final qty = int.tryParse(qtyCtrl.text.trim()) ?? 0;
@@ -253,14 +260,11 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                 }
                 final currentBal = (item['bal'] ?? 0) as int;
                 if (currentBal < qty) {
-                  _showSnackBar("Not enough stock available!",
-                      isError: true);
+                  _showSnackBar("Not enough stock available!", isError: true);
                   return;
                 }
                 try {
-                  await _firestore
-                      .collection('ready_stock_transactions')
-                      .add({
+                  await _firestore.collection('ready_stock_transactions').add({
                     'itemId': item['docId'],
                     'type': 'issue',
                     'department': selectedDept,
@@ -272,16 +276,18 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                       .collection('ready_stock_items')
                       .doc(item['docId'])
                       .update({
-                    'bal': currentBal - qty,
-                    'out': (item['out'] ?? 0) + qty,
-                    'dateEdit':
-                        DateFormat('dd-MM-yyyy').format(DateTime.now()),
-                    'updatedAt': FieldValue.serverTimestamp(),
-                  });
+                        'bal': currentBal - qty,
+                        'out': (item['out'] ?? 0) + qty,
+                        'dateEdit': DateFormat(
+                          'dd-MM-yyyy',
+                        ).format(DateTime.now()),
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      });
 
                   // daily history
-                  final todayKey =
-                      DateFormat('yyyy-MM-dd').format(DateTime.now());
+                  final todayKey = DateFormat(
+                    'yyyy-MM-dd',
+                  ).format(DateTime.now());
                   final dailyRef = _firestore
                       .collection('ready_stock_daily_history')
                       .doc(todayKey)
@@ -327,10 +333,13 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text("Add Additional Stock",
-              style: TextStyle(color: Colors.green[700])),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            "Add Additional Stock",
+            style: TextStyle(color: Colors.green[700]),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -340,9 +349,9 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                   labelText: "Second Party Name",
                   hintText: "Enter party name (e.g., Vendor A)",
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  prefixIcon:
-                      Icon(Icons.person, color: Colors.green[700]),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: Icon(Icons.person, color: Colors.green[700]),
                 ),
                 onChanged: (_) => setStateDialog(() {}),
               ),
@@ -353,9 +362,9 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                 decoration: InputDecoration(
                   labelText: "Quantity",
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  prefixIcon:
-                      Icon(Icons.add_box, color: Colors.green[700]),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: Icon(Icons.add_box, color: Colors.green[700]),
                 ),
               ),
             ],
@@ -367,14 +376,14 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[600]),
+                backgroundColor: Colors.green[600],
+              ),
               onPressed: partyCtrl.text.trim().isEmpty
                   ? null
                   : () async {
                       final qty = int.tryParse(qtyCtrl.text) ?? 0;
                       if (qty <= 0) {
-                        _showSnackBar("Enter valid quantity",
-                            isError: true);
+                        _showSnackBar("Enter valid quantity", isError: true);
                         return;
                       }
                       final newBal = (item['bal'] ?? 0) + qty;
@@ -382,27 +391,29 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                       await _firestore
                           .collection('ready_stock_transactions')
                           .add({
-                        'itemId': item['docId'],
-                        'type': 'received',
-                        'party': partyCtrl.text.trim(),
-                        'quantity': qty,
-                        'timestamp': FieldValue.serverTimestamp(),
-                      });
+                            'itemId': item['docId'],
+                            'type': 'received',
+                            'party': partyCtrl.text.trim(),
+                            'quantity': qty,
+                            'timestamp': FieldValue.serverTimestamp(),
+                          });
 
                       await _firestore
                           .collection('ready_stock_items')
                           .doc(item['docId'])
                           .update({
-                        'bal': newBal,
-                        'incoming': (item['incoming'] ?? 0) + qty,
-                        'dateEdit':
-                            DateFormat('dd-MM-yyyy').format(DateTime.now()),
-                        'updatedAt': FieldValue.serverTimestamp(),
-                      });
+                            'bal': newBal,
+                            'incoming': (item['incoming'] ?? 0) + qty,
+                            'dateEdit': DateFormat(
+                              'dd-MM-yyyy',
+                            ).format(DateTime.now()),
+                            'updatedAt': FieldValue.serverTimestamp(),
+                          });
 
                       await _loadDataFromFirebase();
                       _showSnackBar(
-                          "Received $qty from ${partyCtrl.text.trim()}");
+                        "Received $qty from ${partyCtrl.text.trim()}",
+                      );
                       Navigator.pop(ctx);
                     },
               child: const Text("Continue Received"),
@@ -418,17 +429,21 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) => Container(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text("Update Stock",
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange[700])),
+            Text(
+              "Update Stock",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange[700],
+              ),
+            ),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -443,7 +458,9 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red[600],
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                   ),
                 ),
                 ElevatedButton.icon(
@@ -456,7 +473,9 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green[600],
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                   ),
                 ),
               ],
@@ -481,39 +500,51 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-                child: CircularProgressIndicator(color: Colors.orange));
+              child: CircularProgressIndicator(color: Colors.orange),
+            );
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              title: Row(children: [
-                Icon(Icons.history, color: Colors.orange[700]),
-                const SizedBox(width: 8),
-                Text("Issue History",
-                    style: TextStyle(color: Colors.orange[700])),
-              ]),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  Icon(Icons.history, color: Colors.orange[700]),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Issue History",
+                    style: TextStyle(color: Colors.orange[700]),
+                  ),
+                ],
+              ),
               content: const Text("No previous issues found."),
               actions: [
                 TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text("Close")),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("Close"),
+                ),
               ],
             );
           }
           final docs = snapshot.data!.docs;
           return AlertDialog(
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            title: Row(children: [
-              Icon(Icons.history, color: Colors.orange[700]),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text("${item['detail']} Issue History",
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.history, color: Colors.orange[700]),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "${item['detail']} Issue History",
                     style: TextStyle(color: Colors.orange[700]),
-                    overflow: TextOverflow.ellipsis),
-              ),
-            ]),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
             content: Container(
               width: double.maxFinite,
               constraints: BoxConstraints(maxHeight: 60.h),
@@ -523,8 +554,7 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                   final data = docs[i].data() as Map<String, dynamic>;
                   final dept = data['department'] ?? '-';
                   final qty = data['quantity'] ?? 0;
-                  final timestamp =
-                      (data['timestamp'] as Timestamp?)?.toDate();
+                  final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
                   final dateStr = timestamp != null
                       ? DateFormat('dd-MM-yyyy hh:mm a').format(timestamp)
                       : '';
@@ -532,14 +562,18 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     elevation: 2,
                     child: ListTile(
-                      leading:
-                          Icon(Icons.arrow_upward, color: Colors.red[700]),
-                      title: Text("Issued $qty → $dept",
-                          style: TextStyle(
-                              color: Colors.red[700],
-                              fontWeight: FontWeight.w600)),
-                      subtitle: Text(dateStr,
-                          style: const TextStyle(fontSize: 12)),
+                      leading: Icon(Icons.arrow_upward, color: Colors.red[700]),
+                      title: Text(
+                        "Issued $qty → $dept",
+                        style: TextStyle(
+                          color: Colors.red[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        dateStr,
+                        style: const TextStyle(fontSize: 12),
+                      ),
                     ),
                   );
                 },
@@ -548,8 +582,10 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: Text("Close",
-                    style: TextStyle(color: Colors.orange[700])),
+                child: Text(
+                  "Close",
+                  style: TextStyle(color: Colors.orange[700]),
+                ),
               ),
             ],
           );
@@ -573,19 +609,24 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-                child: CircularProgressIndicator(color: Colors.orange));
+              child: CircularProgressIndicator(color: Colors.orange),
+            );
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              title: const Text("Issued Today",
-                  style: TextStyle(color: Colors.deepOrange)),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                "Issued Today",
+                style: TextStyle(color: Colors.deepOrange),
+              ),
               content: const Text("No items issued today."),
               actions: [
                 TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text("Close")),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("Close"),
+                ),
               ],
             );
           }
@@ -593,15 +634,21 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
           return AlertDialog(
             backgroundColor: Colors.grey[100],
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
-            title: Row(children: [
-              const Icon(Icons.history, color: Colors.deepOrange),
-              const SizedBox(width: 8),
-              Text("Issued Today (${items.length})",
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.history, color: Colors.deepOrange),
+                const SizedBox(width: 8),
+                Text(
+                  "Issued Today (${items.length})",
                   style: const TextStyle(
-                      color: Colors.deepOrange,
-                      fontWeight: FontWeight.bold)),
-            ]),
+                    color: Colors.deepOrange,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
             content: Container(
               width: double.maxFinite,
               constraints: BoxConstraints(maxHeight: 60.h),
@@ -612,17 +659,23 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                   return ExpansionTile(
                     leading: CircleAvatar(
                       backgroundColor: Colors.orange[100],
-                      child: const Icon(Icons.inventory_2,
-                          color: Colors.deepOrange),
+                      child: const Icon(
+                        Icons.inventory_2,
+                        color: Colors.deepOrange,
+                      ),
                     ),
-                    title: Text(item['itemName'] ?? '-',
-                        style:
-                            const TextStyle(fontWeight: FontWeight.w700)),
-                    trailing: Text("${item['totalIssued'] ?? 0} pcs",
-                        style: TextStyle(
-                            color: Colors.red[700],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13)),
+                    title: Text(
+                      item['itemName'] ?? '-',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    trailing: Text(
+                      "${item['totalIssued'] ?? 0} pcs",
+                      style: TextStyle(
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                   );
                 },
               ),
@@ -630,8 +683,10 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text("Close",
-                    style: TextStyle(color: Colors.deepOrange)),
+                child: const Text(
+                  "Close",
+                  style: TextStyle(color: Colors.deepOrange),
+                ),
               ),
             ],
           );
@@ -643,13 +698,11 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
   // ─── AVERAGE STOCK ────────────────────────────────────────────────────────────
   Future<double> _calculateAverageStock(String itemId) async {
     try {
-      final thirtyDaysAgo =
-          DateTime.now().subtract(const Duration(days: 30));
+      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
       final snapshot = await _firestore
           .collection('ready_stock_transactions')
           .where('itemId', isEqualTo: itemId)
-          .where('timestamp',
-              isGreaterThan: Timestamp.fromDate(thirtyDaysAgo))
+          .where('timestamp', isGreaterThan: Timestamp.fromDate(thirtyDaysAgo))
           .orderBy('timestamp')
           .get();
 
@@ -700,19 +753,24 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(children: [
-          Icon(Icons.bar_chart, color: Colors.purple[700]),
-          const SizedBox(width: 8),
-          Text("1-Month Average",
-              style: TextStyle(color: Colors.purple[700])),
-        ]),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.bar_chart, color: Colors.purple[700]),
+            const SizedBox(width: 8),
+            Text(
+              "1-Month Average",
+              style: TextStyle(color: Colors.purple[700]),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text("Item: ${item['detail']}",
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              "Item: ${item['detail']}",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             Text("Code: ${item['code']}"),
             const SizedBox(height: 16),
@@ -722,28 +780,34 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                 color: Colors.purple[50],
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(children: [
-                Text("Average Stock (30 Days)",
+              child: Column(
+                children: [
+                  Text(
+                    "Average Stock (30 Days)",
+                    style: TextStyle(fontSize: 12, color: Colors.purple[700]),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    avg.toStringAsFixed(2),
                     style: TextStyle(
-                        fontSize: 12, color: Colors.purple[700])),
-                const SizedBox(height: 4),
-                Text(avg.toStringAsFixed(2),
-                    style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.purple[900])),
-                Text("units",
-                    style: TextStyle(
-                        fontSize: 12, color: Colors.purple[600])),
-              ]),
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.purple[900],
+                    ),
+                  ),
+                  Text(
+                    "units",
+                    style: TextStyle(fontSize: 12, color: Colors.purple[600]),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text("Close",
-                style: TextStyle(color: Colors.purple[700])),
+            child: Text("Close", style: TextStyle(color: Colors.purple[700])),
           ),
         ],
       ),
@@ -752,12 +816,10 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
 
   Future<void> _showGroupWiseAverageDialog() async {
     final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
-    final itemSnapshot =
-        await _firestore.collection('ready_stock_items').get();
+    final itemSnapshot = await _firestore.collection('ready_stock_items').get();
     final transSnapshot = await _firestore
         .collection('ready_stock_transactions')
-        .where('timestamp',
-            isGreaterThan: Timestamp.fromDate(thirtyDaysAgo))
+        .where('timestamp', isGreaterThan: Timestamp.fromDate(thirtyDaysAgo))
         .get();
 
     Map<String, List<Map<String, dynamic>>> groupItems = {};
@@ -780,8 +842,11 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
         int currentBal = item['bal'] ?? 0;
         final itemTrans =
             transSnapshot.docs.where((t) => t['itemId'] == itemId).toList()
-              ..sort((a, b) => (a['timestamp'] as Timestamp)
-                  .compareTo(b['timestamp'] as Timestamp));
+              ..sort(
+                (a, b) => (a['timestamp'] as Timestamp).compareTo(
+                  b['timestamp'] as Timestamp,
+                ),
+              );
 
         DateTime? lastDate;
         for (var trans in itemTrans) {
@@ -806,21 +871,23 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
         totalStockDays += currentBal;
         totalDays++;
       }
-      groupAverages[group] =
-          totalDays > 0 ? totalStockDays / totalDays : 0.0;
+      groupAverages[group] = totalDays > 0 ? totalStockDays / totalDays : 0.0;
     }
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(children: [
-          Icon(Icons.bar_chart, color: Colors.purple[700]),
-          const SizedBox(width: 8),
-          Text("Group-wise 30-Day Average",
-              style: TextStyle(color: Colors.purple[700])),
-        ]),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.bar_chart, color: Colors.purple[700]),
+            const SizedBox(width: 8),
+            Text(
+              "Group-wise 30-Day Average",
+              style: TextStyle(color: Colors.purple[700]),
+            ),
+          ],
+        ),
         content: Container(
           width: double.maxFinite,
           constraints: BoxConstraints(maxHeight: 60.h),
@@ -837,18 +904,23 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: Colors.purple[100],
-                          child: Text(group.isNotEmpty ? group[0] : '?',
-                              style:
-                                  TextStyle(color: Colors.purple[900])),
+                          child: Text(
+                            group.isNotEmpty ? group[0] : '?',
+                            style: TextStyle(color: Colors.purple[900]),
+                          ),
                         ),
-                        title: Text(group,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600)),
-                        trailing: Text(avg.toStringAsFixed(2),
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple[900])),
+                        title: Text(
+                          group,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        trailing: Text(
+                          avg.toStringAsFixed(2),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple[900],
+                          ),
+                        ),
                       ),
                     );
                   },
@@ -857,8 +929,7 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text("Close",
-                style: TextStyle(color: Colors.purple[700])),
+            child: Text("Close", style: TextStyle(color: Colors.purple[700])),
           ),
         ],
       ),
@@ -869,37 +940,44 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
   void _addOrUpdateItem({Map<String, dynamic>? existingItem}) async {
     final isEdit = existingItem != null;
 
-    final codeCtrl =
-        TextEditingController(text: isEdit ? existingItem["code"] : '');
-    final detailCtrl =
-        TextEditingController(text: isEdit ? existingItem["detail"] : '');
-    final pillerCtrl =
-        TextEditingController(text: isEdit ? existingItem["piller_no"] : '');
+    final codeCtrl = TextEditingController(
+      text: isEdit ? existingItem["code"] : '',
+    );
+    final detailCtrl = TextEditingController(
+      text: isEdit ? existingItem["detail"] : '',
+    );
+    final pillerCtrl = TextEditingController(
+      text: isEdit ? existingItem["piller_no"] : '',
+    );
     final inCtrl = TextEditingController(
-        text: isEdit ? existingItem["in"].toString() : '0');
+      text: isEdit ? existingItem["in"].toString() : '0',
+    );
     final incomingCtrl = TextEditingController(
-        text: isEdit ? existingItem["incoming"].toString() : '0');
+      text: isEdit ? existingItem["incoming"].toString() : '0',
+    );
     final outCtrl = TextEditingController(
-        text: isEdit ? existingItem["out"].toString() : '0');
+      text: isEdit ? existingItem["out"].toString() : '0',
+    );
     final balCtrl = TextEditingController(
-        text: isEdit ? existingItem["bal"].toString() : '0');
+      text: isEdit ? existingItem["bal"].toString() : '0',
+    );
     final remarkCtrl = TextEditingController(
-        text: isEdit ? (existingItem["remark1"] ?? '') : '');
+      text: isEdit ? (existingItem["remark1"] ?? '') : '',
+    );
 
     String? imageUrl = isEdit ? existingItem["image"] : null;
     XFile? selectedImage;
     bool isUploading = false;
-    int nextSr =
-        isEdit ? existingItem["sr"] : await _getNextSrNumber();
-    final String currentDate =
-        DateFormat('dd-MM-yyyy').format(DateTime.now());
+    int nextSr = isEdit ? existingItem["sr"] : await _getNextSrNumber();
+    final String currentDate = DateFormat('dd-MM-yyyy').format(DateTime.now());
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => Dialog(
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Container(
             width: 600,
             constraints: BoxConstraints(maxHeight: 80.h),
@@ -914,21 +992,24 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                       colors: [Colors.orange[700]!, Colors.orange[500]!],
                     ),
                     borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(20)),
+                      top: Radius.circular(20),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      Icon(isEdit ? Icons.edit : Icons.add_circle,
-                          color: Colors.white, size: 28),
+                      Icon(
+                        isEdit ? Icons.edit : Icons.add_circle,
+                        color: Colors.white,
+                        size: 28,
+                      ),
                       const SizedBox(width: 12),
                       Text(
-                        isEdit
-                            ? "Edit Ready Stock Item"
-                            : "Add New Item",
+                        isEdit ? "Edit Ready Stock Item" : "Add New Item",
                         style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontSize: 20),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
                       ),
                       const Spacer(),
                       IconButton(
@@ -958,61 +1039,64 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                                 ),
                                 child: selectedImage != null
                                     ? FutureBuilder<Uint8List>(
-                                        future:
-                                            selectedImage!.readAsBytes(),
+                                        future: selectedImage!.readAsBytes(),
                                         builder: (context, snapshot) {
                                           if (snapshot.hasData) {
                                             return ClipRRect(
                                               borderRadius:
-                                                  BorderRadius.circular(
-                                                      10),
+                                                  BorderRadius.circular(10),
                                               child: Image.memory(
-                                                  snapshot.data!,
-                                                  fit: BoxFit.cover),
+                                                snapshot.data!,
+                                                fit: BoxFit.cover,
+                                              ),
                                             );
                                           }
                                           return const Center(
-                                              child:
-                                                  CircularProgressIndicator());
+                                            child: CircularProgressIndicator(),
+                                          );
                                         },
                                       )
-                                    : imageUrl != null &&
-                                            imageUrl!.isNotEmpty
+                                    : imageUrl != null && imageUrl!.isNotEmpty
                                     ? ClipRRect(
-                                        borderRadius:
-                                            BorderRadius.circular(10),
-                                        child: Image.network(imageUrl!,
-                                            fit: BoxFit.cover),
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Image.network(
+                                          imageUrl!,
+                                          fit: BoxFit.cover,
+                                        ),
                                       )
-                                    : Icon(Icons.image,
+                                    : Icon(
+                                        Icons.image,
                                         size: 60,
-                                        color: Colors.grey[400]),
+                                        color: Colors.grey[400],
+                                      ),
                               ),
                               const SizedBox(height: 12),
                               ElevatedButton.icon(
                                 onPressed: isUploading
                                     ? null
                                     : () async {
-                                        final XFile? image =
-                                            await _picker.pickImage(
-                                                source:
-                                                    ImageSource.gallery);
+                                        final XFile? image = await _picker
+                                            .pickImage(
+                                              source: ImageSource.gallery,
+                                            );
                                         if (image != null) {
                                           setDialogState(
-                                              () => selectedImage = image);
+                                            () => selectedImage = image,
+                                          );
                                         }
                                       },
-                                icon: const Icon(Icons.upload_file,
-                                    size: 18),
-                                label: Text(selectedImage != null
-                                    ? "Change Image"
-                                    : "Upload Image"),
+                                icon: const Icon(Icons.upload_file, size: 18),
+                                label: Text(
+                                  selectedImage != null
+                                      ? "Change Image"
+                                      : "Upload Image",
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.orange[600],
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(10)),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
                               ),
                             ],
@@ -1020,70 +1104,104 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                         ),
                         const SizedBox(height: 24),
                         _buildModernField(
-                            codeCtrl, "DPL Code", Icons.qr_code,
-                            required: true),
+                          codeCtrl,
+                          "DPL Code",
+                          Icons.qr_code,
+                          required: true,
+                        ),
                         const SizedBox(height: 16),
                         _buildModernField(
-                            detailCtrl, "Detail", Icons.description,
-                            required: true),
+                          detailCtrl,
+                          "Detail",
+                          Icons.description,
+                          required: true,
+                        ),
                         const SizedBox(height: 16),
                         _buildModernField(
-                            pillerCtrl, "Piller No.", Icons.pin,
-                            required: true),
+                          pillerCtrl,
+                          "Piller No.",
+                          Icons.pin,
+                          required: true,
+                        ),
                         const SizedBox(height: 24),
-                        Text("Stock Information",
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange[800])),
+                        Text(
+                          "Stock Information",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange[800],
+                          ),
+                        ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
                             Expanded(
-                                child: _buildModernField(
-                                    inCtrl, "IN", Icons.add_box,
-                                    isNumber: true)),
+                              child: _buildModernField(
+                                inCtrl,
+                                "IN",
+                                Icons.add_box,
+                                isNumber: true,
+                              ),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
-                                child: _buildModernField(incomingCtrl,
-                                    "Incoming", Icons.input,
-                                    isNumber: true)),
+                              child: _buildModernField(
+                                incomingCtrl,
+                                "Incoming",
+                                Icons.input,
+                                isNumber: true,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
                         Row(
                           children: [
                             Expanded(
-                                child: _buildModernField(
-                                    outCtrl, "OUT", Icons.remove_circle,
-                                    isNumber: true)),
+                              child: _buildModernField(
+                                outCtrl,
+                                "OUT",
+                                Icons.remove_circle,
+                                isNumber: true,
+                              ),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
-                                child: _buildModernField(balCtrl,
-                                    "Balance", Icons.account_balance,
-                                    isNumber: true)),
+                              child: _buildModernField(
+                                balCtrl,
+                                "Balance",
+                                Icons.account_balance,
+                                isNumber: true,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
-                        _buildModernField(
-                            remarkCtrl, "Remark 1", Icons.note),
+                        _buildModernField(remarkCtrl, "Remark 1", Icons.note),
                         const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 20),
+                            horizontal: 16,
+                            vertical: 20,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.orange[50],
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.calendar_today,
-                                  color: Colors.orange[700]),
+                              Icon(
+                                Icons.calendar_today,
+                                color: Colors.orange[700],
+                              ),
                               const SizedBox(width: 12),
-                              Text("Date Edit: $currentDate",
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.orange[900])),
+                              Text(
+                                "Date Edit: $currentDate",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange[900],
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1097,15 +1215,18 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
                     borderRadius: const BorderRadius.vertical(
-                        bottom: Radius.circular(20)),
+                      bottom: Radius.circular(20),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text("Cancel",
-                            style: TextStyle(fontSize: 16)),
+                        child: const Text(
+                          "Cancel",
+                          style: TextStyle(fontSize: 16),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       ElevatedButton.icon(
@@ -1113,9 +1234,12 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                           backgroundColor: Colors.orange[600],
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 14),
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                         onPressed: isUploading
                             ? null
@@ -1127,23 +1251,22 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                                     detail.isEmpty ||
                                     piller.isEmpty) {
                                   _showSnackBar(
-                                      "Please fill all required fields",
-                                      isError: true);
+                                    "Please fill all required fields",
+                                    isError: true,
+                                  );
                                   return;
                                 }
                                 setDialogState(() => isUploading = true);
                                 if (selectedImage != null) {
-                                  imageUrl =
-                                      await _uploadImage(selectedImage!);
+                                  imageUrl = await _uploadImage(selectedImage!);
                                 }
 
-                                final inVal =
-                                    int.tryParse(inCtrl.text) ?? 0;
+                                final inVal = int.tryParse(inCtrl.text) ?? 0;
                                 final incomingVal =
                                     int.tryParse(incomingCtrl.text) ?? 0;
-                                final outVal =
-                                    int.tryParse(outCtrl.text) ?? 0;
-                                final balVal = int.tryParse(balCtrl.text) ??
+                                final outVal = int.tryParse(outCtrl.text) ?? 0;
+                                final balVal =
+                                    int.tryParse(balCtrl.text) ??
                                     (inVal + incomingVal - outVal);
 
                                 final newItem = {
@@ -1158,8 +1281,7 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                                   "bal": balVal,
                                   "remark1": remarkCtrl.text.trim(),
                                   "dateEdit": currentDate,
-                                  "updatedAt":
-                                      FieldValue.serverTimestamp(),
+                                  "updatedAt": FieldValue.serverTimestamp(),
                                 };
 
                                 try {
@@ -1168,25 +1290,24 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                                         .collection('ready_stock_items')
                                         .doc(existingItem["docId"])
                                         .update(newItem);
-                                    _showSnackBar(
-                                        "Item updated successfully");
+                                    _showSnackBar("Item updated successfully");
                                   } else {
                                     newItem["createdAt"] =
                                         FieldValue.serverTimestamp();
                                     await _firestore
                                         .collection('ready_stock_items')
                                         .add(newItem);
-                                    _showSnackBar(
-                                        "Item added successfully!");
+                                    _showSnackBar("Item added successfully!");
                                   }
                                   await _loadDataFromFirebase();
                                   Navigator.pop(ctx);
                                 } catch (e) {
-                                  _showSnackBar("Error saving item: $e",
-                                      isError: true);
+                                  _showSnackBar(
+                                    "Error saving item: $e",
+                                    isError: true,
+                                  );
                                 } finally {
-                                  setDialogState(
-                                      () => isUploading = false);
+                                  setDialogState(() => isUploading = false);
                                 }
                               },
                         icon: isUploading
@@ -1194,8 +1315,10 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white))
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
                             : Icon(isEdit ? Icons.check : Icons.add),
                         label: Text(
                           isEdit ? "Update Item" : "Add Item",
@@ -1249,31 +1372,31 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
       }
 
       var headerRow = rows[0]
-          .map((cell) =>
-              cell?.value?.toString().trim().toLowerCase() ?? '')
+          .map((cell) => cell?.value?.toString().trim().toLowerCase() ?? '')
           .toList();
 
-      bool hasRequired = ['code', 'detail', 'piller_no']
-          .every((h) => headerRow.contains(h));
+      bool hasRequired = [
+        'code',
+        'detail',
+        'piller_no',
+      ].every((h) => headerRow.contains(h));
       if (!hasRequired) {
         _showSnackBar(
-            "Missing required columns: code, detail, piller_no",
-            isError: true);
+          "Missing required columns: code, detail, piller_no",
+          isError: true,
+        );
         setState(() => _isLoading = false);
         return;
       }
 
       List<Map<String, dynamic>> importedItems = [];
-      final String today =
-          DateFormat('dd-MM-yyyy').format(DateTime.now());
+      final String today = DateFormat('dd-MM-yyyy').format(DateTime.now());
 
       for (int i = 1; i < rows.length; i++) {
         var row = rows[i];
         if (row.length < 3) continue;
         Map<String, dynamic> item = {};
-        for (int j = 0;
-            j < headerRow.length && j < row.length;
-            j++) {
+        for (int j = 0; j < headerRow.length && j < row.length; j++) {
           var header = headerRow[j];
           var value = row[j]?.value;
           if (value == null) continue;
@@ -1296,13 +1419,14 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
         }
         if (item['code'] == null ||
             item['detail'] == null ||
-            item['piller_no'] == null) continue;
+            item['piller_no'] == null)
+          continue;
 
         item['in'] = item['in'] ?? 0;
         item['incoming'] = item['incoming'] ?? 0;
         item['out'] = item['out'] ?? 0;
-        item['bal'] = item['bal'] ??
-            (item['in'] + item['incoming'] - item['out']);
+        item['bal'] =
+            item['bal'] ?? (item['in'] + item['incoming'] - item['out']);
         item['image'] = item['image'] ?? '';
         item['remark1'] = item['remark1'] ?? '';
         item['dateEdit'] = today;
@@ -1317,8 +1441,9 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
       }
 
       WriteBatch batch = _firestore.batch();
-      final existingSnapshot =
-          await _firestore.collection('ready_stock_items').get();
+      final existingSnapshot = await _firestore
+          .collection('ready_stock_items')
+          .get();
       final Map<String, DocumentReference> existingMap = {
         for (var d in existingSnapshot.docs) d['code']: d.reference,
       };
@@ -1330,8 +1455,7 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
             'updatedAt': FieldValue.serverTimestamp(),
           });
         } else {
-          final docRef =
-              _firestore.collection('ready_stock_items').doc();
+          final docRef = _firestore.collection('ready_stock_items').doc();
           batch.set(docRef, {
             ...item,
             'createdAt': FieldValue.serverTimestamp(),
@@ -1347,8 +1471,7 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
       }
       if (batchCount > 0) await batch.commit();
       await _loadDataFromFirebase();
-      _showSnackBar(
-          "Excel imported! ${importedItems.length} items processed.");
+      _showSnackBar("Excel imported! ${importedItems.length} items processed.");
     } catch (e) {
       _showSnackBar("Import failed: $e", isError: true);
     }
@@ -1360,23 +1483,25 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(children: [
-          Icon(Icons.warning_amber, color: Colors.red[700], size: 28),
-          const SizedBox(width: 12),
-          Text("Delete Item?",
-              style: TextStyle(color: Colors.red[700])),
-        ]),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber, color: Colors.red[700], size: 28),
+            const SizedBox(width: 12),
+            Text("Delete Item?", style: TextStyle(color: Colors.red[700])),
+          ],
+        ),
         content: const Text("This action cannot be undone. Are you sure?"),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel")),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red[600],
-                foregroundColor: Colors.white),
+              backgroundColor: Colors.red[600],
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
               try {
                 await _firestore
@@ -1399,13 +1524,14 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: isError ? Colors.red[600] : Colors.green[600],
-      behavior: SnackBarBehavior.floating,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red[600] : Colors.green[600],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   // ─── HELPER WIDGETS ───────────────────────────────────────────────────────────
@@ -1423,14 +1549,17 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
         labelText: label + (required ? " *" : ""),
         prefixIcon: Icon(icon, color: Colors.orange[700]),
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.orange[200]!)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.orange[200]!),
+        ),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.orange[200]!)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.orange[200]!),
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.orange[600]!, width: 2)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.orange[600]!, width: 2),
+        ),
         filled: true,
         fillColor: Colors.orange[50],
       ),
@@ -1438,30 +1567,40 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
   }
 
   Widget _header(String text, double width) => SizedBox(
-        width: width,
-        child: Text(text,
-            style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontSize: 12),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.visible,
-            softWrap: true),
-      );
+    width: width,
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        fontSize: 12,
+      ),
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      overflow: TextOverflow.visible,
+      softWrap: true,
+    ),
+  );
 
-  Widget _cell(String text, double width,
-          {Color? color, bool bold = false, double fontSize = 13}) =>
-      SizedBox(
-        width: width,
-        child: Text(text,
-            style: TextStyle(
-                color: color ?? Colors.black87,
-                fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
-                fontSize: fontSize),
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis),
-      );
+  Widget _cell(
+    String text,
+    double width, {
+    Color? color,
+    bool bold = false,
+    double fontSize = 13,
+  }) => SizedBox(
+    width: width,
+    child: Text(
+      text,
+      style: TextStyle(
+        color: color ?? Colors.black87,
+        fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+        fontSize: fontSize,
+      ),
+      textAlign: TextAlign.center,
+      overflow: TextOverflow.ellipsis,
+    ),
+  );
 
   Widget _cellImage(String? url, double width) {
     if (url == null || url.isEmpty) return _placeholderImage(width);
@@ -1472,13 +1611,15 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
           onTap: () => _showImageZoom(url.trim()),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.network(url.trim(),
-                width: 55,
-                height: 55,
-                fit: BoxFit.cover,
-                cacheWidth: 120,
-                filterQuality: FilterQuality.low,
-                errorBuilder: (_, __, ___) => _errorImage(width)),
+            child: Image.network(
+              url.trim(),
+              width: 55,
+              height: 55,
+              fit: BoxFit.cover,
+              cacheWidth: 120,
+              filterQuality: FilterQuality.low,
+              errorBuilder: (_, __, ___) => _errorImage(width),
+            ),
           ),
         ),
       ),
@@ -1486,80 +1627,80 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
   }
 
   Widget _placeholderImage(double width) => SizedBox(
-        width: width,
-        child: Center(
-          child: Container(
-            width: 55,
-            height: 55,
-            decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8)),
-            child: Icon(Icons.image, size: 28, color: Colors.grey[500]),
-          ),
+    width: width,
+    child: Center(
+      child: Container(
+        width: 55,
+        height: 55,
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(8),
         ),
-      );
+        child: Icon(Icons.image, size: 28, color: Colors.grey[500]),
+      ),
+    ),
+  );
 
   Widget _errorImage(double width) => SizedBox(
-        width: width,
-        child: Center(
-          child: Container(
-            width: 55,
-            height: 55,
-            decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8)),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.broken_image, size: 24, color: Colors.red[400]),
-                Text("Error",
-                    style:
-                        TextStyle(fontSize: 8, color: Colors.red[600])),
-              ],
-            ),
-          ),
+    width: width,
+    child: Center(
+      child: Container(
+        width: 55,
+        height: 55,
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          borderRadius: BorderRadius.circular(8),
         ),
-      );
-
-  Widget _actionButtons(Map<String, dynamic> item, double width) =>
-      SizedBox(
-        width: width,
-        child: Row(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            IconButton(
-              icon: Icon(Icons.edit, color: Colors.orange[700], size: 20),
-              onPressed: () => _addOrUpdateItem(existingItem: item),
-              tooltip: "Edit",
-            ),
-            IconButton(
-              icon: Icon(Icons.delete, color: Colors.red[700], size: 20),
-              onPressed: () =>
-                  _deleteItem(item["docId"] ?? '', item["sr"]),
-              tooltip: "Delete",
+            Icon(Icons.broken_image, size: 24, color: Colors.red[400]),
+            Text(
+              "Error",
+              style: TextStyle(fontSize: 8, color: Colors.red[600]),
             ),
           ],
         ),
-      );
+      ),
+    ),
+  );
 
-  Widget _updateButton(Map<String, dynamic> item, double width) =>
-      SizedBox(
-        width: width,
-        child: Center(
-          child: ElevatedButton(
-            onPressed: () => _showUpdateOptions(item),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[600],
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text("Update",
-                style: TextStyle(fontSize: 12, color: Colors.white)),
-          ),
+  Widget _actionButtons(Map<String, dynamic> item, double width) => SizedBox(
+    width: width,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          icon: Icon(Icons.edit, color: Colors.orange[700], size: 20),
+          onPressed: () => _addOrUpdateItem(existingItem: item),
+          tooltip: "Edit",
         ),
-      );
+        IconButton(
+          icon: Icon(Icons.delete, color: Colors.red[700], size: 20),
+          onPressed: () => _deleteItem(item["docId"] ?? '', item["sr"]),
+          tooltip: "Delete",
+        ),
+      ],
+    ),
+  );
+
+  Widget _updateButton(Map<String, dynamic> item, double width) => SizedBox(
+    width: width,
+    child: Center(
+      child: ElevatedButton(
+        onPressed: () => _showUpdateOptions(item),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blue[600],
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: const Text(
+          "Update",
+          style: TextStyle(fontSize: 12, color: Colors.white),
+        ),
+      ),
+    ),
+  );
 
   // ─── RESPONSIVE TABLE (same structure as StoreStockScreen) ───────────────────
   Widget _responsiveTable() {
@@ -1577,7 +1718,9 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
               // Table Header
               Container(
                 padding: const EdgeInsets.symmetric(
-                    vertical: 14, horizontal: 16),
+                  vertical: 14,
+                  horizontal: 16,
+                ),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [Colors.orange[600]!, Colors.orange[400]!],
@@ -1640,21 +1783,33 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                             _cell(item["sr"].toString(), 70),
                             _cell(item["code"] ?? '', 100, bold: true),
                             _cellImage(item["image"], 110),
-                            _cell(item["detail"] ?? '', 160,
-                                bold: true, color: Colors.blue[700]),
+                            _cell(
+                              item["detail"] ?? '',
+                              160,
+                              bold: true,
+                              color: Colors.blue[700],
+                            ),
                             _cell(item["piller_no"] ?? '', 110),
                             _cell(item["in"].toString(), 90),
                             _cell(item["incoming"].toString(), 100),
-                            _cell(item["out"].toString(), 90,
-                                color: Colors.red[700]),
-                            _cell(item["bal"].toString(), 100,
-                                color: Colors.green[900],
-                                bold: true,
-                                fontSize: 14),
                             _cell(
-                                item["dateEdit"]?.toString() ?? '', 90),
-                            _cell(item["remark1"] ?? '–', 120,
-                                color: Colors.grey[700]),
+                              item["out"].toString(),
+                              90,
+                              color: Colors.red[700],
+                            ),
+                            _cell(
+                              item["bal"].toString(),
+                              100,
+                              color: Colors.green[900],
+                              bold: true,
+                              fontSize: 14,
+                            ),
+                            _cell(item["dateEdit"]?.toString() ?? '', 90),
+                            _cell(
+                              item["remark1"] ?? '–',
+                              120,
+                              color: Colors.grey[700],
+                            ),
                             _actionButtons(item, 100),
                             _updateButton(item, 100),
                           ],
@@ -1666,7 +1821,10 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                     if (isExpanded)
                       Container(
                         margin: const EdgeInsets.only(
-                            bottom: 8, left: 8, right: 8),
+                          bottom: 8,
+                          left: 8,
+                          right: 8,
+                        ),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.orange[50],
@@ -1686,7 +1844,8 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                                 child: Padding(
                                   padding: EdgeInsets.all(8),
                                   child: CircularProgressIndicator(
-                                      color: Colors.orange),
+                                    color: Colors.orange,
+                                  ),
                                 ),
                               );
                             }
@@ -1696,8 +1855,7 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                                 padding: const EdgeInsets.all(8),
                                 child: Text(
                                   "No issue history for this item.",
-                                  style: TextStyle(
-                                      color: Colors.grey[700]),
+                                  style: TextStyle(color: Colors.grey[700]),
                                 ),
                               );
                             }
@@ -1706,17 +1864,23 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(children: [
-                                  Icon(Icons.history,
-                                      color: Colors.orange[700], size: 18),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    "Issue History (${docs.length})",
-                                    style: TextStyle(
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.history,
+                                      color: Colors.orange[700],
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "Issue History (${docs.length})",
+                                      style: TextStyle(
                                         color: Colors.orange[700],
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ]),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(height: 6),
                                 Container(
                                   decoration: BoxDecoration(
@@ -1729,31 +1893,36 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                                         const NeverScrollableScrollPhysics(),
                                     itemCount: docs.length,
                                     itemBuilder: (context, i) {
-                                      final data = docs[i].data()
-                                          as Map<String, dynamic>;
+                                      final data =
+                                          docs[i].data()
+                                              as Map<String, dynamic>;
                                       final qty = data['quantity'] ?? 0;
-                                      final dept =
-                                          data['department'] ?? '-';
-                                      final ts = (data['timestamp']
-                                              as Timestamp?)
-                                          ?.toDate();
+                                      final dept = data['department'] ?? '-';
+                                      final ts =
+                                          (data['timestamp'] as Timestamp?)
+                                              ?.toDate();
                                       final dateStr = ts != null
                                           ? DateFormat(
-                                                  'dd-MM-yyyy hh:mm a')
-                                              .format(ts)
+                                              'dd-MM-yyyy hh:mm a',
+                                            ).format(ts)
                                           : '-';
                                       return ListTile(
                                         dense: true,
-                                        leading: Icon(Icons.arrow_upward,
-                                            color: Colors.red[600]),
+                                        leading: Icon(
+                                          Icons.arrow_upward,
+                                          color: Colors.red[600],
+                                        ),
                                         title: Text(
-                                            "Issued $qty pcs → $dept",
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.red[700])),
-                                        subtitle: Text(dateStr,
-                                            style: const TextStyle(
-                                                fontSize: 12)),
+                                          "Issued $qty pcs → $dept",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.red[700],
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          dateStr,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
                                       );
                                     },
                                   ),
@@ -1809,8 +1978,11 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: 20),
+                    child: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1828,15 +2000,19 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Ready Stock',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20,
-                              color: Colors.white)),
+                      Text(
+                        'Ready Stock',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          color: Colors.white,
+                        ),
+                      ),
                       SizedBox(height: 2),
-                      Text('Manage Ready Stock Items',
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.white70)),
+                      Text(
+                        'Manage Ready Stock Items',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
                     ],
                   ),
                 ),
@@ -1858,8 +2034,7 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
         ),
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Colors.orange))
+          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
           : Column(
               children: [
                 // Search + Group Filter
@@ -1870,7 +2045,9 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 4),
+                            horizontal: 20,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
@@ -1889,8 +2066,11 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                                   "Search by Code, Detail or Piller No...",
                               hintStyle: TextStyle(color: Colors.grey[400]),
                               border: InputBorder.none,
-                              prefixIcon: Icon(Icons.search,
-                                  color: Colors.orange[600], size: 24),
+                              prefixIcon: Icon(
+                                Icons.search,
+                                color: Colors.orange[600],
+                                size: 24,
+                              ),
                             ),
                           ),
                         ),
@@ -1912,11 +2092,12 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                           value: _selectedGroup,
                           hint: const Text("Filter Group"),
                           items: _groupList
-                              .map((g) => DropdownMenuItem(
-                                    value: g,
-                                    child: Text(
-                                        g == 'All' ? 'All Groups' : g),
-                                  ))
+                              .map(
+                                (g) => DropdownMenuItem(
+                                  value: g,
+                                  child: Text(g == 'All' ? 'All Groups' : g),
+                                ),
+                              )
                               .toList(),
                           onChanged: (v) {
                             setState(() => _selectedGroup = v!);
@@ -1958,16 +2139,21 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10),
+                                horizontal: 10,
+                              ),
                               decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                               child: DropdownButton<int>(
                                 value: _rowsPerPage,
                                 underline: const SizedBox(),
                                 items: [5, 10, 20, 50]
-                                    .map((n) => DropdownMenuItem(
+                                    .map(
+                                      (n) => DropdownMenuItem(
                                         value: n,
-                                        child: Text("$n / page")))
+                                        child: Text("$n / page"),
+                                      ),
+                                    )
                                     .toList(),
                                 onChanged: (v) => setState(() {
                                   _rowsPerPage = v!;
@@ -1979,10 +2165,9 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
                               icon: const Icon(Icons.chevron_right),
                               onPressed:
                                   (_currentPage + 1) * _rowsPerPage <
-                                          filteredData.length
-                                      ? () =>
-                                          setState(() => _currentPage++)
-                                      : null,
+                                      filteredData.length
+                                  ? () => setState(() => _currentPage++)
+                                  : null,
                             ),
                           ],
                         ),
@@ -1999,24 +2184,29 @@ class _ReadyStockScreenState extends State<ReadyStockScreen> {
             heroTag: "add_item",
             backgroundColor: Colors.orange[600],
             icon: const Icon(Icons.add, color: Colors.white, size: 20),
-            label: Text("Add Item",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w600)),
+            label: Text(
+              "Add Item",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           SizedBox(height: 0.5.h),
           FloatingActionButton.extended(
             onPressed: _uploadExcelFile,
             heroTag: "upload_excel",
             backgroundColor: Colors.green[600],
-            icon: const Icon(Icons.upload_file,
-                color: Colors.white, size: 20),
-            label: Text("Upload Excel",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w600)),
+            icon: const Icon(Icons.upload_file, color: Colors.white, size: 20),
+            label: Text(
+              "Upload Excel",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),

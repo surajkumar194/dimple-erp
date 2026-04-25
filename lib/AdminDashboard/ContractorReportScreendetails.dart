@@ -1,1209 +1,1303 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-// ──────────────────────────────────────────────────────────────
-// MAIN SCREEN
-// ──────────────────────────────────────────────────────────────
-
-class ContractorReport extends StatefulWidget {
-  const ContractorReport({super.key});
+class ConstructionProductionDashboard extends StatefulWidget {
+  const ConstructionProductionDashboard({super.key});
 
   @override
-  State<ContractorReport> createState() => _ContractorReportState();
+  State<ConstructionProductionDashboard> createState() =>
+      _ConstructionProductionDashboardState();
 }
 
-class _ContractorReportState extends State<ContractorReport>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _ConstructionProductionDashboardState
+    extends State<ConstructionProductionDashboard>
+    with TickerProviderStateMixin {
+  static const _primary    = Color(0xFF169a8d);
+  static const _primaryDk  = Color(0xFF0d7c70);
+  static const _lightBg    = Color(0xFFF0F8F7);
+  static const _darkText   = Color(0xFF2C3E50);
+  static const _success    = Color(0xFF2ECC71);
+  static const _danger     = Color(0xFFE74C3C);
+  static const _warning    = Color(0xFFFFA500);
+  static const _blue       = Color(0xFF3B82F6);
+  static const _purple     = Color(0xFF8B5CF6);
+
+  static const _primaryGrad = LinearGradient(
+    colors: [Color(0xFF169a8d), Color(0xFF0d7c70)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  String _selectedFilter = "All";
+
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _animCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 700));
+    _fadeAnim =
+        CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _animCtrl.forward();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _animCtrl.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: _buildAppBar(),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          ReportTab(type: "cutting"),
-          ReportTab(type: "pasting"),
-        ],
-      ),
-    );
+  List _mdfProducts(List products) => products.where((p) {
+        final cat = (p['productCategory'] ?? '').toString().toLowerCase();
+        return cat == 'mdf' || cat == 'construction';
+      }).toList();
+
+  int _parseQty(dynamic qty) {
+    if (qty is int) return qty;
+    if (qty is double) return qty.toInt();
+    if (qty is String) return int.tryParse(qty) ?? 0;
+    return 0;
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(120),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.purple.shade600,
-              Colors.blue.shade600,
-              Colors.teal.shade600,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.assignment_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Contract Reports',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
-                            color: Colors.white,
-                          ),
-                        ),
-                        SizedBox(height: 1),
-                        Text(
-                          'Production Overview',
-                          style: TextStyle(fontSize: 12, color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              TabBar(
-                controller: _tabController,
-                indicatorColor: Colors.white,
-                indicatorWeight: 3,
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white54,
-                labelStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4,
-                ),
-                tabs: [
-                  _buildTab(Icons.content_cut_rounded, "Cutting"),
-                  _buildTab(Icons.layers_rounded, "Pasting"),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  Color _priorityColor(String p) {
+    if (p == 'High') return _danger;
+    if (p == 'Medium') return _warning;
+    return _success;
   }
 
-  Tab _buildTab(IconData icon, String text) {
-    return Tab(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 6),
-          Text(text),
-        ],
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-// REPORT TAB
-// ──────────────────────────────────────────────────────────────
-
-class ReportTab extends StatefulWidget {
-  final String type;
-  const ReportTab({super.key, required this.type});
-
-  @override
-  State<ReportTab> createState() => _ReportTabState();
-}
-
-class _ReportTabState extends State<ReportTab>
-    with SingleTickerProviderStateMixin {
-  String _filter = "all";
-  late AnimationController _animController;
-
-  List<Color> get _gradientColors => widget.type == "cutting"
-      ? [Colors.purple.shade600, Colors.blue.shade600]
-      : [Colors.teal.shade600, Colors.green.shade600];
-
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    )..forward();
+  int _safeInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
   }
 
-  @override
-  void dispose() {
-    _animController.dispose();
-    super.dispose();
-  }
+  Future<_DashboardData> _loadData() async {
+    final ordersSnap = await FirebaseFirestore.instance
+        .collection('orders')
+        .orderBy('orderDate', descending: true)
+        .get();
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.purple.shade50.withOpacity(0.3),
-            Colors.blue.shade50.withOpacity(0.3),
-            Colors.pink.shade50.withOpacity(0.2),
-          ],
-        ),
-      ),
-      child: Column(
-        children: [
-          _buildFilterBar(),
-          Expanded(child: _buildList()),
-        ],
-      ),
-    );
-  }
+    final prodSnap = await FirebaseFirestore.instance
+        .collection('constructionProduction')
+        .get();
 
-  Widget _buildFilterBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-      child: Row(
-        children: [
-          Text(
-            'FILTER',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-              color: Colors.grey.shade500,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip("All", "all", Colors.purple.shade600),
-                  const SizedBox(width: 8),
-                  _buildFilterChip("Done", "done", Colors.green.shade600),
-                  const SizedBox(width: 8),
-                  _buildFilterChip("Pending", "pending", Colors.orange.shade600),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    final Map<String, Map<String, dynamic>> savedMap = {};
+    for (final doc in prodSnap.docs) {
+      savedMap[doc.id] = doc.data();
+    }
 
-  Widget _buildFilterChip(String label, String value, Color activeColor) {
-    final isSelected = _filter == value;
-    return GestureDetector(
-      onTap: () => setState(() => _filter = value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(colors: [activeColor, activeColor.withOpacity(0.75)])
-              : null,
-          color: isSelected ? null : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: isSelected
-                  ? activeColor.withOpacity(0.35)
-                  : Colors.grey.withOpacity(0.12),
-              blurRadius: isSelected ? 10 : 5,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          border: Border.all(
-            color: isSelected ? Colors.transparent : Colors.grey.shade200,
-            width: 1.5,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: isSelected ? Colors.white : Colors.grey.shade600,
-            letterSpacing: 0.3,
-          ),
-        ),
-      ),
-    );
-  }
+    int totalOrders = 0, doneOrders = 0, partialOrders = 0, pendingOrders = 0;
+    int totalProducts = 0, doneProducts = 0;
+    int empType = 0, conType = 0, bothType = 0;
+    int totalQty = 0, empQty = 0, conQty = 0;
 
-  Widget _buildList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('constructionProduction')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: _gradientColors),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      strokeWidth: 3,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ShaderMask(
-                  shaderCallback: (bounds) =>
-                      LinearGradient(colors: _gradientColors).createShader(bounds),
-                  child: const Text(
-                    'Loading Orders...',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
+    final List<_OrderProgress> orderList = [];
+
+    for (final doc in ordersSnap.docs) {
+      final data = doc.data();
+      final products = data['products'] is List ? data['products'] as List : [];
+      final mdfProds = _mdfProducts(products);
+      if (mdfProds.isEmpty) continue;
+
+      totalOrders++;
+      final saved = savedMap[doc.id];
+      final arr = saved != null
+          ? List.from(saved['productsProduction'] ?? [])
+          : <dynamic>[];
+
+      int orderDone = 0;
+      final List<_ProductProgress> prodList = [];
+
+      for (int i = 0; i < mdfProds.length; i++) {
+        final prod = mdfProds[i] as Map<String, dynamic>;
+        final qty = _parseQty(prod['quantity']);
+        totalProducts++;
+        totalQty += qty;
+
+        Map<String, dynamic>? sp;
+        if (i < arr.length && arr[i] != null && (arr[i] as Map).isNotEmpty) {
+          sp = Map<String, dynamic>.from(arr[i] as Map);
         }
 
-        if (snapshot.hasError) return _buildErrorState();
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return _buildEmptyState();
+        if (sp != null) {
+          orderDone++;
+          doneProducts++;
+          final type = sp['productionType'] ?? '';
+          final eQ = _safeInt(sp['employeeQuantity']);
+          final cQ = _safeInt(sp['contractorQuantity']);
+          if (type == 'employee') {
+            empType++;
+            empQty += qty;
+          } else if (type == 'contractor') {
+            conType++;
+            conQty += qty;
+          } else if (type == 'both') {
+            bothType++;
+            empQty += eQ;
+            conQty += cQ;
+          }
+        }
 
-        final filtered = snapshot.data!.docs.where((doc) {
-          final d = doc.data() as Map<String, dynamic>;
-          if (widget.type == "cutting" && d['cuttingContractor'] == null) return false;
-          if (widget.type == "pasting" && d['pastingContractor'] == null) return false;
-          if (_filter == "done") return d['status'] == "done";
-          if (_filter == "pending") return d['status'] != "done";
-          return true;
-        }).toList();
+        prodList.add(_ProductProgress(
+          name: (prod['productName'] ?? 'Product ${i + 1}').toString(),
+          qty: qty,
+          isDone: sp != null,
+          productionType: sp?['productionType'],
+          boxContractor: sp?['boxContractor'],
+          cuttingContractor: sp?['cuttingContractor'],
+          pastingContractor: sp?['pastingContractor'],
+          employeeQty: _safeInt(sp?['employeeQuantity']),
+          contractorQty: _safeInt(sp?['contractorQuantity']),
+        ));
+      }
 
-        if (filtered.isEmpty) return _buildEmptyState();
+      if (orderDone >= mdfProds.length) {
+        doneOrders++;
+      } else if (orderDone > 0) {
+        partialOrders++;
+      } else {
+        pendingOrders++;
+      }
 
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
-          itemCount: filtered.length,
-          itemBuilder: (context, i) {
-            final data = filtered[i].data() as Map<String, dynamic>;
-            data['id'] = filtered[i].id;
-            return FadeTransition(
-              opacity: _animController,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.3, 0),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                  parent: _animController,
-                  curve: Curves.easeOut,
-                )),
-                child: _OrderCard(
-                  data: data,
-                  type: widget.type,
-                  gradientColors: _gradientColors,
-                ),
-              ),
-            );
-          },
-        );
-      },
+      orderList.add(_OrderProgress(
+        orderId: doc.id,
+        customerName: data['customerName'] ?? '-',
+        companyName: data['companyName'] ?? '',
+        salesPerson: data['salesPerson'] ?? '-',
+        priority: data['priority'] ?? 'Medium',
+        totalProducts: mdfProds.length,
+        doneProducts: orderDone,
+        products: prodList,
+        deliveryDate: (data['deliveryDate'] as Timestamp?)?.toDate(),
+      ));
+    }
+
+    return _DashboardData(
+      totalOrders: totalOrders,
+      doneOrders: doneOrders,
+      partialOrders: partialOrders,
+      pendingOrders: pendingOrders,
+      totalProducts: totalProducts,
+      doneProducts: doneProducts,
+      pendingProducts: totalProducts - doneProducts,
+      empType: empType,
+      conType: conType,
+      bothType: bothType,
+      totalQty: totalQty,
+      empQty: empQty,
+      conQty: conQty,
+      orderList: orderList,
     );
   }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(40),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.purple.shade100.withOpacity(0.5),
-                  Colors.blue.shade100.withOpacity(0.5),
-                ],
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.inbox_rounded, size: 80, color: Colors.grey.shade400),
-          ),
-          const SizedBox(height: 24),
-          ShaderMask(
-            shaderCallback: (bounds) => LinearGradient(
-              colors: [Colors.purple.shade700, Colors.blue.shade700],
-            ).createShader(bounds),
-            child: const Text(
-              'No Records Found',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'No orders match the selected filter',
-            style: TextStyle(fontSize: 15, color: Colors.grey.shade600),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.red.shade50,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.error_outline_rounded, size: 60, color: Colors.red.shade400),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Failed to Load Data',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.red.shade600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-// ORDER CARD
-// ──────────────────────────────────────────────────────────────
-
-class _OrderCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String type;
-  final List<Color> gradientColors;
-
-  const _OrderCard({
-    required this.data,
-    required this.type,
-    required this.gradientColors,
-  });
 
   @override
   Widget build(BuildContext context) {
-    final isDone = data['status'] == "done";
-    final contractorName = type == "cutting"
-        ? (data['cuttingContractor'] ?? 'N/A')
-        : (data['pastingContractor'] ?? 'N/A');
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white,
-            Colors.purple.shade50.withOpacity(0.3),
-            Colors.blue.shade50.withOpacity(0.3),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.purple.withOpacity(0.12),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-            spreadRadius: 1,
-          ),
-        ],
-        border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── TOP ROW ──
-            Row(
-              children: [
-                Container(
-                  width: 6,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: gradientColors,
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ORDER',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      ShaderMask(
-                        shaderCallback: (bounds) =>
-                            LinearGradient(colors: gradientColors).createShader(bounds),
-                        child: Text(
-                          '#${data['orderId'] ?? '—'}',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.person_rounded,
-                              size: 14, color: Colors.grey.shade500),
-                          const SizedBox(width: 4),
-                          Text(
-                            contractorName,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                _buildStatusChip(isDone),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            Container(
-              height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.grey.shade300,
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ── DETAIL BOXES ──
-            Row(
-              children: [
-                Expanded(
-                  child: _buildDetailBox(
-                    icon: type == "cutting"
-                        ? Icons.content_cut_rounded
-                        : Icons.layers_rounded,
-                    label: 'Type',
-                    value: type == "cutting" ? "Cutting" : "Pasting",
-                    colors: gradientColors,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildDetailBox(
-                    icon: Icons.circle,
-                    label: 'Status',
-                    value: isDone ? 'Completed' : 'Pending',
-                    colors: isDone
-                        ? [Colors.green.shade400, Colors.green.shade700]
-                        : [Colors.orange.shade400, Colors.orange.shade700],
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 14),
-
-            // ── OPEN BUTTON ──
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: gradientColors,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: gradientColors[0].withOpacity(0.4),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  ),
+    return Scaffold(
+      backgroundColor: _lightBg,
+      appBar: _appBar(),
+      body: FutureBuilder<_DashboardData>(
+        future: _loadData(),
+        builder: (ctx, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(
+                child: CircularProgressIndicator(color: _primary));
+          }
+          if (snap.hasError) {
+            return Center(
+              child: Text('Error: ${snap.error}',
+                  style: const TextStyle(color: _danger)),
+            );
+          }
+          final d = snap.data!;
+          return FadeTransition(
+            opacity: _fadeAnim,
+            child: RefreshIndicator(
+              color: _primary,
+              onRefresh: () async => setState(() {}),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                children: [
+                  _overviewCard(d),
+                  const SizedBox(height: 5),
+                  _statGrid(d),
+                  const SizedBox(height: 5),
+                  _typeSplitCard(d),
+                  const SizedBox(height: 5),
+                  _qtyCard(d),
+                  const SizedBox(height: 5),
+                  _sectionTitle('📋 Orders Detail'),
+                  const SizedBox(height: 5),
+                  _filterRow(),
+                  const SizedBox(height: 5),
+                  ..._orderCards(d),
                 ],
               ),
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DetailScreen(data: data, type: type),
-                  ),
-                ),
-                icon: const Icon(Icons.open_in_new_rounded, size: 20),
-                label: const Text(
-                  'Open Details',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  shadowColor: Colors.transparent,
-                  minimumSize: const Size(double.infinity, 52),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildDetailBox({
-    required IconData icon,
-    required String label,
-    required String value,
-    required List<Color> colors,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors[0].withOpacity(0.12), colors[1].withOpacity(0.06)],
+  PreferredSizeWidget _appBar() => AppBar(
+        elevation: 0,
+        flexibleSpace:
+            Container(decoration: const BoxDecoration(gradient: _primaryGrad)),
+        foregroundColor: Colors.white,
+        leading: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.arrow_back_ios_new_rounded,
+                color: Colors.white, size: 18),
+          ),
         ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors[0].withOpacity(0.25), width: 1.5),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Image.asset('assets/dpl.png', height: 26),
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Contractor Dashboard',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        letterSpacing: 0.3)),
+                Text('Construction & MDF Overview',
+                    style: TextStyle(fontSize: 11, color: Colors.white70)),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          GestureDetector(
+            onTap: () => setState(() {}),
+            child: Container(
+              margin: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.refresh_rounded,
+                  color: Colors.white, size: 18),
+            ),
+          ),
+        ],
+      );
+
+  Widget _overviewCard(_DashboardData d) {
+    final pct = d.totalProducts == 0
+        ? 0.0
+        : d.doneProducts / d.totalProducts;
+
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        gradient: _primaryGrad,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+              color: _primary.withOpacity(0.35),
+              blurRadius: 20,
+              offset: const Offset(0, 8)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: colors),
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: [
-                BoxShadow(
-                  color: colors[0].withOpacity(0.4),
-                  blurRadius: 6,
-                  offset: const Offset(0, 3),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Overall Progress',
+                        style: TextStyle(
+                            color: Colors.white70, fontSize: 13)),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${(pct * 100).toStringAsFixed(1)}%',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 46,
+                          fontWeight: FontWeight.w900,
+                          height: 1.0),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${d.doneProducts} / ${d.totalProducts} products complete',
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(icon, size: 15, color: Colors.white),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 3),
-          ShaderMask(
-            shaderCallback: (bounds) =>
-                LinearGradient(colors: colors).createShader(bounds),
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(bool isDone) {
-    final colors = isDone
-        ? [Colors.green.shade400, Colors.green.shade700]
-        : [Colors.orange.shade400, Colors.orange.shade700];
-    final icon = isDone ? Icons.check_circle_rounded : Icons.hourglass_top_rounded;
-    final label = isDone ? 'Done' : 'Pending';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: colors),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: colors[0].withOpacity(0.4),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.white),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────
-// DETAIL SCREEN
-// ──────────────────────────────────────────────────────────────
-
-class DetailScreen extends StatefulWidget {
-  final Map<String, dynamic> data;
-  final String type;
-
-  const DetailScreen({super.key, required this.data, required this.type});
-
-  @override
-  State<DetailScreen> createState() => _DetailScreenState();
-}
-
-class _DetailScreenState extends State<DetailScreen>
-    with SingleTickerProviderStateMixin {
-  bool _isUpdating = false;
-  late AnimationController _animController;
-  late Animation<double> _scaleAnim;
-
-  List<Color> get _gradientColors => widget.type == "cutting"
-      ? [Colors.purple.shade600, Colors.blue.shade600]
-      : [Colors.teal.shade600, Colors.green.shade600];
-
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _scaleAnim = CurvedAnimation(parent: _animController, curve: Curves.elasticOut);
-    if (widget.data['status'] == "done") _animController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _markDone() async {
-    setState(() => _isUpdating = true);
-    try {
-      await FirebaseFirestore.instance
-          .collection('constructionProduction')
-          .doc(widget.data['id'])
-          .update({
-        "status": "done",
-        widget.type == "cutting" ? "cuttingApproved" : "pastingApproved": true,
-      });
-      if (mounted) {
-        setState(() {
-          widget.data['status'] = "done";
-          _isUpdating = false;
-        });
-        _animController.forward();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isUpdating = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red.shade600,
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDone = widget.data['status'] == "done";
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: _buildAppBar(),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.purple.shade50.withOpacity(0.3),
-              Colors.blue.shade50.withOpacity(0.3),
-              Colors.pink.shade50.withOpacity(0.2),
+              SizedBox(
+                width: 88,
+                height: 88,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      value: pct,
+                      strokeWidth: 9,
+                      backgroundColor: Colors.white.withOpacity(0.2),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          Colors.white),
+                    ),
+                    Text('${(pct * 100).toInt()}%',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
             ],
           ),
-        ),
-        child: isDone ? _buildDoneBody() : _buildPendingBody(),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar() {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(60),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: _gradientColors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      widget.type.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    Text(
-                      'Order #${widget.data['orderId'] ?? '—'}',
-                      style: const TextStyle(fontSize: 12, color: Colors.white70),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPendingBody() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          const SizedBox(height: 10),
-          _buildInfoCard(),
-          const SizedBox(height: 20),
-          _buildStatusCard(
-            colors: [Colors.orange.shade400, Colors.orange.shade700],
-            icon: Icons.hourglass_top_rounded,
-            label: 'PENDING',
-            description: 'This work order has not been completed yet.',
-          ),
-          const SizedBox(height: 28),
-          _buildMarkDoneButton(),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDoneBody() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          const SizedBox(height: 10),
-          _buildInfoCard(),
-          const SizedBox(height: 20),
-          ScaleTransition(
-            scale: _scaleAnim,
-            child: _buildStatusCard(
-              colors: [Colors.green.shade400, Colors.green.shade700],
-              icon: Icons.check_circle_rounded,
-              label: 'COMPLETED',
-              description: 'Work has been completed and approved.',
-            ),
-          ),
-          const SizedBox(height: 28),
-          _buildBackButton(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCard() {
-    final contractorKey =
-        widget.type == "cutting" ? 'cuttingContractor' : 'pastingContractor';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white,
-            Colors.purple.shade50.withOpacity(0.3),
-            Colors.blue.shade50.withOpacity(0.3),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.purple.withOpacity(0.12),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ShaderMask(
-            shaderCallback: (bounds) =>
-                LinearGradient(colors: _gradientColors).createShader(bounds),
-            child: const Text(
-              'WORK ORDER DETAILS',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.5,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            height: 2,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: _gradientColors),
-              borderRadius: BorderRadius.circular(2),
+          const SizedBox(height: 18),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: pct,
+              minHeight: 10,
+              backgroundColor: Colors.white.withOpacity(0.18),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Colors.white),
             ),
           ),
           const SizedBox(height: 16),
-          _infoRow(Icons.tag_rounded, 'Order ID',
-              '#${widget.data['orderId'] ?? '—'}', _gradientColors[0]),
-          const SizedBox(height: 12),
-          _infoRow(Icons.person_outline_rounded, 'Contractor',
-              widget.data[contractorKey] ?? 'Not assigned', _gradientColors[1]),
-          const SizedBox(height: 12),
-          _infoRow(
-            widget.type == "cutting"
-                ? Icons.content_cut_rounded
-                : Icons.layers_rounded,
-            'Type',
-            widget.type[0].toUpperCase() + widget.type.substring(1),
-            _gradientColors[0],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _miniStat('✅ Done', '${d.doneOrders}'),
+              Container(height: 32, width: 1, color: Colors.white24),
+              _miniStat('⏳ Partial', '${d.partialOrders}'),
+              Container(height: 32, width: 1, color: Colors.white24),
+              _miniStat('🔴 Pending', '${d.pendingOrders}'),
+              Container(height: 32, width: 1, color: Colors.white24),
+              _miniStat('📦 Total', '${d.totalOrders}'),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value, Color iconColor) {
-    return Row(
+  Widget _miniStat(String label, String val) => Column(
+        children: [
+          Text(val,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 3),
+          Text(label,
+              style:
+                  const TextStyle(color: Colors.white60, fontSize: 10)),
+        ],
+      );
+
+  Widget _statGrid(_DashboardData d) {
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 24,
+      mainAxisSpacing: 24,
+      childAspectRatio: 2,
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [iconColor.withOpacity(0.2), iconColor.withOpacity(0.08)],
-            ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 16, color: iconColor),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade600,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A2E),
-            ),
-            textAlign: TextAlign.end,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
+        _statCard('Total Orders', '${d.totalOrders}',
+            Icons.receipt_long_rounded, _blue,
+            const LinearGradient(
+                colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)])),
+        _statCard('Done Orders', '${d.doneOrders}',
+            Icons.check_circle_rounded, _success,
+            const LinearGradient(
+                colors: [Color(0xFFF0FDF4), Color(0xFFDCFCE7)])),
+        _statCard('Total Products', '${d.totalProducts}',
+            Icons.inventory_2_rounded, _warning,
+            const LinearGradient(
+                colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)])),
+        _statCard('Pending Products', '${d.pendingProducts}',
+            Icons.pending_actions_rounded, _danger,
+            const LinearGradient(
+                colors: [Color(0xFFFFF1F2), Color(0xFFFFE4E6)])),
       ],
     );
   }
 
-  Widget _buildStatusCard({
-    required List<Color> colors,
-    required IconData icon,
-    required String label,
-    required String description,
-  }) {
+  Widget _statCard(String label, String value, IconData icon, Color color,
+      LinearGradient bg) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors[0].withOpacity(0.15), colors[1].withOpacity(0.06)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors[0].withOpacity(0.35), width: 1.5),
+        gradient: bg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
-            color: colors[0].withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+              color: color.withOpacity(0.12),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 22),
           ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(value,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        height: 1.0)),
+                const SizedBox(height: 4),
+                Text(label,
+                    style: TextStyle(
+                        color: color.withOpacity(0.7),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _typeSplitCard(_DashboardData d) {
+    final total = d.empType + d.conType + d.bothType;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 5)),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: _primaryGrad,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.pie_chart_rounded,
+                    color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 10),
+              const Text('Production Type Split',
+                  style: TextStyle(
+                      color: _darkText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15)),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$total Saved',
+                    style: const TextStyle(
+                        color: _primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                  child: _typeBox('Employee', d.empType, total,
+                      Icons.person_rounded, _blue,
+                      const LinearGradient(colors: [
+                        Color(0xFFEFF6FF),
+                        Color(0xFFDBEAFE)
+                      ]))),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _typeBox('Contractor', d.conType, total,
+                      Icons.engineering_rounded, _warning,
+                      const LinearGradient(colors: [
+                        Color(0xFFFFFBEB),
+                        Color(0xFFFEF3C7)
+                      ]))),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _typeBox('Both', d.bothType, total,
+                      Icons.groups_rounded, _purple,
+                      const LinearGradient(colors: [
+                        Color(0xFFF5F3FF),
+                        Color(0xFFEDE9FE)
+                      ]))),
+            ],
+          ),
+          if (total > 0) ...[
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Row(
+                children: [
+                  if (d.empType > 0)
+                    Expanded(
+                        flex: d.empType,
+                        child: Container(height: 14, color: _blue)),
+                  if (d.conType > 0)
+                    Expanded(
+                        flex: d.conType,
+                        child: Container(height: 14, color: _warning)),
+                  if (d.bothType > 0)
+                    Expanded(
+                        flex: d.bothType,
+                        child: Container(height: 14, color: _purple)),
+                  if (d.pendingProducts > 0)
+                    Expanded(
+                        flex: d.pendingProducts,
+                        child: Container(
+                            height: 14, color: Colors.grey.shade200)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _dot(_blue, 'Employee'),
+                const SizedBox(width: 14),
+                _dot(_warning, 'Contractor'),
+                const SizedBox(width: 14),
+                _dot(_purple, 'Both'),
+                const SizedBox(width: 14),
+                _dot(Colors.grey.shade300, 'Pending'),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _typeBox(String label, int count, int total, IconData icon,
+      Color color, LinearGradient bg) {
+    final pct = total == 0 ? 0.0 : count / total;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 6),
+          Text('$count',
+              style: TextStyle(
+                  color: color,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900)),
+          Text(label,
+              style: TextStyle(
+                  color: color.withOpacity(0.7),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: pct,
+              minHeight: 5,
+              backgroundColor: Colors.white.withOpacity(0.6),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text('${(pct * 100).toInt()}%',
+              style: TextStyle(color: color, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+
+  Widget _dot(Color color, String label) => Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.all(18),
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                  color: color, borderRadius: BorderRadius.circular(3))),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                  color: Colors.grey.shade600, fontSize: 10)),
+        ],
+      );
+
+  // ── Qty Card ──────────────────────────────────────────────────
+  Widget _qtyCard(_DashboardData d) {
+    final pendingQty = d.totalQty - d.empQty - d.conQty;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 5)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.bar_chart_rounded,
+                    color: Color(0xFF6366F1), size: 16),
+              ),
+              const SizedBox(width: 10),
+              const Text('Quantity Distribution',
+                  style: TextStyle(
+                      color: _darkText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                  child: _qtyBox('Total', d.totalQty, _primary,
+                      Icons.all_inclusive_rounded,
+                      const LinearGradient(colors: [
+                        Color(0xFFECFDF5),
+                        Color(0xFFD1FAE5)
+                      ]))),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _qtyBox('Employee', d.empQty, _blue,
+                      Icons.person_rounded,
+                      const LinearGradient(colors: [
+                        Color(0xFFEFF6FF),
+                        Color(0xFFDBEAFE)
+                      ]))),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _qtyBox('Contractor', d.conQty, _warning,
+                      Icons.engineering_rounded,
+                      const LinearGradient(colors: [
+                        Color(0xFFFFFBEB),
+                        Color(0xFFFEF3C7)
+                      ]))),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _qtyBox(
+                      'Pending',
+                      pendingQty < 0 ? 0 : pendingQty,
+                      _danger,
+                      Icons.hourglass_empty_rounded,
+                      const LinearGradient(colors: [
+                        Color(0xFFFFF1F2),
+                        Color(0xFFFFE4E6)
+                      ]))),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _qtyBox(String label, int val, Color color, IconData icon,
+      LinearGradient bg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        gradient: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 6),
+          Text('$val',
+              style: TextStyle(
+                  color: color,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 3),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: color.withOpacity(0.7),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────
+  Widget _sectionTitle(String t) => Text(t,
+      style: const TextStyle(
+          color: _darkText, fontWeight: FontWeight.bold, fontSize: 16));
+
+  // ── Filter Row ────────────────────────────────────────────────
+  Widget _filterRow() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _fchip('All', Colors.grey.shade700, Colors.grey.shade100),
+          _fchip('Employee', _blue, const Color(0xFFEFF6FF)),
+          _fchip('Contractor', _warning, const Color(0xFFFFFBEB)),
+          _fchip('Both', _purple, const Color(0xFFF5F3FF)),
+          _fchip('Done', _success, const Color(0xFFF0FDF4)),
+          _fchip('Pending', _danger, const Color(0xFFFFF1F2)),
+        ],
+      ),
+    );
+  }
+
+  Widget _fchip(String label, Color textColor, Color bg) {
+    final isSel = _selectedFilter == label;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedFilter = label),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSel ? textColor : bg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color:
+                    isSel ? textColor : textColor.withOpacity(0.3)),
+            boxShadow: isSel
+                ? [
+                    BoxShadow(
+                        color: textColor.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3))
+                  ]
+                : [],
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSel ? Colors.white : textColor,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Order Cards ───────────────────────────────────────────────
+  List<Widget> _orderCards(_DashboardData d) {
+    List<_OrderProgress> list = d.orderList;
+
+    switch (_selectedFilter) {
+      case 'Employee':
+        list = list
+            .where((o) => o.products
+                .any((p) => p.isDone && p.productionType == 'employee'))
+            .toList();
+        break;
+      case 'Contractor':
+        list = list
+            .where((o) => o.products
+                .any((p) => p.isDone && p.productionType == 'contractor'))
+            .toList();
+        break;
+      case 'Both':
+        list = list
+            .where((o) => o.products
+                .any((p) => p.isDone && p.productionType == 'both'))
+            .toList();
+        break;
+      case 'Done':
+        list = list
+            .where((o) => o.doneProducts >= o.totalProducts)
+            .toList();
+        break;
+      case 'Pending':
+        list = list
+            .where((o) => o.doneProducts < o.totalProducts)
+            .toList();
+        break;
+    }
+
+    if (list.isEmpty) {
+      return [
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      shape: BoxShape.circle),
+                  child: Icon(Icons.inbox_rounded,
+                      color: Colors.grey.shade400, size: 48),
+                ),
+                const SizedBox(height: 16),
+                Text('No orders for "$_selectedFilter"',
+                    style: TextStyle(
+                        color: Colors.grey.shade500, fontSize: 14)),
+              ],
+            ),
+          ),
+        )
+      ];
+    }
+
+    return list.map((o) => _orderCard(o)).toList();
+  }
+
+  Widget _orderCard(_OrderProgress o) {
+    final pct =
+        o.totalProducts == 0 ? 0.0 : o.doneProducts / o.totalProducts;
+    final allDone = o.doneProducts >= o.totalProducts;
+    final anyDone = o.doneProducts > 0;
+
+    final statusColor =
+        allDone ? _success : anyDone ? _warning : _danger;
+    final statusGrad = allDone
+        ? const LinearGradient(
+            colors: [Color(0xFFF0FDF4), Color(0xFFDCFCE7)])
+        : anyDone
+            ? const LinearGradient(
+                colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)])
+            : const LinearGradient(
+                colors: [Color(0xFFFFF1F2), Color(0xFFFFE4E6)]);
+    final pColor = _priorityColor(o.priority);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border:
+            Border.all(color: statusColor.withOpacity(0.25), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 5)),
+        ],
+      ),
+      child: Theme(
+        data: ThemeData(
+            dividerColor: Colors.transparent,
+            colorScheme: const ColorScheme.light()),
+        child: ExpansionTile(
+          tilePadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          childrenPadding:
+              const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          leading: Container(
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: colors),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: colors[0].withOpacity(0.45),
-                  blurRadius: 18,
-                  offset: const Offset(0, 7),
+              gradient: statusGrad,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: statusColor.withOpacity(0.3)),
+            ),
+            child: Icon(
+              allDone
+                  ? Icons.check_circle_rounded
+                  : anyDone
+                      ? Icons.pending_rounded
+                      : Icons.schedule_rounded,
+              color: statusColor,
+              size: 24,
+            ),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(o.customerName,
+                    style: const TextStyle(
+                        color: _darkText,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: pColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: pColor.withOpacity(0.4)),
+                ),
+                child: Text(o.priority,
+                    style: TextStyle(
+                        color: pColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (o.companyName.isNotEmpty)
+                  Text(o.companyName,
+                      style: TextStyle(
+                          color: Colors.grey.shade500, fontSize: 11)),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.badge_outlined,
+                        size: 12, color: Colors.grey.shade500),
+                    const SizedBox(width: 4),
+                    Text(o.salesPerson,
+                        style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 11)),
+                    if (o.deliveryDate != null) ...[
+                      const SizedBox(width: 12),
+                      Icon(Icons.calendar_today,
+                          size: 12, color: Colors.grey.shade500),
+                      const SizedBox(width: 4),
+                      Text(
+                          '${o.deliveryDate!.day}/${o.deliveryDate!.month}/${o.deliveryDate!.year}',
+                          style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 11)),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: pct,
+                          minHeight: 7,
+                          backgroundColor:
+                              statusColor.withOpacity(0.15),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(statusColor),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${o.doneProducts}/${o.totalProducts}  ${(pct * 100).toInt()}%',
+                        style: TextStyle(
+                            color: statusColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            child: Icon(icon, size: 46, color: Colors.white),
           ),
-          const SizedBox(height: 16),
-          ShaderMask(
-            shaderCallback: (bounds) =>
-                LinearGradient(colors: colors).createShader(bounds),
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: 2.5,
-              ),
+          children: [
+            Divider(height: 1, color: Colors.grey.shade100),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.precision_manufacturing_rounded,
+                    size: 14, color: _primary),
+                const SizedBox(width: 6),
+                const Text('MDF Products',
+                    style: TextStyle(
+                        color: _darkText,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13)),
+              ],
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            description,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 10),
+            ...o.products.map((p) => _productRow(p)),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildMarkDoneButton() {
+  Widget _productRow(_ProductProgress p) {
+    Color typeColor;
+    IconData typeIcon;
+    LinearGradient typeBg;
+
+    if (!p.isDone) {
+      typeColor = Colors.grey.shade400;
+      typeIcon = Icons.hourglass_empty_rounded;
+      typeBg = LinearGradient(
+          colors: [Colors.grey.shade50, Colors.grey.shade100]);
+    } else if (p.productionType == 'employee') {
+      typeColor = _blue;
+      typeIcon = Icons.person_rounded;
+      typeBg = const LinearGradient(
+          colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)]);
+    } else if (p.productionType == 'contractor') {
+      typeColor = _warning;
+      typeIcon = Icons.engineering_rounded;
+      typeBg = const LinearGradient(
+          colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)]);
+    } else {
+      typeColor = _purple;
+      typeIcon = Icons.groups_rounded;
+      typeBg = const LinearGradient(
+          colors: [Color(0xFFF5F3FF), Color(0xFFEDE9FE)]);
+    }
+
     return Container(
-      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.green.shade400, Colors.green.shade700],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.green.withOpacity(0.4),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        gradient: typeBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: typeColor.withOpacity(0.25)),
       ),
-      child: ElevatedButton.icon(
-        onPressed: _isUpdating ? null : _markDone,
-        icon: _isUpdating
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
-              )
-            : const Icon(Icons.check_circle_rounded, size: 22),
-        label: Text(
-          _isUpdating ? 'Updating...' : 'MARK AS DONE',
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: typeColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(typeIcon, color: typeColor, size: 14),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(p.name,
+                    style: const TextStyle(
+                        color: _darkText,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: typeColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('Qty: ${p.qty}',
+                    style: TextStyle(
+                        color: typeColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: p.isDone
+                      ? _success.withOpacity(0.12)
+                      : _danger.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: p.isDone
+                          ? _success.withOpacity(0.35)
+                          : _danger.withOpacity(0.3)),
+                ),
+                child: Text(
+                  p.isDone ? '✅ Done' : '⏳ Pending',
+                  style: TextStyle(
+                      color: p.isDone ? _success : _danger,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          shadowColor: Colors.transparent,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
+          if (p.isDone) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (p.productionType != null)
+                  _chip2('🏭 ${p.productionType!.toUpperCase()}',
+                      typeColor),
+                if ((p.productionType == 'employee' ||
+                        p.productionType == 'both') &&
+                    p.employeeQty > 0)
+                  _chip2('👤 Emp: ${p.employeeQty}', _blue),
+                if ((p.productionType == 'contractor' ||
+                        p.productionType == 'both') &&
+                    p.contractorQty > 0)
+                  _chip2('🔧 Con: ${p.contractorQty}', _warning),
+                if (p.boxContractor is List &&
+                    (p.boxContractor as List).isNotEmpty)
+                  _chip2(
+                      '📦 ${(p.boxContractor as List).join(", ")}',
+                      Colors.grey.shade600),
+                if (p.cuttingContractor != null &&
+                    p.cuttingContractor!.isNotEmpty)
+                  _chip2('✂️ ${p.cuttingContractor}',
+                      Colors.grey.shade600),
+                if (p.pastingContractor != null &&
+                    p.pastingContractor!.isNotEmpty)
+                  _chip2('🖌 ${p.pastingContractor}',
+                      Colors.grey.shade600),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
 
-  Widget _buildBackButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () => Navigator.pop(context),
-        icon: const Icon(Icons.arrow_back_rounded, size: 20),
-        label: const Text(
-          'BACK TO LIST',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1,
-          ),
+  Widget _chip2(String label, Color color) => Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.3)),
         ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.grey.shade700,
-          side: BorderSide(color: Colors.grey.shade300, width: 1.5),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      ),
-    );
-  }
+        child: Text(label,
+            style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w600)),
+      );
+}
+
+// ─── Data Models ──────────────────────────────────────────────────────────────
+
+class _DashboardData {
+  final int totalOrders, doneOrders, partialOrders, pendingOrders;
+  final int totalProducts, doneProducts, pendingProducts;
+  final int empType, conType, bothType;
+  final int totalQty, empQty, conQty;
+  final List<_OrderProgress> orderList;
+
+  const _DashboardData({
+    required this.totalOrders,
+    required this.doneOrders,
+    required this.partialOrders,
+    required this.pendingOrders,
+    required this.totalProducts,
+    required this.doneProducts,
+    required this.pendingProducts,
+    required this.empType,
+    required this.conType,
+    required this.bothType,
+    required this.totalQty,
+    required this.empQty,
+    required this.conQty,
+    required this.orderList,
+  });
+}
+
+class _OrderProgress {
+  final String orderId, customerName, companyName, salesPerson, priority;
+  final int totalProducts, doneProducts;
+  final List<_ProductProgress> products;
+  final DateTime? deliveryDate;
+
+  const _OrderProgress({
+    required this.orderId,
+    required this.customerName,
+    required this.companyName,
+    required this.salesPerson,
+    required this.priority,
+    required this.totalProducts,
+    required this.doneProducts,
+    required this.products,
+    this.deliveryDate,
+  });
+}
+
+class _ProductProgress {
+  final String name;
+  final int qty;
+  final bool isDone;
+  final String? productionType, cuttingContractor, pastingContractor;
+  final dynamic boxContractor;
+  final int employeeQty, contractorQty;
+
+  const _ProductProgress({
+    required this.name,
+    required this.qty,
+    required this.isDone,
+    this.productionType,
+    this.boxContractor,
+    this.cuttingContractor,
+    this.pastingContractor,
+    this.employeeQty = 0,
+    this.contractorQty = 0,
+  });
 }

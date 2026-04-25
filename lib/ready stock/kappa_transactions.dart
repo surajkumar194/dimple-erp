@@ -18,40 +18,35 @@ import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:universal_html/html.dart' as html;
 
-class StoreStockScreen extends StatefulWidget {
-  const StoreStockScreen({super.key});
+class KappaTransactions extends StatefulWidget {
+  const KappaTransactions({super.key});
   @override
-  _StoreStockScreenState createState() => _StoreStockScreenState();
+  _KappaTransactionsState createState() => _KappaTransactionsState();
 }
 
-class _StoreStockScreenState extends State<StoreStockScreen>
+class _KappaTransactionsState extends State<KappaTransactions>
     with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
+
   List<Map<String, dynamic>> stockData = [];
   List<Map<String, dynamic>> filteredData = [];
   final TextEditingController _searchController = TextEditingController();
+
   bool _isLoading = false;
   String _selectedDateFilter = 'All';
-  String _selectedMovingFilter = 'All';
   DateTimeRange? _customDateRange;
   String _selectedGroupFilter = 'All';
+
   static const Color primaryOrange = Color(0xFFE65100);
   static const Color lightOrange = Color(0xFFFFB74D);
   static const Color darkOrange = Color(0xFFBF360C);
   static const Color accentOrange = Color(0xFFFF9800);
   static const Color bgOrange = Color(0xFFFFF3E0);
   static const Color cardOrange = Color(0xFFFFF8F0);
-  final List<String> _movingFilters = [
-    'All',
-    'FAST MOVING',
-    'SLOW MOVING',
-    'NON MOVING',
-    'NEW',
-    'NEW JAR',
-    'ON ORDER',
-  ];
+
+
   final List<String> _dateFilters = [
     'All',
     'Today',
@@ -59,6 +54,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     'Last 30 Days',
     'Custom',
   ];
+
   List<String> _groupList = [];
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -92,10 +88,11 @@ class _StoreStockScreenState extends State<StoreStockScreen>
 
   String normalizeHeader(String h) {
     h = h.toLowerCase().trim();
+
     if (h.contains('code')) return 'code';
     if (h.contains('item name') || h == 'name') return 'name';
     if (h == 'group') return 'group';
-    if (h.contains('total stock')) return 'located';
+    if (h.contains('total stock')) return 'located'; // ✅ ADD THIS
     if (h.contains('received')) return 'received';
     if (h.contains('issue')) return 'issue';
     if (h.contains('stock in hand')) return 'current';
@@ -111,7 +108,6 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     } catch (e) {}
     return null;
   }
-
   Future<void> _downloadPdf() async {
     final pdf = pw.Document();
     Uint8List logoBytes;
@@ -231,9 +227,12 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     _showSnackBar('PDF Generated');
   }
 
+  // ==================== DATA OPERATIONS ====================
+
+  // ✅ Sr aur Code dono ek saath — next Sr number return karta hai
   Future<int> _getNextSrNumber() async {
     try {
-      final snapshot = await _firestore.collection('stock_items').get();
+      final snapshot = await _firestore.collection('kappa_items').get();
       int maxSr = 0;
       for (var doc in snapshot.docs) {
         final sr = doc.data()['sr'];
@@ -245,23 +244,29 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     }
   }
 
+  // ✅ Code = Sr ke hisaab se — Sr 1 = DPL-001, Sr 5 = DPL-005
   String _srToCode(int sr) => 'DPL-${sr.toString().padLeft(3, '0')}';
 
+  // ✅ Auto code = next Sr se generate hota hai
   Future<String> _getNextAutoCode() async {
     final nextSr = await _getNextSrNumber();
     return _srToCode(nextSr);
   }
 
+  // ✅ Delete ke baad Sr renumber + Code bhi sync
   Future<void> _renumberSrNumbers() async {
     try {
       final snapshot = await _firestore
-          .collection('stock_items')
+          .collection('kappa_items')
           .orderBy('createdAt', descending: false)
           .get();
       WriteBatch batch = _firestore.batch();
       int sr = 1;
       for (var doc in snapshot.docs) {
-        batch.update(doc.reference, {'sr': sr, 'code': _srToCode(sr)});
+        batch.update(doc.reference, {
+          'sr': sr,
+          'code': _srToCode(sr), // ✅ Code bhi Sr ke saath sync
+        });
         sr++;
       }
       await batch.commit();
@@ -270,15 +275,19 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     }
   }
 
+  // ✅ Fix Codes — Sr ke hisaab se code set karta hai
   Future<void> _fixCodesSequentially() async {
     final snapshot = await _firestore
-        .collection('stock_items')
+        .collection('kappa_items')
         .orderBy('createdAt')
         .get();
     WriteBatch batch = _firestore.batch();
     int counter = 1;
     for (var doc in snapshot.docs) {
-      batch.update(doc.reference, {'sr': counter, 'code': _srToCode(counter)});
+      batch.update(doc.reference, {
+        'sr': counter,
+        'code': _srToCode(counter), // ✅ Sr 1 = DPL-001
+      });
       counter++;
     }
     await batch.commit();
@@ -288,7 +297,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
   Future<void> _loadDataFromFirebase() async {
     setState(() => _isLoading = true);
     try {
-      final snapshot = await _firestore.collection('stock_items').get();
+      final snapshot = await _firestore.collection('kappa_items').get();
       stockData = snapshot.docs.map((doc) {
         final data = doc.data();
         data['docId'] = doc.id;
@@ -338,10 +347,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
             item['name'].toString().toLowerCase().contains(query) ||
             (item['group'] ?? '').toString().toLowerCase().contains(query);
 
-        bool matchesMoving =
-            _selectedMovingFilter == 'All' ||
-            (item['moving'] ?? '').toString().toUpperCase() ==
-                _selectedMovingFilter;
+
         bool matchesGroup =
             _selectedGroupFilter == 'All' ||
             item['group'] == _selectedGroupFilter;
@@ -382,8 +388,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
           matchesDate = true;
         }
 
-        return matchesSearch && matchesMoving && matchesGroup && matchesDate;
-      }).toList();
+return matchesSearch && matchesGroup && matchesDate;      }).toList();
       _currentPage = 0;
     });
   }
@@ -393,6 +398,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     final end = (start + _rowsPerPage).clamp(0, filteredData.length);
     return filteredData.sublist(start, end);
   }
+
 
   Future<String?> _uploadImage(XFile imageFile) async {
     try {
@@ -569,19 +575,18 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     );
   }
 
-  // ==================== ISSUE STOCK (FIXED - OTHER SUPPORT) ====================
 
   void _issueStockWithDepartment(Map<String, dynamic> item) {
     final qtyCtrl = TextEditingController();
-    final otherCtrl = TextEditingController();
     String? selectedJobCard;
-    String issueType = 'jobcard';
+    String? selectedJobLabel;
     List<QueryDocumentSnapshot> jobCardDocs = [];
     bool isLoadingJobs = true;
     bool isSubmitting = false;
 
+    // Pehle job cards load karo
     _firestore
-        .collection('orders')
+        .collection('jobCards')
         .orderBy('createdAt', descending: true)
         .get()
         .then((snapshot) {
@@ -593,9 +598,10 @@ class _StoreStockScreenState extends State<StoreStockScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) {
+          // Job cards load karo dialog open hote hi
           if (isLoadingJobs) {
             _firestore
-                .collection('orders')
+                .collection('jobCards')
                 .orderBy('createdAt', descending: true)
                 .get()
                 .then((snapshot) {
@@ -604,14 +610,6 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                   setStateDialog(() {});
                 });
           }
-
-          // Button enable condition
-          final bool canSubmit =
-              !isSubmitting &&
-              qtyCtrl.text.isNotEmpty &&
-              (issueType == 'jobcard'
-                  ? selectedJobCard != null
-                  : otherCtrl.text.trim().isNotEmpty);
 
           return AlertDialog(
             shape: RoundedRectangleBorder(
@@ -675,7 +673,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Stock In Hand ──
+                    // Stock in hand dikhao
                     Builder(
                       builder: (_) {
                         final located =
@@ -725,141 +723,81 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                       },
                     ),
 
-                    // ── Issue Type Dropdown ──
-                    DropdownButtonFormField<String>(
-                      value: issueType,
-                      decoration: const InputDecoration(
-                        labelText: 'Issue Type',
-                        border: OutlineInputBorder(),
+                    Text(
+                      'Select Job Card',
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
                       ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'jobcard',
-                          child: Text('Job Card'),
-                        ),
-                        DropdownMenuItem(value: 'other', child: Text('Other')),
-                      ],
-                      onChanged: (v) {
-                        setStateDialog(() {
-                          issueType = v!;
-                          selectedJobCard = null;
-                          otherCtrl.clear();
-                        });
-                      },
                     ),
-                    const SizedBox(height: 14),
-
-                    // ── Job Card Section ──
-                    if (issueType == 'jobcard') ...[
-                      Text(
-                        'Select Job Card',
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      isLoadingJobs
-                          ? const Center(child: CircularProgressIndicator())
-                          : jobCardDocs.isEmpty
-                          ? Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 6),
+                    isLoadingJobs
+                        ? const Center(child: CircularProgressIndicator())
+                        : jobCardDocs.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'No Job Cards found.',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.shade300),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: DropdownButton<String>(
+                              value: selectedJobCard,
+                              isExpanded: true,
+                              underline: const SizedBox(),
+                              hint: const Text('Select Job Card'),
+                              icon: Icon(
+                                Icons.arrow_drop_down,
+                                color: Colors.red[700],
                               ),
-                              child: Text(
-                                'No Job Cards found.',
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            )
-                          : Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey[50],
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.red.shade300),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              child: DropdownButton<String>(
-                                value: selectedJobCard,
-                                isExpanded: true,
-                                underline: const SizedBox(),
-                                hint: const Text('Select Job Card'),
-                                icon: Icon(
-                                  Icons.arrow_drop_down,
-                                  color: Colors.red[700],
-                                ),
-                                items: jobCardDocs.map((d) {
-                                  final data = d.data() as Map<String, dynamic>;
-                                  final List products = data['products'] ?? [];
-                                  final qty = products.isNotEmpty
-                                      ? products[0]['quantity']?.toString() ??
-                                            ''
-                                      : '';
-                                  final customer = data['customerName'] ?? '';
-                                  final label =
-                                      'JobCard: ${d.id} | $customer | Qty: $qty';
-                                  return DropdownMenuItem<String>(
-                                    value: d.id,
-                                    child: Text(
-                                      label,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                      ),
+                              items: jobCardDocs.map((d) {
+                                final data = d.data() as Map<String, dynamic>;
+                                final jobNo =
+                                    data['jobCardNumber'] ??
+                                    data['jobNo'] ??
+                                    'N/A';
+                                final dplCode = data['dplCode'] ?? '';
+                                final List products = data['products'] ?? [];
+                                final qty = products.isNotEmpty
+                                    ? products[0]['quantity']?.toString() ?? ''
+                                    : '';
+                                final label =
+                                    'DPL: $dplCode | Job: $jobNo | Qty: $qty';
+                                return DropdownMenuItem<String>(
+                                  value: d.id,
+                                  child: Text(
+                                    label,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
                                     ),
-                                  );
-                                }).toList(),
-                                onChanged: (v) =>
-                                    setStateDialog(() => selectedJobCard = v),
-                              ),
-                            ),
-                      const SizedBox(height: 14),
-                    ],
-
-                    // ── Other Reason Section ──
-                    if (issueType == 'other') ...[
-                      Text(
-                        'Reason / Description',
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.red.shade300),
-                        ),
-                        child: TextField(
-                          controller: otherCtrl,
-                          maxLines: 3,
-                          onChanged: (_) => setStateDialog(() {}),
-                          decoration: InputDecoration(
-                            hintText: 'Enter reason / description...',
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.edit_note,
-                              color: Colors.red[700],
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (v) {
+                                setStateDialog(() {
+                                  selectedJobCard = v;
+                                });
+                              },
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                    ],
 
-                    // ── Quantity ──
+                    const SizedBox(height: 16),
+
+                    // Quantity field
                     Text(
                       'Quantity to Issue',
                       style: TextStyle(
@@ -910,7 +848,10 @@ class _StoreStockScreenState extends State<StoreStockScreen>
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: canSubmit ? Colors.red[600] : Colors.grey,
+                  backgroundColor:
+                      selectedJobCard != null && qtyCtrl.text.isNotEmpty
+                      ? Colors.red[600]
+                      : Colors.grey,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 32,
@@ -920,8 +861,12 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed: canSubmit
-                    ? () async {
+                onPressed:
+                    isSubmitting ||
+                        selectedJobCard == null ||
+                        qtyCtrl.text.isEmpty
+                    ? null
+                    : () async {
                         final qty = int.tryParse(qtyCtrl.text) ?? 0;
                         if (qty <= 0) {
                           _showSnackBar('Valid quantity daalo', isError: true);
@@ -946,26 +891,21 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                         setStateDialog(() => isSubmitting = true);
 
                         try {
+                          // Transaction record
                           await _firestore
                               .collection('stock_transactions')
                               .add({
                                 'itemId': item['docId'],
-                                'itemName': item['name'] ?? '',
                                 'type': 'issue',
-                                'issueType': issueType,
-                                'jobCardId': issueType == 'jobcard'
-                                    ? selectedJobCard
-                                    : null,
-                                'otherReason': issueType == 'other'
-                                    ? otherCtrl.text.trim()
-                                    : null,
+                                'jobCardId': selectedJobCard,
                                 'quantity': qty,
                                 'timestamp': FieldValue.serverTimestamp(),
                               });
 
+                          // ✅ Issue column mein add karo
                           final newIssue = currentIssue + qty;
                           await _firestore
-                              .collection('stock_items')
+                              .collection('kappa_items')
                               .doc(item['docId'])
                               .update({
                                 'issue': newIssue,
@@ -976,35 +916,15 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                               });
 
                           await _loadDataFromFirebase();
-
-                          final reference = issueType == 'jobcard'
-                              ? selectedJobCard!
-                              : otherCtrl.text.trim();
-
-                          Navigator.pop(ctx);
-
-                          // ✅ Navigate to Receipt Page
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => IssueReceiptPage(
-                                itemName: item['name'] ?? '',
-                                quantity: qty,
-                                issueType: issueType,
-                                reference: reference,
-                                remainingStock: (currentStock - qty).toInt(),
-                                date: DateFormat(
-                                  'dd MMM yyyy, hh:mm a',
-                                ).format(DateTime.now()),
-                              ),
-                            ),
+                          _showSnackBar(
+                            '✓ $qty issue ho gaya | Issue Total: $newIssue | Bacha: ${currentStock - qty}',
                           );
+                          Navigator.pop(ctx);
                         } catch (e) {
                           _showSnackBar('Error: $e', isError: true);
                           setStateDialog(() => isSubmitting = false);
                         }
-                      }
-                    : null,
+                      },
                 child: isSubmitting
                     ? const SizedBox(
                         width: 20,
@@ -1161,7 +1081,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                         'timestamp': FieldValue.serverTimestamp(),
                       });
                       await _firestore
-                          .collection('stock_items')
+                          .collection('kappa_items')
                           .doc(item['docId'])
                           .update({
                             'received': (item['received'] ?? 0) + qty,
@@ -1244,6 +1164,18 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                     },
                   ),
                 ),
+                // const SizedBox(width: 16),
+                // Expanded(
+                //   child: _buildUpdateButton(
+                //     icon: Icons.add_box_outlined,
+                //     label: 'Add Stock',
+                //     color: accentOrange,
+                //     onTap: () {
+                //       Navigator.pop(ctx);
+                //       _addAdditionalWithParty(item);
+                //     },
+                //   ),
+                // ),
               ],
             ),
             const SizedBox(height: 20),
@@ -1304,9 +1236,9 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     final nameCtrl = TextEditingController(
       text: isEdit ? existingItem['name'] : '',
     );
-    final groupCtrl = TextEditingController(
-      text: isEdit ? existingItem['group'] : '',
-    );
+ final groupCtrl = TextEditingController(
+  text: isEdit ? existingItem['group'] : 'kappa',
+);
     final locatedCtrl = TextEditingController(
       text: isEdit ? (existingItem['located'] ?? 0).toString() : '0',
     );
@@ -1314,9 +1246,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
       text: isEdit ? (existingItem['received'] ?? 0).toString() : '0',
     );
     final issueCtrl = TextEditingController(text: '0');
-    String movingValue = isEdit
-        ? (existingItem['moving'] ?? 'FAST MOVING')
-        : 'FAST MOVING';
+  
     String? imageUrl = isEdit ? existingItem['image'] : null;
     XFile? selectedImage;
     bool isUploading = false;
@@ -1340,6 +1270,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // HEADER
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1403,6 +1334,8 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                     ],
                   ),
                 ),
+
+                // CONTENT
                 Flexible(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
@@ -1445,50 +1378,19 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                           required: true,
                         ),
                         const SizedBox(height: 16),
+
                         Container(
                           decoration: BoxDecoration(
                             color: bgOrange,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: lightOrange, width: 1.5),
                           ),
-                          child: DropdownButtonFormField<String>(
-                            value: movingValue,
-                            items:
-                                [
-                                      'FAST MOVING',
-                                      'SLOW MOVING',
-                                      'NON MOVING',
-                                      'NEW',
-                                      'NEW JAR',
-                                      'ON ORDER',
-                                    ]
-                                    .map(
-                                      (t) => DropdownMenuItem(
-                                        value: t,
-                                        child: Text(t),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged: (v) =>
-                                setDialogState(() => movingValue = v!),
-                            decoration: InputDecoration(
-                              labelText: 'Moving Status *',
-                              labelStyle: TextStyle(color: primaryOrange),
-                              prefixIcon: Icon(
-                                Icons.trending_up,
-                                color: primaryOrange,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                            ),
-                          ),
+                          
                         ),
                         const SizedBox(height: 18),
                         Divider(color: Colors.grey[300], thickness: 1),
                         const SizedBox(height: 10),
+
                         Row(
                           children: [
                             Container(
@@ -1515,6 +1417,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                           ],
                         ),
                         const SizedBox(height: 20),
+
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -1523,6 +1426,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                           ),
                           child: Column(
                             children: [
+                              // ✅ 'Total Stock' label (tumhara change)
                               _buildModernField(
                                 locatedCtrl,
                                 'Total Stock',
@@ -1546,6 +1450,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                             ],
                           ),
                         ),
+
                         const SizedBox(height: 20),
                         Container(
                           padding: const EdgeInsets.all(18),
@@ -1575,6 +1480,8 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                     ),
                   ),
                 ),
+
+                // FOOTER
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -1634,7 +1541,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                   }
                                   if (!isEdit) {
                                     final existing = await _firestore
-                                        .collection('stock_items')
+                                        .collection('kappa_items')
                                         .where('code', isEqualTo: code)
                                         .get();
                                     if (existing.docs.isNotEmpty) {
@@ -1681,26 +1588,27 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                     'located': located,
                                     'received': finalReceived,
                                     'issue': finalIssue,
-                                    'moving': movingValue,
+
                                     'dateEdit': currentDate,
                                     'updatedAt': FieldValue.serverTimestamp(),
                                   };
 
                                   if (isEdit) {
                                     await _firestore
-                                        .collection('stock_items')
+                                        .collection('kappa_items')
                                         .doc(existingItem['docId'])
                                         .update(newItem);
                                     _showSnackBar(
                                       '✓ Item updated successfully',
                                     );
                                   } else {
+                                    // ✅ Sr aur Code sync — Sr 1 = DPL-001
                                     newItem['sr'] = nextSr;
                                     newItem['code'] = _srToCode(nextSr);
                                     newItem['createdAt'] =
                                         FieldValue.serverTimestamp();
                                     await _firestore
-                                        .collection('stock_items')
+                                        .collection('kappa_items')
                                         .add(newItem);
                                     _showSnackBar('✓ Item added successfully');
                                   }
@@ -1803,20 +1711,27 @@ class _StoreStockScreenState extends State<StoreStockScreen>
       for (int i = 1; i < rows.length; i++) {
         var row = rows[i];
         if (row.length < 2) continue;
+
         Map<String, dynamic> item = {};
+
         for (int j = 0; j < headerRow.length && j < row.length; j++) {
           var header = headerRow[j];
           var value = row[j]?.value;
+
           if (value == null) continue;
+
           switch (header) {
+            // ✅ Excel ka Sr use karo
             case 'sr':
               item['sr'] = int.tryParse(value.toString()) ?? 0;
               break;
+
             case 'located':
             case 'received':
             case 'issue':
               item[header] = int.tryParse(value.toString()) ?? 0;
               break;
+
             case 'code':
             case 'name':
             case 'group':
@@ -1826,10 +1741,14 @@ class _StoreStockScreenState extends State<StoreStockScreen>
               break;
           }
         }
+
+        // Required check
         if (item['code'] == null ||
             item['name'] == null ||
             item['group'] == null)
           continue;
+
+        // Default values
         item['located'] = item['located'] ?? 0;
         item['received'] = item['received'] ?? 0;
         item['issue'] = item['issue'] ?? 0;
@@ -1838,9 +1757,13 @@ class _StoreStockScreenState extends State<StoreStockScreen>
             .toUpperCase();
         item['image'] = item['image'] ?? '';
         item['dateEdit'] = today;
+
+        // ❌ REMOVE THIS (important)
+        // final assignedSr = await _getNextSrNumber();
+        // item['sr'] = assignedSr;
+
         importedItems.add(item);
       }
-
       if (importedItems.isEmpty) {
         _showSnackBar('No valid data found in Excel', isError: true);
         setState(() => _isLoading = false);
@@ -1851,7 +1774,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
       int batchCount = 0;
       for (var item in importedItems) {
         var existingQuery = await _firestore
-            .collection('stock_items')
+            .collection('kappa_items')
             .where('code', isEqualTo: item['code'])
             .limit(1)
             .get();
@@ -1861,7 +1784,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
             'updatedAt': FieldValue.serverTimestamp(),
           });
         } else {
-          var docRef = _firestore.collection('stock_items').doc();
+          var docRef = _firestore.collection('kappa_items').doc();
           item['createdAt'] = FieldValue.serverTimestamp();
           item['updatedAt'] = FieldValue.serverTimestamp();
           batch.set(docRef, item);
@@ -1911,7 +1834,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
             ),
             onPressed: () async {
               try {
-                await _firestore.collection('stock_items').doc(docId).delete();
+                await _firestore.collection('kappa_items').doc(docId).delete();
                 await _renumberSrNumbers();
                 await _loadDataFromFirebase();
                 _showSnackBar('✓ Item deleted');
@@ -2229,7 +2152,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Store Stock Report',
+                        'Kappa Stock Report',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 20,
@@ -2238,7 +2161,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Track & manage store stock',
+                        'Track & manage kappa stock',
                         style: TextStyle(fontSize: 12, color: Colors.white70),
                       ),
                     ],
@@ -2334,26 +2257,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                           ),
                           child: Row(
                             children: [
-                              DropdownButton<String>(
-                                value: _selectedMovingFilter,
-                                underline: const SizedBox(),
-                                icon: Icon(
-                                  Icons.filter_list,
-                                  color: primaryOrange,
-                                ),
-                                items: _movingFilters
-                                    .map(
-                                      (e) => DropdownMenuItem(
-                                        value: e,
-                                        child: Text(e),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (v) {
-                                  setState(() => _selectedMovingFilter = v!);
-                                  _applyFilters();
-                                },
-                              ),
+                         
                               const SizedBox(width: 4),
                               DropdownButton<String>(
                                 value: _selectedGroupFilter,
@@ -2462,11 +2366,13 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                   _headerFlex('Image', 2),
                                   _headerFlex('Item Name', 3),
                                   _headerFlex('Group', 2),
-                                  _headerFlex('Total Stock', 2),
+                                  _headerFlex(
+                                    'Total Stock',
+                                    2,
+                                  ), // ✅ tumhara change
                                   _headerFlex('Received', 2),
                                   _headerFlex('Issue', 2),
                                   _headerFlex('Stock In Hand', 2),
-                                  _headerFlex('Moving', 2),
                                   _headerFlex('Date', 2),
                                   _headerFlex('Actions', 3),
                                   _headerFlex('Update', 2),
@@ -2474,6 +2380,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                               ),
                             ),
                             const SizedBox(height: 5),
+
                             Expanded(
                               child: ListView.builder(
                                 itemCount: _paginatedData.length,
@@ -2526,12 +2433,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                               ? Colors.red[700]
                                               : Colors.green[800],
                                         ),
-                                        _statusCellFlex(
-                                          (item['moving'] ?? '-')
-                                              .toString()
-                                              .toUpperCase(),
-                                          2,
-                                        ),
+                                     
                                         _cellFlex(item['dateEdit'] ?? '-', 2),
                                         _actionFlex(item, 3),
                                         _updateFlex(item, 2),
@@ -2574,6 +2476,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                             'Showing ${(_currentPage * _rowsPerPage) + 1}–${((_currentPage + 1) * _rowsPerPage).clamp(0, filteredData.length)} of ${filteredData.length}',
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
+                          //  const Spacer(),
                           IconButton(
                             icon: const Icon(Icons.chevron_left),
                             onPressed: _currentPage > 0
@@ -2610,6 +2513,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                 ],
               ),
             ),
+
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 1, left: 20),
         child: Row(
@@ -2668,247 +2572,6 @@ class _StoreStockScreenState extends State<StoreStockScreen>
           ],
         ),
       ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ISSUE RECEIPT PAGE
-// ═══════════════════════════════════════════════════════════════════════════════
-class IssueReceiptPage extends StatelessWidget {
-  final String itemName;
-  final int quantity;
-  final String issueType;
-  final String reference;
-  final int remainingStock;
-  final String date;
-
-  const IssueReceiptPage({
-    super.key,
-    required this.itemName,
-    required this.quantity,
-    required this.issueType,
-    required this.reference,
-    required this.remainingStock,
-    required this.date,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const Color primaryOrange = Color(0xFFE65100);
-    const Color accentOrange = Color(0xFFFF9800);
-    const Color bgOrange = Color(0xFFFFF3E0);
-
-    return Scaffold(
-      backgroundColor: bgOrange,
-      appBar: AppBar(
-        backgroundColor: primaryOrange,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Issue Receipt',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // ── Success Icon ──
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.green.withOpacity(0.2),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  Icons.check_circle_rounded,
-                  color: Colors.green[600],
-                  size: 72,
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Stock Issued Successfully!',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFE65100),
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Transaction has been recorded',
-                style: TextStyle(color: Colors.grey[600], fontSize: 14),
-              ),
-              const SizedBox(height: 28),
-
-              // ── Receipt Card ──
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.orange.withOpacity(0.12),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 16,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFE65100), Color(0xFFFF9800)],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(
-                            Icons.receipt_long_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'ISSUE RECEIPT',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    _receiptRow(
-                      'Item Name',
-                      itemName,
-                      valueColor: const Color(0xFF1F2937),
-                      bold: true,
-                    ),
-                    const Divider(height: 24),
-                    _receiptRow(
-                      'Quantity Issued',
-                      quantity.toString(),
-                      valueColor: Colors.red[700]!,
-                      bold: true,
-                    ),
-                    const Divider(height: 24),
-                    _receiptRow(
-                      'Issue Type',
-                      issueType == 'jobcard' ? '📋 Job Card' : '📝 Other',
-                    ),
-                    const Divider(height: 24),
-                    _receiptRow(
-                      issueType == 'jobcard' ? 'Job Card ID' : 'Reason',
-                      reference,
-                      valueColor: accentOrange,
-                    ),
-                    const Divider(height: 24),
-                    _receiptRow(
-                      'Remaining Stock',
-                      remainingStock.toString(),
-                      valueColor: remainingStock <= 0
-                          ? Colors.red[700]!
-                          : Colors.green[700]!,
-                      bold: true,
-                    ),
-                    const Divider(height: 24),
-                    _receiptRow('Date & Time', date),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 28),
-
-              // ── Back Button ──
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryOrange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 4,
-                  ),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  label: const Text(
-                    'Back to Stock',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _receiptRow(
-    String label,
-    String value, {
-    Color? valueColor,
-    bool bold = false,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: TextStyle(
-              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
-              fontSize: 13,
-              color: valueColor ?? const Color(0xFF1F2937),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

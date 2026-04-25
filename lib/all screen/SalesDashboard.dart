@@ -2,8 +2,11 @@ import 'package:dimple_erp/all screen/DeliverySchedulingScreen.dart';
 import 'package:dimple_erp/all screen/OrderBookingScreen.dart';
 import 'package:dimple_erp/all screen/IssueInventoryScreen.dart';
 import 'package:dimple_erp/all screen/ProductionTrackingScreen.dart';
-import 'package:dimple_erp/all%20screen/JobCardHistoryTab.dart' show JobCardHistoryTab;
+import 'package:dimple_erp/all%20screen/DesignerScreen.dart';
+import 'package:dimple_erp/all%20screen/JobCardHistoryTab.dart'
+    show JobCardHistoryTab;
 import 'package:dimple_erp/all%20screen/SelectSalesOrderTab.dart';
+import 'package:dimple_erp/extra.dart/PaymentApprovalScreen.dart';
 import 'package:dimple_erp/extra.dart/PaymentCollectionScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
@@ -150,8 +153,8 @@ class SalesDashboard extends StatelessWidget {
                       },
                     ),
 
-
-                      _dashboardCard(
+                
+                    _dashboardCard(
                       title: "payment Collection",
                       subtitle: "Record customer payments",
                       icon: Icons.local_shipping,
@@ -160,16 +163,32 @@ class SalesDashboard extends StatelessWidget {
                         const Color(0xFFEEA849),
                       ],
                       onTap: () {
-                      Navigator.push(
-  context,
-  MaterialPageRoute(
-    builder: (_) => PaymentCollectionScreen(
-    
-    ),
-  ),
-);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PaymentCollectionScreen(),
+                          ),
+                        );
                       },
                     ),
+                         _dashboardCard(
+                      title: "Designer",
+                      subtitle: "Approve or decline payment requests",
+                      icon: Icons.local_shipping,
+                      gradient: [
+                        const Color.fromARGB(255, 242, 54, 2),
+                        const Color(0xFFEEA849),
+                      ],
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const DesignerScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
                   ],
                 );
               },
@@ -204,7 +223,7 @@ class SalesDashboard extends StatelessWidget {
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children:  [
+            children: [
               Text(
                 "Sales Dashboard",
                 style: TextStyle(
@@ -216,7 +235,7 @@ class SalesDashboard extends StatelessWidget {
               SizedBox(height: 0.5.h),
               Text(
                 "Manage your sales orders",
-                style: TextStyle(fontSize: 14.sp,color: Colors.white70),
+                style: TextStyle(fontSize: 14.sp, color: Colors.white70),
               ),
             ],
           ),

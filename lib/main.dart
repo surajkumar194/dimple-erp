@@ -49,18 +49,15 @@ class AppModeHandler extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, authSnapshot) {
-
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
               .collection('settings')
               .doc('app_mode')
               .snapshots(),
           builder: (context, modeSnapshot) {
-
             if (!modeSnapshot.hasData) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
@@ -80,19 +77,18 @@ class AppModeHandler extends StatelessWidget {
             // =========================
             // 🔴 DEMO MODE
             // =========================
-           if (mode == "demo") {
-  return const LoginScreen(isDemo: true);
-}
-
+            if (mode == "demo") {
+              return const LoginScreen(isDemo: true);
+            }
 
             // =========================
             // 🟢 LIVE MODE
             // =========================
-         if (user != null) {
-  return const MainScreen();
-} else {
-  return const LoginScreen(isDemo: false);
-}
+            if (user != null) {
+              return const MainScreen();
+            } else {
+              return const LoginScreen(isDemo: false);
+            }
           },
         );
       },

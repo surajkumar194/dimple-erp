@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dimple_erp/UNIT%202/Unit2ProductSimpleScreen.dart';
 import 'package:dimple_erp/UNIT%202/unit2inventary.dart';
 import 'package:dimple_erp/UNIT%202/MachineScreen.dart';
 import 'package:dimple_erp/UNIT%202/addsalesorderunit2.dart';
@@ -147,7 +148,7 @@ class _Unit2SalesState extends State<Unit2Sales> {
               future: _getCount('unit2JobCards'),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const Unit2InventoryScreen()),
+                MaterialPageRoute(builder: (_) => const Unit2ProductSimpleScreen()),
               ),
             ),
 
@@ -180,7 +181,7 @@ class _Unit2SalesState extends State<Unit2Sales> {
               ),
             ),
             _firestoreCard(
-              title: "Ready Dispatch Screen",
+              title: "Finished Stock",
               subtitle: "Manage Dispatch Items",
               icon: Icons.inventory_2,
               gradient: [
@@ -190,7 +191,7 @@ class _Unit2SalesState extends State<Unit2Sales> {
               future: _getProductionUnit2Count(),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const DispatchScreen()),
+                MaterialPageRoute(builder: (_) => const DispatchTableScreen()),
               ),
             ),
 

@@ -11,12 +11,12 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
+
 class OrderHistoryScreen extends StatefulWidget {
   const OrderHistoryScreen({super.key});
   @override
   State<OrderHistoryScreen> createState() => _OrderHistoryScreenState();
 }
-
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -28,6 +28,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     'Completed',
     'Cancelled',
   ];
+
   void _showTermsSelectionDialog(Map<String, dynamic> data) {
     bool payment = true;
     bool freight = true;
@@ -93,7 +94,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                       termsOptions: {
                         'payment': payment,
                         'advance50': advance50,
-
                         'freight': freight,
                         'packing': packing,
                         'gst': gst,
@@ -498,6 +498,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     final customerName = data['customerName'] ?? 'N/A';
     final totalAmount = (data['grandTotal'] ?? 0).toDouble();
     final status = data['status'] ?? 'Pending';
+    final dispatchType = data['dispatchType'] ?? '';
     final orderDate = (data['orderDate'] as Timestamp?)?.toDate();
 
     Color statusColor;
@@ -593,6 +594,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         ),
                       ),
                       const SizedBox(width: 16),
+
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -687,6 +689,22 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                       Row(
                         children: [
                           Expanded(
+                            child: _buildInfoTile(
+                              icon: Icons.local_shipping,
+                              label: 'Dispatch',
+                              value: dispatchType.isEmpty
+                                  ? 'N/A'
+                                  : dispatchType,
+                              color: Colors.purple,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      Row(
+                        children: [
+                          Expanded(
                             child: _buildActionButton(
                               onPressed: () => _editOrder(docId, data),
                               icon: Icons.edit_rounded,
@@ -776,10 +794,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       ),
     );
   }
-
-  // -----------------------------------------------------------------------
-  // ACTION BUTTON
-  // -----------------------------------------------------------------------
   Widget _buildActionButton({
     required VoidCallback onPressed,
     required IconData icon,
@@ -1064,6 +1078,10 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         ),
                         _buildDetailRow('Status', data['status'] ?? 'N/A'),
                         _buildDetailRow('Priority', data['priority'] ?? 'N/A'),
+                        _buildDetailRow(
+                          'Dispatch Type',
+                          data['dispatchType'] ?? 'N/A',
+                        ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -1144,15 +1162,15 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   // PRODUCTS SECTION
   // -----------------------------------------------------------------------
   Widget _buildProductsSection(Map<String, dynamic> data) {
-List products = [];
+    List products = [];
 
-final rawProducts = data['products'];
+    final rawProducts = data['products'];
 
-if (rawProducts is List) {
-  products = rawProducts;
-} else if (rawProducts is Map) {
-  products = [rawProducts];
-}
+    if (rawProducts is List) {
+      products = rawProducts;
+    } else if (rawProducts is Map) {
+      products = [rawProducts];
+    }
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -1226,7 +1244,9 @@ if (rawProducts is List) {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: products.map((product) {
-final images = product['images'] is List ? product['images'] : [];
+                final images = product['images'] is List
+                    ? product['images']
+                    : [];
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(14),
@@ -1809,19 +1829,19 @@ final images = product['images'] is List ? product['images'] : [];
       }
 
       // Download ALL product images with timeout
-List products = [];
+      List products = [];
 
-final rawProducts = data['products'];
+      final rawProducts = data['products'];
 
-if (rawProducts is List) {
-  products = rawProducts;
-} else if (rawProducts is Map) {
-  products = [rawProducts];
-}
+      if (rawProducts is List) {
+        products = rawProducts;
+      } else if (rawProducts is Map) {
+        products = [rawProducts];
+      }
       final List<Map<String, dynamic>> productsWithImages = [];
 
       for (var product in products) {
-final images = product['images'] is List ? product['images'] : [];
+        final images = product['images'] is List ? product['images'] : [];
         final List<pw.MemoryImage> pdfImages = [];
 
         for (var imgUrl in images) {
@@ -2025,8 +2045,14 @@ final images = product['images'] is List ? product['images'] : [];
                           ),
                           pw.Divider(),
                           _pdfInfoRow('Order Date', orderDateStr),
+
                           //  _pdfInfoRow('Dispatch Date', dispatchDateStr),
                           _pdfInfoRow('Status', data['status'] ?? 'Pending'),
+                          _pdfInfoRow(
+                            'Dispatch Type',
+                            data['dispatchType'] ?? 'N/A',
+                          ),
+
                           _pdfInfoRow('Order Location', data['unit'] ?? 'N/A'),
                         ],
                       ),
@@ -2319,19 +2345,19 @@ final images = product['images'] is List ? product['images'] : [];
       }
 
       // Download ALL product images with timeout
-List products = [];
+      List products = [];
 
-final rawProducts = data['products'];
+      final rawProducts = data['products'];
 
-if (rawProducts is List) {
-  products = rawProducts;
-} else if (rawProducts is Map) {
-  products = [rawProducts];
-}
+      if (rawProducts is List) {
+        products = rawProducts;
+      } else if (rawProducts is Map) {
+        products = [rawProducts];
+      }
       final List<Map<String, dynamic>> productsWithImages = [];
 
       for (var product in products) {
-final images = product['images'] is List ? product['images'] : [];
+        final images = product['images'] is List ? product['images'] : [];
         final List<pw.MemoryImage> pdfImages = [];
 
         for (var imgUrl in images) {
@@ -2885,7 +2911,14 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     'Meena Bazar',
     'College Road',
   ];
-  final List<String> _productCategories = ['MDF', 'Kappa Box (Gora)', 'Packaging', 'Shagun Envelope', 'Rigid Box (unit 2 Hussainpura)', 'Others'];
+  final List<String> _productCategories = [
+    'MDF',
+    'Kappa Box (Gora)',
+    'Packaging',
+    'Shagun Envelope',
+    'Rigid Box (unit 2 Hussainpura)',
+    'Others',
+  ];
   final List<String> _salesPersons = [
     "Abhijit Sinha",
     "Komal Sir",
@@ -2909,26 +2942,31 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     "Others",
   ];
 
+  String? _dispatchType;
+
+  final List<String> _dispatchOptions = ['Transport', 'Vehicle'];
   List<Map<String, dynamic>> _products = [];
   bool _isLoading = false;
   final ImagePicker _picker = ImagePicker();
-String generateProductCode(int index) {
-  String code = '';
-  int num = index;
+  String generateProductCode(int index) {
+    String code = '';
+    int num = index;
 
-  do {
-    code = String.fromCharCode(65 + (num % 26)) + code;
-    num = (num ~/ 26) - 1;
-  } while (num >= 0);
+    do {
+      code = String.fromCharCode(65 + (num % 26)) + code;
+      num = (num ~/ 26) - 1;
+    } while (num >= 0);
 
-  return code;
-}
+    return code;
+  }
+
   // -----------------------------------------------------------------------
   @override
   void initState() {
     super.initState();
     _initializeControllers();
     _loadProductsFromOrder();
+    _dispatchType = widget.orderData['dispatchType'];
   }
 
   void _initializeControllers() {
@@ -2951,74 +2989,69 @@ String generateProductCode(int index) {
     _selectedDate =
         (data['deliveryDate'] as Timestamp?)?.toDate() ?? DateTime.now();
     _selectedPriority = data['priority'] ?? 'Medium';
-final savedSales = data['salesPerson'];
+    final savedSales = data['salesPerson'];
 
-if (_salesPersons.contains(savedSales)) {
-  _selectedSalesPerson = savedSales;
-} else {
-  _selectedSalesPerson = 'Others';
-  _customSalesPerson = savedSales;
-}    _selectedUnit = data['unit'];
+    if (_salesPersons.contains(savedSales)) {
+      _selectedSalesPerson = savedSales;
+    } else {
+      _selectedSalesPerson = 'Others';
+      _customSalesPerson = savedSales;
+    }
+    _selectedUnit = data['unit'];
     _selectedStatus = data['status'] ?? 'Pending';
     _advanceAmount = (data['advanceAmount'] ?? 0).toDouble();
     _deliveryCharges = (data['deliveryCharges'] ?? 0).toDouble();
   }
 
-void _loadProductsFromOrder() {
-  final rawProducts = widget.orderData['products'];
+  void _loadProductsFromOrder() {
+    final rawProducts = widget.orderData['products'];
 
-  List productsList = [];
+    List productsList = [];
 
-  if (rawProducts is List) {
-    productsList = rawProducts;
-  } else if (rawProducts is Map) {
-    productsList = [rawProducts];
+    if (rawProducts is List) {
+      productsList = rawProducts;
+    } else if (rawProducts is Map) {
+      productsList = [rawProducts];
+    }
+
+    _products = productsList.map((p) {
+      return {
+        'code': p['productCode'] ?? p['code'] ?? 'A',
+        'category': p['productCategory'] ?? p['category'] ?? 'MDF',
+
+        'name': TextEditingController(
+          text: p['productName'] ?? p['name'] ?? '',
+        ),
+
+        'quantity': TextEditingController(
+          text: '${p['quantity'] ?? p['qty'] ?? 0}',
+        ),
+
+        'price': TextEditingController(text: '${p['price'] ?? p['rate'] ?? 0}'),
+
+        'remarks': TextEditingController(text: p['remarks'] ?? ''),
+
+        'images': <XFile>[],
+
+        'fetchedImages': p['images'] is List
+            ? List<String>.from(p['images'])
+            : <String>[],
+      };
+    }).toList();
+
+    if (_products.isEmpty) {
+      _products.add({
+        'code': 'A',
+        'category': 'MDF',
+        'name': TextEditingController(),
+        'quantity': TextEditingController(),
+        'price': TextEditingController(),
+        'remarks': TextEditingController(),
+        'images': <XFile>[],
+        'fetchedImages': <String>[],
+      });
+    }
   }
-
-  _products = productsList.map((p) {
-    return {
-      'code': p['productCode'] ?? p['code'] ?? 'A',
-      'category': p['productCategory'] ?? p['category'] ?? 'MDF',
-
-      'name': TextEditingController(
-        text: p['productName'] ?? p['name'] ?? '',
-      ),
-
-      'quantity': TextEditingController(
-        text: '${p['quantity'] ?? p['qty'] ?? 0}',
-      ),
-
-      'price': TextEditingController(
-        text: '${p['price'] ?? p['rate'] ?? 0}',
-      ),
-
-      'remarks': TextEditingController(
-        text: p['remarks'] ?? '',
-      ),
-
-      'images': <XFile>[],
-
-      'fetchedImages': p['images'] is List
-          ? List<String>.from(p['images'])
-          : <String>[],
-    };
-  }).toList();
-
-  if (_products.isEmpty) {
-    _products.add({
-      'code': 'A',
-      'category': 'MDF',
-      'name': TextEditingController(),
-      'quantity': TextEditingController(),
-      'price': TextEditingController(),
-      'remarks': TextEditingController(),
-      'images': <XFile>[],
-      'fetchedImages': <String>[],
-    });
-  }
-}
-
-
 
   // ── Computed totals ──────────────────────────────────────────────────
   double get _subTotal {
@@ -3145,39 +3178,41 @@ void _loadProductsFromOrder() {
     }
   }
 
-void _addProduct() {
-  setState(() {
-    final code = generateProductCode(_products.length);
+  void _addProduct() {
+    setState(() {
+      final code = generateProductCode(_products.length);
 
-    _products.add({
-      'code': code,
-      'category': 'MDF',
-      'name': TextEditingController(),
-      'quantity': TextEditingController(),
-      'price': TextEditingController(),
-      'remarks': TextEditingController(),
-      'images': <XFile>[],
-      'fetchedImages': <String>[],
+      _products.add({
+        'code': code,
+        'category': 'MDF',
+        'name': TextEditingController(),
+        'quantity': TextEditingController(),
+        'price': TextEditingController(),
+        'remarks': TextEditingController(),
+        'images': <XFile>[],
+        'fetchedImages': <String>[],
+      });
     });
-  });
-}
-void _removeProduct(int index) {
-  if (_products.length <= 1) return;
+  }
 
-  _products[index]['name'].dispose();
-  _products[index]['quantity'].dispose();
-  _products[index]['price'].dispose();
-  _products[index]['remarks'].dispose();
+  void _removeProduct(int index) {
+    if (_products.length <= 1) return;
 
-  setState(() {
-    _products.removeAt(index);
+    _products[index]['name'].dispose();
+    _products[index]['quantity'].dispose();
+    _products[index]['price'].dispose();
+    _products[index]['remarks'].dispose();
 
-    // reindex codes
-    for (int i = 0; i < _products.length; i++) {
-      _products[i]['code'] = generateProductCode(i);
-    }
-  });
-}
+    setState(() {
+      _products.removeAt(index);
+
+      // reindex codes
+      for (int i = 0; i < _products.length; i++) {
+        _products[i]['code'] = generateProductCode(i);
+      }
+    });
+  }
+
   Future<void> _pickProductImages(int index) async {
     final files = await _picker.pickMultiImage(imageQuality: 85);
     if (files.isNotEmpty) {
@@ -3268,15 +3303,15 @@ void _removeProduct(int index) {
                 onChanged: (v) => setState(() => _selectedSalesPerson = v),
               ),
               const SizedBox(height: 12),
-if (_selectedSalesPerson == 'Others')
-  TextFormField(
-    initialValue: _customSalesPerson ?? '',
-    decoration: const InputDecoration(
-      labelText: 'Enter Sales Person Name',
-      border: OutlineInputBorder(),
-    ),
-    onChanged: (v) => _customSalesPerson = v,
-  ),
+              if (_selectedSalesPerson == 'Others')
+                TextFormField(
+                  initialValue: _customSalesPerson ?? '',
+                  decoration: const InputDecoration(
+                    labelText: 'Enter Sales Person Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (v) => _customSalesPerson = v,
+                ),
               const SizedBox(height: 12),
 
               DropdownButtonFormField<String>(
@@ -3303,6 +3338,26 @@ if (_selectedSalesPerson == 'Others')
                 onChanged: (v) => setState(() => _selectedPriority = v!),
               ),
             ]),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _dispatchOptions.contains(_dispatchType)
+                  ? _dispatchType
+                  : null,
+              decoration: InputDecoration(
+                labelText: 'Dispatch Type',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              items: _dispatchOptions
+                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                  .toList(),
+              onChanged: (val) {
+                setState(() {
+                  _dispatchType = val;
+                });
+              },
+            ),
             const SizedBox(height: 16),
 
             // ── Products ────────────────────────────────────────────────

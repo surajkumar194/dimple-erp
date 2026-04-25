@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:sizer/sizer.dart';
 
+// ════════════════════════════════════════════════════════════════
+//  CONSTANTS
+// ════════════════════════════════════════════════════════════════
 class _C {
   static const primary = Color(0xFF169a8d);
   static const darkText = Color(0xFF2C3E50);
@@ -14,7 +18,8 @@ class _C {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-} 
+}
+
 class _Stage {
   final String id;
   final String title;
@@ -32,15 +37,14 @@ const List<_Stage> _kStages = [
   ),
   _Stage(
     'mdf_cutting',
-    'MDF Cutting/Assemnly(if applicable)',
+    'MDF Cutting/Assembly',
     Icons.content_cut,
     Color(0xFF169a8d),
   ),
-  _Stage('die', 'Die & paper', Icons.auto_fix_high_outlined, Color(0xFFFF6B6B)),
-
+  _Stage('die', 'Die & Paper', Icons.auto_fix_high_outlined, Color(0xFFFF6B6B)),
   _Stage(
     'box_ready',
-    'Box Readyfor Packing',
+    'Box Ready for Packing',
     Icons.check_box_outlined,
     Color(0xFFFFA500),
   ),
@@ -50,19 +54,11 @@ const List<_Stage> _kStages = [
     Icons.verified_outlined,
     Color(0xFF2ECC71),
   ),
-  _Stage(
-    'ready_for_dispatch',
-    'Ready for Dispatch',
-    Icons.local_shipping_outlined,
-    Color(0xFF8E24AA),
-  ),
 ];
 
-// const List<String> _kMaterials = [
-//   'Raw Material for mdf',
-
-// ];
-
+// ════════════════════════════════════════════════════════════════
+//  SCREEN
+// ════════════════════════════════════════════════════════════════
 class MdfProductionScreen extends StatefulWidget {
   final String orderId;
   const MdfProductionScreen({super.key, required this.orderId});
@@ -81,7 +77,11 @@ class _MdfProductionScreenState extends State<MdfProductionScreen>
   List<Map<String, dynamic>> _mdfProducts = [];
   List<Map<String, dynamic>> _prodData = [];
   TabController? _tabs;
-  bool _locked = false;
+
+  bool _firestoreLocked = false;
+
+  bool get _isFullyLocked => _firestoreLocked && _allDone();
+
   @override
   void initState() {
     super.initState();
@@ -101,84 +101,112 @@ class _MdfProductionScreenState extends State<MdfProductionScreen>
   }
 
   // ─── Firebase fetch ───────────────────────────────────────────
- Future<void> _fetch() async {
-  setState(() {
-    _loading = true;
-    _error = null;
-  });
+  Future<void> _fetch() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _firestoreLocked = false;
+    });
 
-  try {
-
-    /// 🔵 FIRST CHECK MDF PRODUCTION COLLECTION
-    final mdfDoc = await FirebaseFirestore.instance
-        .collection('mdfProduction')
-        .doc(widget.orderId)
-        .get();
-
-    if (mdfDoc.exists) {
-
-      final data = mdfDoc.data()!;
-      _mdfProducts = List<Map<String, dynamic>>.from(data['products']);
-
-      _orderData = {};
-
-    } else {
-
-      /// 🔵 OTHERWISE FETCH FROM ORDERS
-      final doc = await FirebaseFirestore.instance
-          .collection('orders')
+    try {
+      final mdfDoc = await FirebaseFirestore.instance
+          .collection('mdfProduction')
           .doc(widget.orderId)
           .get();
 
-      final data = doc.data()!;
+      if (mdfDoc.exists) {
+        final data = mdfDoc.data()!;
+        _firestoreLocked = data['locked'] ?? false;
+        _mdfProducts = List<Map<String, dynamic>>.from(data['products']);
+        _orderData = {};
+      } else {
+        _firestoreLocked = false;
+        final doc = await FirebaseFirestore.instance
+            .collection('orders')
+            .doc(widget.orderId)
+            .get();
+        final data = doc.data()!;
+        _orderData = data;
+        final rawList = data['products'];
+        final all = rawList is List ? rawList : [];
+        _mdfProducts = all
+            .where((p) => (p['productCategory'] ?? '') == 'MDF')
+            .map<Map<String, dynamic>>((p) => Map<String, dynamic>.from(p))
+            .toList();
+      }
 
-      _orderData = data;
+      _prodData = List.generate(_mdfProducts.length, (i) {
+        final saved = (_mdfProducts[i]['mdfProduction'] as Map?) ?? {};
+        final orderQty = _mdfProducts[i]['quantity']?.toString() ?? '';
+        return {
+          for (final s in _kStages)
+            s.id: {
+              'done': saved[s.id]?['done'] ?? false,
+              'remark': TextEditingController(
+                text: saved[s.id]?['remark'] ?? '',
+              ),
+              'qty': TextEditingController(
+                text: saved[s.id]?['qty']?.toString() ??
+                    (s.id == 'raw_material' ? orderQty : ''),
+              ),
+              'date': saved[s.id]?['savedAt'],
+            },
+        };
+      });
 
-      final rawList = data['products'];
+      if (_firestoreLocked && !_checkAllDoneFromProdData()) {
+        _firestoreLocked = false;
+        await FirebaseFirestore.instance
+            .collection('mdfProduction')
+            .doc(widget.orderId)
+            .update({'locked': false});
+      }
 
-      final all = rawList is List ? rawList : [];
+      _tabs?.dispose();
+      _tabs = TabController(length: _mdfProducts.length, vsync: this);
+      _tabs!.addListener(() {
+        if (mounted) setState(() {});
+      });
 
-      _mdfProducts = all
-          .where((p) => (p['productCategory'] ?? '') == 'MDF')
-          .map<Map<String, dynamic>>((p) => Map<String, dynamic>.from(p))
-          .toList();
+      setState(() => _loading = false);
+    } catch (e) {
+      setState(() {
+        _error = 'Error: $e';
+        _loading = false;
+      });
     }
-
-    /// controllers create
-    _prodData = List.generate(_mdfProducts.length, (i) {
-      final saved = (_mdfProducts[i]['mdfProduction'] as Map?) ?? {};
-      final orderQty = _mdfProducts[i]['quantity']?.toString() ?? '';
-
-      return {
-        for (final s in _kStages)
-          s.id: {
-            'done': saved[s.id]?['done'] ?? false,
-            'remark': TextEditingController(
-              text: saved[s.id]?['remark'] ?? '',
-            ),
-            'qty': TextEditingController(
-              text: saved[s.id]?['qty']?.toString() ??
-                  (s.id == 'raw_material' ? orderQty : ''),
-            ),
-            'date': saved[s.id]?['savedAt'],
-          },
-      };
-    });
-
-    _tabs?.dispose();
-    _tabs = TabController(length: _mdfProducts.length, vsync: this);
-
-    setState(() => _loading = false);
-
-  } catch (e) {
-    setState(() {
-      _error = 'Error: $e';
-      _loading = false;
-    });
   }
-}
 
-  // ─── Firebase save ────────────────────────────────────────────
+  bool _checkAllDoneFromProdData() {
+    if (_prodData.isEmpty) return false;
+    for (int i = 0; i < _prodData.length; i++) {
+      for (var s in _kStages) {
+        if (_prodData[i][s.id]['done'] != true) return false;
+      }
+    }
+    return true;
+  }
+
+  bool _allDone() {
+    if (_prodData.isEmpty) return false;
+    for (int i = 0; i < _prodData.length; i++) {
+      for (var s in _kStages) {
+        if (_prodData[i][s.id]['done'] != true) return false;
+      }
+    }
+    return true;
+  }
+
+  // ✅ NEW: Check if a single product's all stages are done
+  bool _allDoneForProduct(int i) {
+    if (_prodData.isEmpty || i >= _prodData.length) return false;
+    for (var s in _kStages) {
+      if (_prodData[i][s.id]['done'] != true) return false;
+    }
+    return true;
+  }
+
+  // ─── Auto-save on stage toggle ────────────────────────────────
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
@@ -188,60 +216,28 @@ class _MdfProductionScreenState extends State<MdfProductionScreen>
         final stageMap = <String, dynamic>{};
         for (final s in _kStages) {
           final sd = _prodData[i][s.id] as Map;
-          final entry = <String, dynamic>{
+          stageMap[s.id] = {
             'done': sd['done'] as bool,
             'remark': (sd['remark'] as TextEditingController).text.trim(),
             'qty': (sd['qty'] as TextEditingController).text.trim(),
             'savedAt': DateTime.now().toIso8601String(),
           };
-
-          stageMap[s.id] = entry;
         }
         prod['mdfProduction'] = stageMap;
         updated.add(prod);
       }
 
-      // merge: replace MDF products, keep others
-      final allProducts = (_orderData['products'] as List? ?? []);
-      int idx = 0;
-      final merged = allProducts.map((p) {
-        if ((p['productCategory'] ?? '') == 'MDF') return updated[idx++];
-        return p;
-      }).toList();
-
-await FirebaseFirestore.instance
-    .collection('mdfProduction')
-    .doc(widget.orderId)
-    .set({
-  'orderId': widget.orderId,
-  'products': updated,
-  'updatedAt': FieldValue.serverTimestamp(),
-}, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('mdfProduction')
+          .doc(widget.orderId)
+          .set({
+            'orderId': widget.orderId,
+            'products': updated,
+            'locked': false,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
       _mdfProducts = updated;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 10),
-                Text(
-                  'Saved successfully!',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            backgroundColor: _C.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -257,14 +253,101 @@ await FirebaseFirestore.instance
     }
   }
 
-  // ═══════════════════════ BUILD ═══════════════════════════════
+  // ─── Final save: COMMON or DISPATCH (per product) ────────────
+  Future<void> _finalSave(String type, int productIndex) async {
+    setState(() => _saving = true);
+    try {
+      final updated = <Map<String, dynamic>>[];
+      for (int i = 0; i < _mdfProducts.length; i++) {
+        final prod = Map<String, dynamic>.from(_mdfProducts[i]);
+        final stageMap = <String, dynamic>{};
+        for (final s in _kStages) {
+          final sd = _prodData[i][s.id] as Map;
+          stageMap[s.id] = {
+            'done': sd['done'],
+            'remark': (sd['remark'] as TextEditingController).text,
+            'qty': (sd['qty'] as TextEditingController).text,
+            'savedAt': DateTime.now().toIso8601String(),
+          };
+        }
+        // ✅ Mark finalStatus per product
+        if (i == productIndex) {
+          prod['finalStatus'] = type;
+          prod['statusSentAt'] = DateTime.now().toIso8601String();
+        }
+        prod['mdfProduction'] = stageMap;
+        updated.add(prod);
+      }
+
+      // ✅ Lock only if ALL products done AND all have finalStatus
+      final shouldLock = _allDone() &&
+          updated.every((p) => p['finalStatus'] != null);
+
+      await FirebaseFirestore.instance
+          .collection('mdfProduction')
+          .doc(widget.orderId)
+          .set({
+            'orderId': widget.orderId,
+            'products': updated,
+            'locked': shouldLock,
+            'updatedAt': FieldValue.serverTimestamp(),
+            if (shouldLock) 'completedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+      _mdfProducts = updated;
+      if (shouldLock) {
+        setState(() => _firestoreLocked = true);
+      }
+
+      if (mounted) {
+        final productName =
+            (_mdfProducts[productIndex]['productName'] ?? 'Product')
+                .toString();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    type == 'COMMON'
+                        ? '✅ "$productName" moved to Common Orders'
+                        : '🚚 "$productName" sent to Dispatch',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: type == 'COMMON' ? Colors.blue : Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: _C.warning),
+        );
+      }
+    }
+    setState(() => _saving = false);
+  }
+
+  // ════════════════════════ BUILD ═══════════════════════════════
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.lightBg,
       appBar: AppBar(
         elevation: 0,
-        flexibleSpace: Container(decoration: BoxDecoration(color: _C.primary)),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(color: _C.primary),
+        ),
         foregroundColor: Colors.white,
         leading: GestureDetector(
           onTap: () => Navigator.pop(context),
@@ -298,12 +381,8 @@ await FirebaseFirestore.instance
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Mdf Production Edit Screen',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    letterSpacing: 0.3,
-                  ),
+                  'MDF Production Edit',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                 ),
                 Text(
                   'Manage MDF production stages',
@@ -313,6 +392,13 @@ await FirebaseFirestore.instance
             ),
           ],
         ),
+        actions: [
+          if (!_loading)
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+              onPressed: _fetch,
+            ),
+        ],
       ),
       body: _loading
           ? _buildLoader()
@@ -321,56 +407,172 @@ await FirebaseFirestore.instance
           : _mdfProducts.isEmpty
           ? _buildEmpty()
           : _buildBody(),
-      floatingActionButton:
-          (!_loading && _error == null && _mdfProducts.isNotEmpty)
-          ? FloatingActionButton.extended(
-              onPressed: _saving ? null : _save,
-              backgroundColor: _C.primary,
-              elevation: 6,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.save_rounded, color: Colors.white),
-              label: Text(
-                _saving ? 'Saving...' : 'Save Production',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            )
-          : null,
+      bottomNavigationBar: _buildBottomBar(),
     );
   }
 
-  // ─── App bar ──────────────────────────────────────────────────
-  // PreferredSizeWidget _appBar() => AppBar(
-  //       elevation: 0,
-  //       centerTitle: true,
-  //       foregroundColor: Colors.white,
-  //       flexibleSpace: Container(
-  //           decoration: const BoxDecoration(gradient: _C.primaryGrad)),
-  //       title: const Row(mainAxisSize: MainAxisSize.min, children: [
-  //         Icon(Icons.precision_manufacturing, color: Colors.white, size: 22),
-  //         SizedBox(width: 10),
-  //         Text('MDF Production',
-  //             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
-  //       ]),
-  //       actions: [
-  //         if (!_loading)
-  //           IconButton(
-  //             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-  //             onPressed: _fetch,
-  //             tooltip: 'Refresh',
-  //           ),
-  //       ],
-  //     );
+  // ─── Bottom bar ───────────────────────────────────────────────
+  Widget? _buildBottomBar() {
+    if (_loading) return null;
+
+    // ✅ Current tab index
+    final currentIndex = (_tabs?.index ?? 0).clamp(0, _mdfProducts.isEmpty ? 0 : _mdfProducts.length - 1);
+
+    // ✅ Check if current product is done
+    final currentProductDone = _mdfProducts.isEmpty ? false : _allDoneForProduct(currentIndex);
+
+    // ✅ Check if current product already has a finalStatus (sent)
+    final alreadySent = _mdfProducts.isEmpty
+        ? false
+        : (_mdfProducts[currentIndex]['finalStatus'] != null);
+
+    final canAct = currentProductDone && !_saving && !alreadySent && !_isFullyLocked;
+
+    String commonLabel = 'COMMON';
+    String dispatchLabel = 'DISPATCH';
+    String commonSub = 'Mark as Common Order';
+    String dispatchSub = 'Send to Dispatch';
+
+    if (alreadySent) {
+      final status = _mdfProducts[currentIndex]['finalStatus'] ?? '';
+      commonLabel = status == 'COMMON' ? '✓ COMMON' : 'COMMON';
+      dispatchLabel = status == 'DISPATCH' ? '✓ DISPATCH' : 'DISPATCH';
+      commonSub = status == 'COMMON' ? 'Already sent' : 'Mark as Common Order';
+      dispatchSub = status == 'DISPATCH' ? 'Already sent' : 'Send to Dispatch';
+    } else if (_isFullyLocked) {
+      commonLabel = '✓ DONE';
+      dispatchLabel = '✓ DONE';
+      commonSub = 'Locked';
+      dispatchSub = 'Locked';
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ActionButton(
+              label: commonLabel,
+              sublabel: commonSub,
+              icon: Icons.category_outlined,
+              color: Colors.blue.shade600,
+              enabled: canAct,
+              loading: _saving,
+              onTap: () => _showConfirmDialog('COMMON', currentIndex),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _ActionButton(
+              label: dispatchLabel,
+              sublabel: dispatchSub,
+              icon: Icons.local_shipping_outlined,
+              color: Colors.green.shade600,
+              enabled: canAct,
+              loading: _saving,
+              onTap: () => _showConfirmDialog('DISPATCH', currentIndex),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Confirm dialog ───────────────────────────────────────────
+  void _showConfirmDialog(String type, int productIndex) {
+    final isCommon = type == 'COMMON';
+    final productName =
+        (_mdfProducts[productIndex]['productName'] ?? 'Product').toString();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (isCommon ? Colors.blue : Colors.green).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                isCommon
+                    ? Icons.category_outlined
+                    : Icons.local_shipping_outlined,
+                color: isCommon ? Colors.blue : Colors.green,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                isCommon ? 'COMMON ORDER' : 'Send to DISPATCH?',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: _C.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '📦 $productName',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: _C.primary,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isCommon
+                  ? 'This product will be moved to the Common Orders list. This action cannot be undone.'
+                  : 'This product will be moved to the Dispatch queue. This action cannot be undone.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _finalSave(type, productIndex);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isCommon ? Colors.blue : Colors.green,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: Text('Confirm $type'),
+          ),
+        ],
+      ),
+    );
+  }
 
   // ─── Loader ───────────────────────────────────────────────────
   Widget _buildLoader() => Center(
@@ -404,7 +606,6 @@ await FirebaseFirestore.instance
     ),
   );
 
-  // ─── Error ────────────────────────────────────────────────────
   Widget _buildError() => Center(
     child: Column(
       mainAxisSize: MainAxisSize.min,
@@ -430,7 +631,6 @@ await FirebaseFirestore.instance
     ),
   );
 
-  // ─── Empty ────────────────────────────────────────────────────
   Widget _buildEmpty() => Center(
     child: Column(
       mainAxisSize: MainAxisSize.min,
@@ -465,7 +665,6 @@ await FirebaseFirestore.instance
     ),
   );
 
-  // ─── Main body ────────────────────────────────────────────────
   Widget _buildBody() => Column(
     children: [
       _orderBanner(),
@@ -484,7 +683,6 @@ await FirebaseFirestore.instance
     ],
   );
 
-  // ─── Order banner ─────────────────────────────────────────────
   Widget _orderBanner() {
     final customer = _orderData['customerName'] ?? '-';
     final company = _orderData['companyName'] ?? '';
@@ -621,7 +819,6 @@ await FirebaseFirestore.instance
     );
   }
 
-  // ─── Tab bar ──────────────────────────────────────────────────
   Widget _tabBar() => Container(
     color: Colors.white,
     margin: const EdgeInsets.only(top: 14),
@@ -674,7 +871,6 @@ await FirebaseFirestore.instance
     ),
   );
 
-  // ─── Product body ─────────────────────────────────────────────
   Widget _productBody(int i) => ListView(
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
     children: [
@@ -687,10 +883,8 @@ await FirebaseFirestore.instance
     ],
   );
 
-  // ─── Product detail card ──────────────────────────────────────
   Widget _productDetailCard(Map<String, dynamic> p) {
     String sv(dynamic v) => v == null ? '' : v.toString().trim();
-
     Widget row(String label, String val) {
       if (val.isEmpty) return const SizedBox.shrink();
       return Padding(
@@ -724,15 +918,9 @@ await FirebaseFirestore.instance
       );
     }
 
-    final l = sv(p['length']);
-    final h = sv(p['height']);
-    final w = sv(p['width']);
-    final size = [l, h, w].where((x) => x.isNotEmpty).join(' × ');
-
     final sections = (p['sections'] as Map<String, dynamic>?) ?? {};
     final extraSections = (p['customExtraSections'] as List?) ?? [];
     final List<String> chips = [];
-
     void addChip(String key, String label) {
       final v = sections[key];
       if (v != null && v.toString().trim().isNotEmpty && v.toString() != '0') {
@@ -751,7 +939,6 @@ await FirebaseFirestore.instance
       final t = (ex['title'] ?? '').toString().trim();
       if (t.isNotEmpty) chips.add(t);
     }
-
     final images = (p['images'] as List?) ?? [];
 
     return Container(
@@ -793,17 +980,14 @@ await FirebaseFirestore.instance
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 5),
           const Divider(height: 1),
-          const SizedBox(height: 14),
+          const SizedBox(height: 5),
           row('Product Name', sv(p['productName'])),
           row('Quantity', sv(p['quantity'])),
-          row('Price', sv(p['price']).isNotEmpty ? '₹ ${sv(p['price'])}' : ''),
-          row('Size (L×H×W)', size),
           row('Remarks', sv(p['remarks'])),
-
           if (chips.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 5),
             const Text(
               'Sections:',
               style: TextStyle(
@@ -812,7 +996,7 @@ await FirebaseFirestore.instance
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 5),
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -840,9 +1024,8 @@ await FirebaseFirestore.instance
                   .toList(),
             ),
           ],
-
           if (images.isNotEmpty) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 5),
             const Text(
               'Reference Images:',
               style: TextStyle(
@@ -851,7 +1034,7 @@ await FirebaseFirestore.instance
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 5),
             SizedBox(
               height: 90,
               child: ListView.separated(
@@ -909,12 +1092,10 @@ await FirebaseFirestore.instance
     );
   }
 
-  // ─── Progress card ────────────────────────────────────────────
   Widget _progressCard(int i) {
     final pd = _prodData[i];
     final done = _kStages.where((s) => pd[s.id]['done'] == true).length;
     final pct = done / _kStages.length;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1024,13 +1205,13 @@ await FirebaseFirestore.instance
     );
   }
 
-  // ─── Stage card ───────────────────────────────────────────────
   Widget _stageCard(int i, _Stage s) {
     final sd = _prodData[i][s.id] as Map;
     final isDone = sd['done'] as bool;
     final ctrl = sd['remark'] as TextEditingController;
     final qtyCtrl = sd['qty'] as TextEditingController;
-    final date = sd['date'];
+
+    final isLocked = _isFullyLocked;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -1053,36 +1234,72 @@ await FirebaseFirestore.instance
       ),
       child: Column(
         children: [
-          // header — tap to toggle
           GestureDetector(
             onTap: () {
-              if (_locked) return;
-
+              if (isLocked) return;
               setState(() {
                 sd['done'] = !isDone;
-
                 if (sd['done']) {
-                  final currentQty = (sd['qty'] as TextEditingController).text;
-
+                  final currentQty =
+                      (sd['qty'] as TextEditingController).text;
                   final index = _kStages.indexOf(s);
-
                   if (index + 1 < _kStages.length) {
-                    final nextStage = _kStages[index + 1];
-
                     final nextCtrl =
-                        _prodData[i][nextStage.id]['qty']
+                        _prodData[i][_kStages[index + 1].id]['qty']
                             as TextEditingController;
-
-                    if (nextCtrl.text.isEmpty) {
-                      nextCtrl.text = currentQty;
-                    }
+                    if (nextCtrl.text.isEmpty) nextCtrl.text = currentQty;
                   }
-
                   sd['date'] = DateTime.now().toIso8601String();
                 } else {
                   sd['date'] = null;
                 }
               });
+              _save();
+
+              // ✅ NEW: Auto switch to next incomplete product tab
+              if (_allDoneForProduct(i) && _tabs != null && _mdfProducts.length > 1) {
+                for (int next = i + 1; next < _mdfProducts.length; next++) {
+                  if (!_allDoneForProduct(next)) {
+                    final productName =
+                        (_mdfProducts[next]['productName'] ?? 'Product ${next + 1}')
+                            .toString();
+                    Future.delayed(const Duration(milliseconds: 400), () {
+                      if (mounted) {
+                        _tabs!.animateTo(next);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(
+                                  Icons.arrow_forward_rounded,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    '✅ Product ${i + 1} done! Now: $productName',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: _C.primary,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            margin: const EdgeInsets.all(16),
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    });
+                    break;
+                  }
+                }
+              }
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1145,7 +1362,6 @@ await FirebaseFirestore.instance
                       ],
                     ),
                   ),
-                  // Done / Pending toggle button
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     padding: const EdgeInsets.symmetric(
@@ -1195,22 +1411,19 @@ await FirebaseFirestore.instance
               ),
             ),
           ),
-
-          // body
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 12),
-
                 Row(
                   children: [
                     Expanded(
                       flex: 2,
                       child: TextField(
                         controller: ctrl,
-                        enabled: !_locked,
+                        enabled: !isLocked,
                         decoration: InputDecoration(
                           labelText: 'Remark',
                           prefixIcon: Icon(Icons.edit_note, color: s.color),
@@ -1230,13 +1443,11 @@ await FirebaseFirestore.instance
                         ),
                       ),
                     ),
-
                     const SizedBox(width: 10),
-
                     Expanded(
                       child: TextField(
                         controller: qtyCtrl,
-                        enabled: !_locked,
+                        enabled: !isLocked,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText: 'Qty',
@@ -1259,7 +1470,6 @@ await FirebaseFirestore.instance
                     ),
                   ],
                 ),
-
                 if (isDone && sd['date'] != null) ...[
                   const SizedBox(height: 10),
                   Row(
@@ -1284,136 +1494,86 @@ await FirebaseFirestore.instance
       ),
     );
   }
+}
 
-  // ─── Raw material checklist ───────────────────────────────────
-  Widget _rawMaterialList(Map sd) {
-    final materials = sd['materials'] as Map<String, bool>;
-    final checked = materials.values.where((v) => v).length;
+// ════════════════════════════════════════════════════════════════
+//  REUSABLE ACTION BUTTON WIDGET
+// ════════════════════════════════════════════════════════════════
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final String sublabel;
+  final IconData icon;
+  final Color color;
+  final bool enabled;
+  final bool loading;
+  final VoidCallback onTap;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        //  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+  const _ActionButton({
+    required this.label,
+    required this.sublabel,
+    required this.icon,
+    required this.color,
+    required this.enabled,
+    required this.loading,
+    required this.onTap,
+  });
 
-        // Container(
-        //   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        //   decoration: BoxDecoration(
-        //     color: checked == materials.length
-        //         ? _C.success.withOpacity(0.15)
-        //         : _C.primary.withOpacity(0.1),
-        //     borderRadius: BorderRadius.circular(12),
-        //   ),
-        //   // child: Text('$checked / ${materials.length} ready',
-        //   //     style: TextStyle(
-        //   //         color: checked == materials.length ? _C.success : _C.primary,
-        //   //         fontSize: 11,
-        //   //         fontWeight: FontWeight.bold)),
-        // ),
-        //  ]),
-        // const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Column(
-            children: materials.entries.map((entry) {
-              final isChecked = entry.value;
-              final isLast = entry.key == materials.keys.last;
-              return Column(
-                children: [
-                  InkWell(
-                    onTap: () =>
-                        setState(() => materials[entry.key] = !isChecked),
-                    borderRadius: BorderRadius.circular(12),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isChecked
-                            ? _C.primary.withOpacity(0.07)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: isChecked
-                                  ? _C.primary
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: isChecked
-                                    ? _C.primary
-                                    : Colors.grey.shade400,
-                                width: 2,
-                              ),
-                            ),
-                            child: isChecked
-                                ? const Icon(
-                                    Icons.check_rounded,
-                                    color: Colors.white,
-                                    size: 16,
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              entry.key,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: isChecked
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                                color: isChecked ? _C.primary : _C.darkText,
-                              ),
-                            ),
-                          ),
-                          if (isChecked)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _C.success.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                '✓ Ready',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: _C.success,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        decoration: BoxDecoration(
+          color: enabled ? color : Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: enabled
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  if (!isLast)
-                    Divider(
-                      height: 1,
-                      color: Colors.grey.shade200,
-                      indent: 14,
-                      endIndent: 14,
-                    ),
-                ],
-              );
-            }).toList(),
-          ),
+                ]
+              : [],
         ),
-      ],
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (loading)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            else
+              Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  sublabel,
+                  style: const TextStyle(color: Colors.white70, fontSize: 10),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

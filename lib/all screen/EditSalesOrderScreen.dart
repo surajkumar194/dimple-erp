@@ -5,6 +5,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show File;
+import 'package:http/http.dart' as http;
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AppColors {
   static const Color primary = Color(0xFF169a8d);
@@ -65,6 +70,8 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
   bool _isSaving = false;
   final ImagePicker _picker = ImagePicker();
   String _selectedUnit = 'Unit 1';
+  String? _dispatchType;
+  final List<String> _dispatchOptions = ['Transport', 'Vehicle'];
   late AnimationController _animationController;
   final List<String> _units = [
     'Unit 1',
@@ -75,30 +82,75 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
 
   bool _showPartialDispatch = false;
 
-  void _openFullScreenImage(ImageProvider imageProvider) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.zero,
-        child: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: InteractiveViewer(
-            minScale: 1,
-            maxScale: 4,
-            child: Center(
-              child: Image(image: imageProvider, fit: BoxFit.contain),
+ void _openFullScreenImage(String imageUrl) {
+  showDialog(
+    context: context,
+    barrierColor: Colors.black,
+    builder: (_) => Dialog(
+      backgroundColor: Colors.black,
+      insetPadding: EdgeInsets.zero,
+      child: Stack(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 4,
+              child: Center(
+                child: Image.network(imageUrl, fit: BoxFit.contain),
+              ),
             ),
           ),
-        ),
+
+          // 🔥 DOWNLOAD BUTTON
+          Positioned(
+            bottom: 30,
+            right: 20,
+            child: FloatingActionButton(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.download, color: Colors.black),
+              onPressed: () {
+                downloadImage(imageUrl);
+              },
+            ),
+          ),
+        ],
       ),
-    );
+    ),
+  );
+}
+Future<void> downloadImage(String url) async {
+  try {
+    if (kIsWeb) {
+      await launchUrl(Uri.parse(url));
+    } else {
+      // ✅ MOBILE
+      var status = await Permission.storage.request();
+      if (!status.isGranted) return;
+
+      final response = await http.get(Uri.parse(url));
+
+      final result = await ImageGallerySaver.saveImage(
+        response.bodyBytes,
+        quality: 100,
+        name: "ERP_${DateTime.now().millisecondsSinceEpoch}",
+      );
+
+      print("Saved: $result");
+    }
+  } catch (e) {
+    print("Download error: $e");
   }
+}
+  final List<String> _productCategories = [
+    'MDF',
+    'Kappa Box (Gora)',
+    'Packaging',
+    'Shagun Envelope',
+    'Rigid Box (unit 2 Hussainpura)',
+    'Others',
+  ];
 
-  final List<String> _productCategories =['MDF', 'Kappa Box (Gora)', 'Packaging', 'Shagun Envelope', 'Rigid Box (unit 2 Hussainpura)', 'Others'];
-
-  
   final TextEditingController _otherSalesPersonController =
       TextEditingController();
   final List<String> _salesPersons = [
@@ -140,6 +192,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
   @override
   void initState() {
     super.initState();
+    _dispatchType = widget.orderData['dispatchType'];
     // _productionUnit = widget.orderData['productionUnit'] ?? 'Unit 1';
 
     _animationController = AnimationController(
@@ -194,6 +247,7 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
       _selectedSalesPerson = null;
     }
     _selectedUnit = widget.orderData['unit'] ?? 'Unit 1';
+    _dispatchType = widget.orderData['dispatchType'];
     final rawProducts = widget.orderData['products'];
 
     List productsList = [];
@@ -207,11 +261,13 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
     _products = productsList.map((p) {
       final sections = p['sections'] as Map<String, dynamic>? ?? {};
       final extraSections = p['customExtraSections'] as List? ?? [];
+
       final rawQty = safeText(p['quantity']);
       final split = _splitQuantityAndRemark(rawQty);
 
       return {
         'id': p['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        'sections': sections, // ✅ ADD THIS LINE
 
         'nameController': TextEditingController(text: p['productName'] ?? ''),
         'quantityController': TextEditingController(text: split['qty']),
@@ -232,37 +288,37 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
               hasValue(sections['trayDetail']) ||
               hasValue(sections['trayQty']) ||
               hasValue(sections['trayPrice']) ||
-  hasValue(sections['tray']), 
+              hasValue(sections['tray']),
 
           'Salophin':
               hasValue(sections['salophinDetail']) ||
               hasValue(sections['salophinQty']) ||
               hasValue(sections['salophinPrice']) ||
-  hasValue(sections['salophin']),
+              hasValue(sections['salophin']),
 
           'Box Cover':
               hasValue(sections['boxCoverDetail']) ||
               hasValue(sections['boxCoverQty']) ||
-              hasValue(sections['boxCoverPrice']) 
-            ||  hasValue(sections['boxCover']),
+              hasValue(sections['boxCoverPrice']) ||
+              hasValue(sections['boxCover']),
 
           'Inner':
               hasValue(sections['innerDetail']) ||
               hasValue(sections['innerQty']) ||
               hasValue(sections['innerPrice']) ||
-  hasValue(sections['inner']),
+              hasValue(sections['inner']),
 
           'Bottom':
               hasValue(sections['bottomDetail']) ||
               hasValue(sections['bottomQty']) ||
-              hasValue(sections['bottomPrice'])||
-  hasValue(sections['bottom']),
+              hasValue(sections['bottomPrice']) ||
+              hasValue(sections['bottom']),
 
           'Die':
               hasValue(sections['dieDetail']) ||
               hasValue(sections['dieQty']) ||
-              hasValue(sections['diePrice'])||
-  hasValue(sections['die']),
+              hasValue(sections['diePrice']) ||
+              hasValue(sections['die']),
 
           'Others':
               hasValue(sections['otherDetail']) ||
@@ -272,7 +328,8 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
         },
 
         'trayDetailController': TextEditingController(
-text: sections['trayDetail'] ?? sections['tray'] ?? '',        ),
+          text: sections['trayDetail'] ?? sections['tray'] ?? '',
+        ),
         'trayQtyController': TextEditingController(
           text: sections['trayQty']?.toString() ?? '',
         ),
@@ -280,7 +337,8 @@ text: sections['trayDetail'] ?? sections['tray'] ?? '',        ),
           text: sections['trayPrice'] ?? '',
         ),
         'salophinDetailController': TextEditingController(
-text: sections['salophinDetail'] ?? sections['salophin'] ?? '',        ),
+          text: sections['salophinDetail'] ?? sections['salophin'] ?? '',
+        ),
         'salophinQtyController': TextEditingController(
           text: sections['salophinQty']?.toString() ?? '',
         ),
@@ -288,7 +346,8 @@ text: sections['salophinDetail'] ?? sections['salophin'] ?? '',        ),
           text: sections['salophinPrice'] ?? '',
         ),
         'boxCoverDetailController': TextEditingController(
-text: sections['boxCoverDetail'] ?? sections['boxCover'] ?? '',        ),
+          text: sections['boxCoverDetail'] ?? sections['boxCover'] ?? '',
+        ),
         'boxCoverQtyController': TextEditingController(
           text: sections['boxCoverQty']?.toString() ?? '',
         ),
@@ -296,7 +355,8 @@ text: sections['boxCoverDetail'] ?? sections['boxCover'] ?? '',        ),
           text: sections['boxCoverPrice'] ?? '',
         ),
         'innerDetailController': TextEditingController(
-text: sections['innerDetail'] ?? sections['inner'] ?? '',        ),
+          text: sections['innerDetail'] ?? sections['inner'] ?? '',
+        ),
         'innerQtyController': TextEditingController(
           text: sections['innerQty']?.toString() ?? '',
         ),
@@ -304,7 +364,8 @@ text: sections['innerDetail'] ?? sections['inner'] ?? '',        ),
           text: sections['innerPrice'] ?? '',
         ),
         'bottomDetailController': TextEditingController(
-text: sections['bottomDetail'] ?? sections['bottom'] ?? '',        ),
+          text: sections['bottomDetail'] ?? sections['bottom'] ?? '',
+        ),
         'bottomQtyController': TextEditingController(
           text: sections['bottomQty']?.toString() ?? '',
         ),
@@ -594,26 +655,23 @@ text: sections['bottomDetail'] ?? sections['bottom'] ?? '',        ),
 
       await jobDoc.set({
         'linkedOrderId': widget.orderId,
-
-        'jobCardNumber': widget.orderId, // ⭐⭐⭐ ADD THIS
-
+        'jobCardNumber': widget.orderId,
         'customerName': _customerController.text.trim(),
         'companyName': _companyController.text.trim(),
         'phone': _phoneController.text.trim(),
         'email': _emailController.text.trim(),
         'location': _locationController.text.trim(),
-
         'products': productsData,
         'partialDispatches': partialDispatchesData,
-
         'priority': _priority,
         'salesPerson': _selectedSalesPerson == 'Others'
             ? _customSalesPerson
             : _selectedSalesPerson,
-
         'unit': _selectedUnit,
         'deliveryDate': Timestamp.fromDate(_deliveryDate),
         'orderDate': Timestamp.fromDate(_orderDate),
+        'dispatchType': _dispatchType,
+
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -671,8 +729,10 @@ text: sections['bottomDetail'] ?? sections['bottom'] ?? '',        ),
         final allImages = [...existingImages, ...newImageUrls];
 
         final sectionSelected = product['sectionSelected'] as Map<String, bool>;
-        final Map<String, dynamic> sections = {};
-
+        final oldSections = product['sections'] ?? {};
+        final Map<String, dynamic> sections = Map<String, dynamic>.from(
+          oldSections,
+        );
         if (sectionSelected['Tray'] == true) {
           sections['trayDetail'] =
               (product['trayDetailController'] as TextEditingController).text
@@ -781,7 +841,9 @@ text: sections['bottomDetail'] ?? sections['bottom'] ?? '',        ),
         }
 
         final List<Map<String, dynamic>> extraSectionsData = [];
-
+        final selectedCategory = (product['productCategory'] ?? '')
+            .toString()
+            .trim();
         for (final sec
             in product['customExtraSections']
                 as List<Map<String, TextEditingController>>) {
@@ -813,7 +875,7 @@ text: sections['bottomDetail'] ?? sections['bottom'] ?? '',        ),
           'width': widthController.text.trim(),
           'price': double.tryParse(priceController.text.trim()) ?? 0,
           'remarks': remarkController.text.trim(),
-          'productCategory': product['productCategory'],
+          'productCategory': selectedCategory,
           'images': allImages,
           'sections': sections,
           'customExtraSections': extraSectionsData,
@@ -839,7 +901,10 @@ text: sections['bottomDetail'] ?? sections['bottom'] ?? '',        ),
           });
         }
       }
-
+      await FirebaseFirestore.instance
+          .collection('orders_backup')
+          .doc(widget.orderId)
+          .set(widget.orderData);
       await FirebaseFirestore.instance
           .collection('orders')
           .doc(widget.orderId)
@@ -849,15 +914,13 @@ text: sections['bottomDetail'] ?? sections['bottom'] ?? '',        ),
             'phone': _phoneController.text.trim(),
             'email': _emailController.text.trim(),
             'location': _locationController.text.trim(),
-
             'products': productsData,
             'partialDispatches': partialDispatchesData,
-
             'priority': _priority,
             'salesPerson': _selectedSalesPerson == 'Others'
                 ? _customSalesPerson
                 : _selectedSalesPerson,
-
+            'dispatchType': _dispatchType,
             'unit': _selectedUnit,
             'deliveryDate': Timestamp.fromDate(_deliveryDate),
             'orderDate': Timestamp.fromDate(_orderDate),
@@ -906,54 +969,56 @@ text: sections['bottomDetail'] ?? sections['bottom'] ?? '',        ),
       setState(() => _isSaving = false);
     }
   }
-Future<void> _saveToUnit2IfRigid(
-  List<Map<String, dynamic>> productsData,
-) async {
-  try {
-    final rigidProducts = productsData.where((p) {
-      final cat = (p['productCategory'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
 
-      return cat.contains('rigid box');
-    }).toList();
+  Future<void> _saveToUnit2IfRigid(
+    List<Map<String, dynamic>> productsData,
+  ) async {
+    try {
+      final rigidProducts = productsData.where((p) {
+        final cat = (p['productCategory'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
 
-    // ❌ agar rigid nahi hai → delete
-    if (rigidProducts.isEmpty) {
+        return cat == 'rigid box (unit 2 hussainpura)';
+      }).toList();
+
+      // ❌ agar rigid nahi hai → delete
+      if (rigidProducts.isEmpty) {
+        await FirebaseFirestore.instance
+            .collection('unit2JobCards')
+            .doc(widget.orderId)
+            .delete();
+        return;
+      }
+
+      // ✅ same doc update (no duplicate)
       await FirebaseFirestore.instance
           .collection('unit2JobCards')
           .doc(widget.orderId)
-          .delete();
-      return;
+          .set({
+            'orderId': widget.orderId,
+            'isJobCardCreated': false,
+            'customerName': _customerController.text.trim(),
+            'companyName': _companyController.text.trim(),
+            'phone': _phoneController.text.trim(),
+            'location': _locationController.text.trim(),
+            'salesPerson': _selectedSalesPerson == 'Others'
+                ? _customSalesPerson
+                : _selectedSalesPerson,
+            'priority': _priority,
+            'deliveryDate': Timestamp.fromDate(_deliveryDate),
+            'createdDate': Timestamp.fromDate(_orderDate),
+            'products': rigidProducts,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+      print("✅ Unit2 synced properly");
+    } catch (e) {
+      print("🔥 unit2 save error: $e");
     }
-
-    // ✅ same doc update (no duplicate)
-    await FirebaseFirestore.instance
-        .collection('unit2JobCards')
-        .doc(widget.orderId)
-        .set({
-      'orderId': widget.orderId,
-      'isJobCardCreated': false,
-      'customerName': _customerController.text.trim(),
-      'companyName': _companyController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'location': _locationController.text.trim(),
-      'salesPerson': _selectedSalesPerson == 'Others'
-          ? _customSalesPerson
-          : _selectedSalesPerson,
-      'priority': _priority,
-      'deliveryDate': Timestamp.fromDate(_deliveryDate),
-      'createdDate': Timestamp.fromDate(_orderDate),
-      'products': rigidProducts,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    print("✅ Unit2 synced properly");
-  } catch (e) {
-    print("🔥 unit2 save error: $e");
   }
-}
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1031,6 +1096,34 @@ Future<void> _saveToUnit2IfRigid(
                   controller: _locationController,
                   label: 'Location',
                   icon: Icons.location_on,
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            _buildSection(
+              title: 'Dispatch Type',
+              icon: Icons.local_shipping,
+              gradient: LinearGradient(
+                colors: [Colors.green.shade100, Colors.teal.shade100],
+              ),
+              children: [
+                DropdownButtonFormField<String>(
+                  value: _dispatchOptions.contains(_dispatchType)
+                      ? _dispatchType
+                      : null,
+                  decoration: _buildInputDecoration(
+                    'Select Dispatch Type',
+                    Icons.local_shipping,
+                  ),
+                  items: _dispatchOptions
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _dispatchType = val;
+                    });
+                  },
                 ),
               ],
             ),
@@ -1530,8 +1623,8 @@ Future<void> _saveToUnit2IfRigid(
                 sectionSelected['Tray'] =
                     hasValue(sections['trayDetail']) ||
                     hasValue(sections['trayQty']) ||
-                    hasValue(sections['trayPrice'])||
-    hasValue(sections['tray']);
+                    hasValue(sections['trayPrice']) ||
+                    hasValue(sections['tray']);
                 (product['trayDetailController'] as TextEditingController)
                         .text =
                     sections['trayDetail'] ?? sections['tray'] ?? '';
@@ -1608,7 +1701,7 @@ Future<void> _saveToUnit2IfRigid(
                     hasValue(sections['otherDetail']) ||
                     hasValue(sections['otherQty']) ||
                     hasValue(sections['otherPrice']) ||
-                    hasValue(sections['other'])||
+                    hasValue(sections['other']) ||
                     (data['customExtraSections'] as List?)?.isNotEmpty == true;
                 (product['otherDetailController'] as TextEditingController)
                         .text =
@@ -2247,7 +2340,7 @@ Future<void> _saveToUnit2IfRigid(
           (url) => Stack(
             children: [
               GestureDetector(
-                onTap: () => _openFullScreenImage(NetworkImage(url)),
+                onTap: () => _openFullScreenImage(url),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: SizedBox(
@@ -2288,13 +2381,7 @@ Future<void> _saveToUnit2IfRigid(
           (x) => Stack(
             children: [
               GestureDetector(
-                onTap: () {
-                  _openFullScreenImage(
-                    kIsWeb
-                        ? NetworkImage(x.path)
-                        : FileImage(File(x.path)) as ImageProvider,
-                  );
-                },
+        onTap: () => _openFullScreenImage(x.path), // ✅ FIXED
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: SizedBox(

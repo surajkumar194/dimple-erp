@@ -18,8 +18,15 @@ class _AppColors {
   static const purple = Color(0xFF6A1B9A);
 }
 
-class ProductionUnit2Screen extends StatelessWidget {
+class ProductionUnit2Screen extends StatefulWidget {
   const ProductionUnit2Screen({super.key});
+  @override
+  State<ProductionUnit2Screen> createState() => _ProductionUnit2ScreenState();
+}
+
+class _ProductionUnit2ScreenState extends State<ProductionUnit2Screen> {
+  TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -62,9 +69,7 @@ class ProductionUnit2Screen extends StatelessWidget {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 10),
-
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -73,9 +78,7 @@ class ProductionUnit2Screen extends StatelessWidget {
                   ),
                   child: Image.asset('assets/dpl.png', height: 36),
                 ),
-
                 const SizedBox(width: 8),
-
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,44 +105,123 @@ class ProductionUnit2Screen extends StatelessWidget {
           ),
         ),
       ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by product name...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: (v) {
+                setState(() {
+                  _searchQuery = v.toLowerCase().trim();
+                });
+              },
+            ),
+          ),
 
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('unit2JobCards')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const _LoadingState();
-          }
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('unit2JobCards')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const _LoadingState();
+                }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const _EmptyState();
-          }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return _buildBody([]);
+                }
 
-          final validDocs = snapshot.data!.docs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return _filterRigidBoxProducts(data['products']).isNotEmpty;
-          }).toList();
+                final validDocs = snapshot.data!.docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  return _filterRigidBoxProducts(data['products']).isNotEmpty;
+                }).toList();
 
-          if (validDocs.isEmpty) return const _EmptyState();
+                // 🔥 SEARCH FILTER
+                final filteredDocs = validDocs.where((doc) {
+                  if (_searchQuery.isEmpty) return true;
 
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
-            itemCount: validDocs.length,
+                  final data = doc.data() as Map<String, dynamic>;
+                  final products = _filterRigidBoxProducts(data['products']);
+
+                  return products.any((p) {
+                    final name = (p['productName'] ?? '')
+                        .toString()
+                        .toLowerCase();
+                    final customer = (data['customerName'] ?? '')
+                        .toString()
+                        .toLowerCase();
+
+                    final length = (p['length'] ?? '').toString().toLowerCase();
+                    final height = (p['height'] ?? '').toString().toLowerCase();
+                    final width = (p['width'] ?? '').toString().toLowerCase();
+
+                    final size = '$length $height $width';
+
+                    return name.contains(_searchQuery) ||
+                        customer.contains(_searchQuery) ||
+                        size.contains(_searchQuery);
+                  });
+                }).toList();
+
+                return _buildBody(filteredDocs);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(List<QueryDocumentSnapshot> allDocs) {
+    final sorted = List<QueryDocumentSnapshot>.from(allDocs);
+    sorted.sort((a, b) {
+      final aData = a.data() as Map<String, dynamic>;
+      final bData = b.data() as Map<String, dynamic>;
+
+   final aTime = aData['createdAt'] as Timestamp?;
+final bTime = bData['createdAt'] as Timestamp?;
+
+return (bTime?.millisecondsSinceEpoch ?? 0)
+    .compareTo(aTime?.millisecondsSinceEpoch ?? 0); // 🔥 latest number first
+    });
+
+    return sorted.isEmpty
+        ? const _EmptyState()
+        : ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+            itemCount: sorted.length,
             itemBuilder: (context, index) {
-              final doc = validDocs[index];
+              final doc = sorted[index];
               return _OrderCard(
+                serialNumber: sorted.length - index,
                 docId: doc.id,
                 data: doc.data() as Map<String, dynamic>,
               );
             },
           );
-        },
-      ),
-    );
+  }
+
+  // Extract numeric part from "DPL-HSP-54" → 54
+  int? _parseJobCardNumber(dynamic raw) {
+    final str = (raw ?? '').toString().trim();
+    if (str.isEmpty) return null;
+    final parts = str.split('-');
+    return int.tryParse(parts.last);
   }
 }
 
+// ══════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════
 List<Map<String, dynamic>> _filterRigidBoxProducts(dynamic rawProducts) {
   List<Map<String, dynamic>> products = [];
   if (rawProducts is List) {
@@ -147,12 +229,11 @@ List<Map<String, dynamic>> _filterRigidBoxProducts(dynamic rawProducts) {
   } else if (rawProducts is Map) {
     products = [Map<String, dynamic>.from(rawProducts)];
   }
-  return products
-      .where((p) {
-  final cat = (p['productCategory'] ?? '').toString().trim().toLowerCase();
-  return cat.contains('rigid box');
-})
-      .toList();
+  
+  return products.where((p) {
+    final cat = (p['productCategory'] ?? '').toString().trim().toLowerCase();
+    return cat.contains('rigid box');
+  }).toList();
 }
 
 String _formatDate(dynamic ts) {
@@ -163,6 +244,9 @@ String _formatDate(dynamic ts) {
   return 'N/A';
 }
 
+// ══════════════════════════════════════════════════
+//  LOADING / EMPTY STATES
+// ══════════════════════════════════════════════════
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
@@ -237,7 +321,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Unit 2 mein koi Rigid Box order nahi hai abhi.',
+            'Koi matching order nahi mila.',
             style: TextStyle(fontSize: 14, color: _AppColors.textLight),
           ),
         ],
@@ -247,10 +331,15 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _OrderCard extends StatefulWidget {
+  final int serialNumber;
   final String docId;
   final Map<String, dynamic> data;
 
-  const _OrderCard({required this.docId, required this.data});
+  const _OrderCard({
+    required this.serialNumber,
+    required this.docId,
+    required this.data,
+  });
 
   @override
   State<_OrderCard> createState() => _OrderCardState();
@@ -290,7 +379,7 @@ class _OrderCardState extends State<_OrderCard> {
       child: Column(
         children: [
           _buildHeader(data, status, products.length),
-          _buildCustomerSection(data),
+          //  _buildCustomerSection(data),
           Container(
             height: 1,
             margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -302,7 +391,6 @@ class _OrderCardState extends State<_OrderCard> {
     );
   }
 
-  // ─────────────────── HEADER ───────────────────
   Widget _buildHeader(Map<String, dynamic> data, String status, int count) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -326,6 +414,26 @@ class _OrderCardState extends State<_OrderCard> {
         children: [
           Row(
             children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.22),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.35)),
+                ),
+                child: Center(
+                  child: Text(
+                    '#${widget.serialNumber}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
@@ -377,11 +485,11 @@ class _OrderCardState extends State<_OrderCard> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _HeaderChip(
-                icon: Icons.local_shipping_outlined,
-                text: _formatDate(data['deliveryDate']),
-              ),
-              const SizedBox(width: 8),
+              // _HeaderChip(
+              //   icon: Icons.local_shipping_outlined,
+              //   text: _formatDate(data['deliveryDate']),
+              // ),
+              // const SizedBox(width: 8),
               _HeaderChip(
                 icon: Icons.inventory_2_outlined,
                 text: '$count Items',
@@ -395,119 +503,119 @@ class _OrderCardState extends State<_OrderCard> {
     );
   }
 
-  Widget _buildCustomerSection(Map<String, dynamic> data) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      color: const Color(0xFFF8FBF8),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: () => setState(() => _customerExpanded = !_customerExpanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: _AppColors.midGreen.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.person_pin_outlined,
-                      size: 16,
-                      color: _AppColors.midGreen,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Customer Details',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: _AppColors.textDark,
-                    ),
-                  ),
-                  const Spacer(),
-                  _MiniPill(
-                    icon: Icons.phone,
-                    text: data['phone']?.toString() ?? 'N/A',
-                  ),
-                  const SizedBox(width: 8),
-                  AnimatedRotation(
-                    turns: _customerExpanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 250),
-                    child: const Icon(
-                      Icons.keyboard_arrow_down,
-                      color: _AppColors.midGreen,
-                      size: 22,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 280),
-            crossFadeState: _customerExpanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            firstChild: const SizedBox.shrink(),
-            secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _DetailTile(
-                          icon: Icons.phone_in_talk_outlined,
-                          label: 'Phone',
-                          value: data['phone']?.toString() ?? 'N/A',
-                          color: _AppColors.blue,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _DetailTile(
-                          icon: Icons.location_on_outlined,
-                          label: 'Location',
-                          value: data['location']?.toString() ?? 'N/A',
-                          color: _AppColors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _DetailTile(
-                          icon: Icons.calendar_today_outlined,
-                          label: 'Order Date',
-                          value: _formatDate(data['orderDate']),
-                          color: _AppColors.purple,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _DetailTile(
-                          icon: Icons.local_shipping_outlined,
-                          label: 'Delivery',
-                          value: _formatDate(data['deliveryDate']),
-                          color: _AppColors.orange,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildCustomerSection(Map<String, dynamic> data) {
+  //   return AnimatedContainer(
+  //     duration: const Duration(milliseconds: 250),
+  //     color: const Color(0xFFF8FBF8),
+  //     child: Column(
+  //       children: [
+  //         InkWell(
+  //           onTap: () => setState(() => _customerExpanded = !_customerExpanded),
+  //           child: Padding(
+  //             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+  //             child: Row(
+  //               children: [
+  //                 Container(
+  //                   padding: const EdgeInsets.all(7),
+  //                   decoration: BoxDecoration(
+  //                     color: _AppColors.midGreen.withOpacity(0.1),
+  //                     borderRadius: BorderRadius.circular(8),
+  //                   ),
+  //                   child: const Icon(
+  //                     Icons.person_pin_outlined,
+  //                     size: 16,
+  //                     color: _AppColors.midGreen,
+  //                   ),
+  //                 ),
+  //                 const SizedBox(width: 10),
+  //                 const Text(
+  //                   'Customer Details',
+  //                   style: TextStyle(
+  //                     fontSize: 13,
+  //                     fontWeight: FontWeight.w700,
+  //                     color: _AppColors.textDark,
+  //                   ),
+  //                 ),
+  //                 const Spacer(),
+  //                 _MiniPill(
+  //                   icon: Icons.phone,
+  //                   text: data['phone']?.toString() ?? 'N/A',
+  //                 ),
+  //                 const SizedBox(width: 8),
+  //                 AnimatedRotation(
+  //                   turns: _customerExpanded ? 0.5 : 0,
+  //                   duration: const Duration(milliseconds: 250),
+  //                   child: const Icon(
+  //                     Icons.keyboard_arrow_down,
+  //                     color: _AppColors.midGreen,
+  //                     size: 22,
+  //                   ),
+  //                 ),
+  //               ],
+  //             ),
+  //           ),
+  //         ),
+  //         AnimatedCrossFade(
+  //           duration: const Duration(milliseconds: 280),
+  //           crossFadeState: _customerExpanded
+  //               ? CrossFadeState.showSecond
+  //               : CrossFadeState.showFirst,
+  //           firstChild: const SizedBox.shrink(),
+  //           secondChild: Padding(
+  //             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+  //             child: Column(
+  //               children: [
+  //                 Row(
+  //                   children: [
+  //                     Expanded(
+  //                       child: _DetailTile(
+  //                         icon: Icons.phone_in_talk_outlined,
+  //                         label: 'Phone',
+  //                         value: data['phone']?.toString() ?? 'N/A',
+  //                         color: _AppColors.blue,
+  //                       ),
+  //                     ),
+  //                     const SizedBox(width: 10),
+  //                     Expanded(
+  //                       child: _DetailTile(
+  //                         icon: Icons.location_on_outlined,
+  //                         label: 'Location',
+  //                         value: data['location']?.toString() ?? 'N/A',
+  //                         color: _AppColors.red,
+  //                       ),
+  //                     ),
+  //                   ],
+  //                 ),
+  //                 const SizedBox(height: 10),
+  //                 Row(
+  //                   children: [
+  //                     Expanded(
+  //                       child: _DetailTile(
+  //                         icon: Icons.calendar_today_outlined,
+  //                         label: 'Order Date',
+  //                         value: _formatDate(data['orderDate']),
+  //                         color: _AppColors.purple,
+  //                       ),
+  //                     ),
+  //                     const SizedBox(width: 10),
+  //                     Expanded(
+  //                       child: _DetailTile(
+  //                         icon: Icons.local_shipping_outlined,
+  //                         label: 'Delivery',
+  //                         value: _formatDate(data['deliveryDate']),
+  //                         color: _AppColors.orange,
+  //                       ),
+  //                     ),
+  //                   ],
+  //                 ),
+  //               ],
+  //             ),
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildProductsSection(List<Map<String, dynamic>> products) {
     return Padding(
@@ -564,7 +672,8 @@ class _OrderCardState extends State<_OrderCard> {
             (entry) => _ProductTile(
               product: entry.value,
               index: entry.key,
-              docId: widget.docId,
+              jobCardDocId: '${widget.docId}_${entry.key}',
+              orderDocId: widget.docId,
               orderData: widget.data,
             ),
           ),
@@ -574,16 +683,22 @@ class _OrderCardState extends State<_OrderCard> {
   }
 }
 
+// ══════════════════════════════════════════════════
+//  PRODUCT TILE
+// ══════════════════════════════════════════════════
 class _ProductTile extends StatelessWidget {
   final Map<String, dynamic> product;
   final int index;
-  final String docId;
+  // ✅ jobCardDocId = orderId_productIndex (unique per product)
+  final String jobCardDocId;
+  final String orderDocId;
   final Map<String, dynamic> orderData;
 
   const _ProductTile({
     required this.product,
     required this.index,
-    required this.docId,
+    required this.jobCardDocId,
+    required this.orderDocId,
     required this.orderData,
   });
 
@@ -736,11 +851,12 @@ class _ProductTile extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 14),
-            // ✅ Job Card Stream — checks by orderId field
-            StreamBuilder<QuerySnapshot>(
+
+            // ✅ FIX: Per-product job card stream using jobCardDocId
+            StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('unit2JobCards')
-                  .where('orderId', isEqualTo: docId)
+                  .collection('unit2ProductJobCards')
+                  .doc(jobCardDocId)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -754,19 +870,23 @@ class _ProductTile extends StatelessWidget {
                     ),
                   );
                 }
-                final exists =
-                    snapshot.hasData && snapshot.data!.docs.isNotEmpty;
+
+                final exists = snapshot.hasData && snapshot.data!.exists;
+
                 if (exists) {
-                  final jobData =
-                      snapshot.data!.docs.first.data() as Map<String, dynamic>;
+                  final jobData = snapshot.data!.data() as Map<String, dynamic>;
                   return _JobCardCreatedBadge(
                     jobCardData: jobData,
-                    docId: snapshot.data!.docs.first.id,
+                    docId: jobCardDocId,
                   );
                 }
+
                 return _CreateJobCardButton(
-                  orderId: docId,
+                  jobCardDocId: jobCardDocId,
+                  orderDocId: orderDocId,
                   orderData: orderData,
+                  product: product,
+                  productIndex: index,
                 );
               },
             ),
@@ -777,6 +897,9 @@ class _ProductTile extends StatelessWidget {
   }
 }
 
+// ══════════════════════════════════════════════════
+//  PRODUCT DETAILS GRID
+// ══════════════════════════════════════════════════
 class _ProductDetailsGrid extends StatelessWidget {
   final Map<String, dynamic> product;
 
@@ -817,6 +940,9 @@ class _ProductDetailsGrid extends StatelessWidget {
   }
 }
 
+// ══════════════════════════════════════════════════
+//  JOB CARD CREATED BADGE
+// ══════════════════════════════════════════════════
 class _JobCardCreatedBadge extends StatelessWidget {
   final Map<String, dynamic> jobCardData;
   final String docId;
@@ -886,145 +1012,150 @@ class _JobCardCreatedBadge extends StatelessWidget {
   }
 }
 
+// ══════════════════════════════════════════════════
+//  CREATE JOB CARD BUTTON
+// ══════════════════════════════════════════════════
 class _CreateJobCardButton extends StatefulWidget {
-  final String orderId;
+  // ✅ jobCardDocId = unique per product (orderId_productIndex)
+  final String jobCardDocId;
+  final String orderDocId;
   final Map<String, dynamic> orderData;
+  final Map<String, dynamic> product;
+  final int productIndex;
 
-  const _CreateJobCardButton({required this.orderId, required this.orderData});
+  const _CreateJobCardButton({
+    required this.jobCardDocId,
+    required this.orderDocId,
+    required this.orderData,
+    required this.product,
+    required this.productIndex,
+  });
 
   @override
   State<_CreateJobCardButton> createState() => _CreateJobCardButtonState();
 }
 
 class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
-  // ✅ Guard: double tap / double submission block
   bool _isSubmitting = false;
-  String selectedTray = 'SBS';
-  void _openJobCardForm(BuildContext context) {
-    final sizeController = TextEditingController();
 
+  void _openJobCardForm(BuildContext context) {
+    // ✅ FIX: Controllers yahan banao — bottom sheet ke andar nahi
+    final sizeController = TextEditingController(
+      text: widget.product['productName'] ?? '',
+    );
     final topSizeController = TextEditingController();
     final traySizeController = TextEditingController();
     final bottomSizeController = TextEditingController();
+    String selectedTray = 'SBS';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      // ✅ isDismissible false while submitting handled inside
+      // ✅ FIX: useRootNavigator: true — sheet properly pop hoga
+      useRootNavigator: true,
       builder: (sheetContext) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          padding: EdgeInsets.only(
-            left: 10,
-            right: 10,
-            top: 30,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 28,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Handle bar
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 2),
-
-                // Title
-                Row(
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              padding: EdgeInsets.only(
+                left: 10,
+                right: 10,
+                top: 30,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 28,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _AppColors.midGreen.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.assignment_add,
-                        color: _AppColors.midGreen,
-                        size: 22,
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 2),
+                    Row(
                       children: [
-                        Text(
-                          'Create Job Card',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: _AppColors.textDark,
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _AppColors.midGreen.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.assignment_add,
+                            color: _AppColors.midGreen,
+                            size: 22,
                           ),
                         ),
-                        Text(
-                          'Unit 2 — Rigid Box',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _AppColors.textLight,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Create Job Card',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: _AppColors.textDark,
+                                ),
+                              ),
+                              Text(
+                                'Unit 2 — ${widget.product['productName'] ?? 'Rigid Box'}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: _AppColors.textLight,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                _FormSection(
-                  title: 'Size',
-                  icon: Icons.swap_horizontal_circle_sharp,
-                  color: const Color.fromARGB(255, 233, 31, 13),
-                  sizeController: sizeController,
-                ),
-                const SizedBox(height: 2),
-
-                _FormSection(
-                  title: 'Top Part',
-                  icon: Icons.vertical_align_top_rounded,
-                  color: _AppColors.blue,
-                  sizeController: topSizeController,
-                 inputFormatters: [],
-keyboardType: TextInputType.text,
-                ),
-                const SizedBox(height: 2),
-                _FormSection(
-                  title: 'Bottom Part',
-                  icon: Icons.vertical_align_bottom_rounded,
-                  color: _AppColors.orange,
-                  sizeController: bottomSizeController,
-                  inputFormatters: [],
-keyboardType: TextInputType.text,
-                ),
-                const SizedBox(height: 2),
-
-                _TrayDropdown(
-                  selectedTray: selectedTray,
-                  onChanged: (val) {
-                    setState(() {
-                      selectedTray = val!;
-                    });
-                  },
-                ),
-
-                const SizedBox(height: 2),
-
-                // ✅ Submit Button — uses StatefulBuilder to show loading state
-                StatefulBuilder(
-                  builder: (ctx, setLocalState) {
-                    return SizedBox(
+                    const SizedBox(height: 5),
+                    _FormSection(
+                      title: 'Size',
+                      icon: Icons.swap_horizontal_circle_sharp,
+                      color: const Color.fromARGB(255, 233, 31, 13),
+                      sizeController: sizeController,
+                    ),
+                    const SizedBox(height: 2),
+                    _FormSection(
+                      title: 'Top Part',
+                      icon: Icons.vertical_align_top_rounded,
+                      color: _AppColors.blue,
+                      sizeController: topSizeController,
+                      keyboardType: TextInputType.text,
+                    ),
+                    const SizedBox(height: 2),
+                    _FormSection(
+                      title: 'Bottom Part',
+                      icon: Icons.vertical_align_bottom_rounded,
+                      color: _AppColors.orange,
+                      sizeController: bottomSizeController,
+                      keyboardType: TextInputType.text,
+                    ),
+                    const SizedBox(height: 2),
+                    _TrayDropdown(
+                      selectedTray: selectedTray,
+                      onChanged: (val) {
+                        setSheetState(() => selectedTray = val!);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        // ✅ null when submitting — disables button
                         onPressed: _isSubmitting
                             ? null
                             : () async {
@@ -1039,18 +1170,20 @@ keyboardType: TextInputType.text,
                                   );
                                   return;
                                 }
-                                setLocalState(() {});
+                                // ✅ FIX: sheetContext se pehle pop karo,
+                                // phir Firestore call
+                                Navigator.of(
+                                  sheetContext,
+                                  rootNavigator: true,
+                                ).pop();
+
                                 await _createJobCard(
                                   context,
-                                  sheetContext: sheetContext,
-                                  Size: sizeController.text.trim(),
+                                  size: sizeController.text.trim(),
                                   topSize: topSizeController.text.trim(),
-
                                   traySize: selectedTray,
-
                                   bottomSize: bottomSizeController.text.trim(),
                                 );
-                                setLocalState(() {});
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _isSubmitting
@@ -1090,22 +1223,20 @@ keyboardType: TextInputType.text,
                                 ],
                               ),
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  // ✅ FIXED _createJobCard
   Future<void> _createJobCard(
     BuildContext context, {
-    required BuildContext sheetContext,
-    required String Size,
+    required String size,
     required String topSize,
     required String traySize,
     required String bottomSize,
@@ -1114,49 +1245,45 @@ keyboardType: TextInputType.text,
     if (mounted) setState(() => _isSubmitting = true);
 
     try {
-      final jobCardRef = FirebaseFirestore.instance.collection('unit2JobCards');
+      final jobCardRef = FirebaseFirestore.instance.collection('unit2ProductJobCards');
 
-      // ✅ 1️⃣ Check existing job card
-      final existing = await jobCardRef
-          .where('orderId', isEqualTo: widget.orderId)
-          .limit(1)
-          .get();
+      // ✅ FIX: Check by jobCardDocId (per-product unique doc)
+      final existingDoc = await jobCardRef.doc(widget.jobCardDocId).get();
 
-      if (existing.docs.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          _snackBar('⚠️ Job Card already exists for this order', Colors.orange),
-        );
+      if (existingDoc.exists) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            _snackBar(
+              '⚠️ Job Card already exists for this product',
+              Colors.orange,
+            ),
+          );
+        }
         if (mounted) setState(() => _isSubmitting = false);
         return;
       }
 
-      // ✅ 2️⃣ Get last job card number
+      // ✅ Auto-increment job card number
       final snapshot = await jobCardRef
           .orderBy('jobCardNumber', descending: true)
           .limit(1)
           .get();
 
       int lastNumber = 0;
-
       if (snapshot.docs.isNotEmpty) {
         final lastCode =
             snapshot.docs.first.data()['jobCardNumber'] ?? 'DPL-HSP-00';
         lastNumber = int.tryParse(lastCode.split('-').last) ?? 0;
       }
-
       lastNumber++;
 
       final jobCardNumber = 'DPL-HSP-${lastNumber.toString().padLeft(2, '0')}';
 
-      // ✅ 3️⃣ Filter products
-      final rigidBoxProducts = _filterRigidBoxProducts(
-        widget.orderData['products'],
-      );
-
-      // ✅ 4️⃣ Create job card
-      await jobCardRef.doc(widget.orderId).set({
+      // ✅ Save with jobCardDocId as document ID (unique per product)
+      await jobCardRef.doc(widget.jobCardDocId).set({
         'jobCardNumber': jobCardNumber,
-        'orderId': widget.orderId,
+        'orderId': widget.orderDocId,
+        'productIndex': widget.productIndex,
         'customerName': widget.orderData['customerName'] ?? '',
         'companyName': widget.orderData['companyName'] ?? '',
         'salesPerson': widget.orderData['salesPerson'] ?? '',
@@ -1164,9 +1291,9 @@ keyboardType: TextInputType.text,
         'productionUnit': 'Unit 2',
         'createdDate': Timestamp.now(),
         'status': 'Pending',
-        'products': rigidBoxProducts,
+        'product': widget.product,
         'parts': {
-          'size': {'size': Size},
+          'size': {'size': size},
           'topPart': {'size': topSize},
           'bottomPart': {'size': bottomSize},
           'tray': {'size': traySize},
@@ -1175,12 +1302,19 @@ keyboardType: TextInputType.text,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // ✅ Close sheet
-      if (sheetContext.mounted) {
-        Navigator.of(sheetContext).pop();
-      }
+      // Save product defaults
+      await FirebaseFirestore.instance
+          .collection('productDefaults')
+          .doc(
+            "${widget.product['productName']}_${widget.product['length']}_${widget.product['height']}_${widget.product['width']}",
+          )
+          .set({
+            'productName': widget.product['productName'],
+            'topPart': topSize,
+            'bottomPart': bottomSize,
+            'tray': traySize,
+          }, SetOptions(merge: true));
 
-      // ✅ Success
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           _snackBar('✅ Job Card Created: $jobCardNumber', _AppColors.midGreen),
@@ -1218,7 +1352,6 @@ keyboardType: TextInputType.text,
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        // ✅ Disable while submitting
         onPressed: _isSubmitting ? null : () => _openJobCardForm(context),
         icon: const Icon(Icons.assignment_add, size: 20),
         label: const Text(
@@ -1239,6 +1372,9 @@ keyboardType: TextInputType.text,
   }
 }
 
+// ══════════════════════════════════════════════════
+//  TRAY DROPDOWN
+// ══════════════════════════════════════════════════
 class _TrayDropdown extends StatelessWidget {
   final String selectedTray;
   final Function(String?) onChanged;
@@ -1272,7 +1408,6 @@ class _TrayDropdown extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-
               const Text(
                 "Tray",
                 style: TextStyle(
@@ -1283,9 +1418,7 @@ class _TrayDropdown extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 10),
-
           DropdownButtonFormField<String>(
             value: selectedTray,
             decoration: InputDecoration(
@@ -1310,7 +1443,7 @@ class _TrayDropdown extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════
-//  FORM SECTION WIDGET
+//  FORM SECTION
 // ══════════════════════════════════════════════════
 class _FormSection extends StatelessWidget {
   final String title;
@@ -1352,7 +1485,6 @@ class _FormSection extends StatelessWidget {
                 child: Icon(icon, size: 16, color: color),
               ),
               const SizedBox(width: 8),
-
               Text(
                 title,
                 style: TextStyle(
@@ -1363,23 +1495,24 @@ class _FormSection extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 10),
-
-         _StyledTextField(
-  controller: sizeController,
-  label: 'Size (L×H×W)',
-  icon: Icons.straighten_outlined,
-  color: color,
-  keyboardType: keyboardType,
-  inputFormatters: inputFormatters,
-),
+          _StyledTextField(
+            controller: sizeController,
+            label: 'Size (L×H×W)',
+            icon: Icons.straighten_outlined,
+            color: color,
+            keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
+          ),
         ],
       ),
     );
   }
 }
 
+// ══════════════════════════════════════════════════
+//  STYLED TEXT FIELD
+// ══════════════════════════════════════════════════
 class _StyledTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
@@ -1402,7 +1535,7 @@ class _StyledTextField extends StatelessWidget {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
-      inputFormatters: inputFormatters, // ✅ IMPORTANT
+      inputFormatters: inputFormatters,
       style: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
@@ -1436,7 +1569,6 @@ class _StyledTextField extends StatelessWidget {
 // ══════════════════════════════════════════════════
 class _StatusBadge extends StatelessWidget {
   final String status;
-
   const _StatusBadge({required this.status});
 
   Color get _color {
@@ -1490,7 +1622,6 @@ class _StatusBadge extends StatelessWidget {
 
 class _PriorityChip extends StatelessWidget {
   final String priority;
-
   const _PriorityChip({required this.priority});
 
   Color get _color {
@@ -1531,7 +1662,6 @@ class _PriorityChip extends StatelessWidget {
 class _HeaderChip extends StatelessWidget {
   final IconData icon;
   final String text;
-
   const _HeaderChip({required this.icon, required this.text});
 
   @override
@@ -1586,7 +1716,6 @@ class _UnitBadge extends StatelessWidget {
 class _MiniPill extends StatelessWidget {
   final IconData icon;
   final String text;
-
   const _MiniPill({required this.icon, required this.text});
 
   @override

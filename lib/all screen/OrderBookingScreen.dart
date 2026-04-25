@@ -13,6 +13,7 @@ class OrderBookingScreen extends StatefulWidget {
   @override
   State<OrderBookingScreen> createState() => _OrderBookingScreenState();
 }
+
 class _OrderBookingScreenState extends State<OrderBookingScreen> {
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -55,11 +56,11 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
 
   void _attachProductListeners(int index) {
     _products[index]['quantity']!.addListener(() {
-      setState(() {});
+      if (mounted) setState(() {});
     });
 
     _products[index]['price']!.addListener(() {
-      setState(() {});
+      if (mounted) setState(() {});
     });
   }
 
@@ -178,9 +179,18 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
   String? _selectedSalesPerson;
   String? _customSalesPerson;
   final String _selectedProductCategory = 'MDF';
-  final List<String> _productCategories =  ['MDF', 'Kappa Box (Gora)', 'Packaging', 'Shagun Envelopes', 'Rigid Box (unit 2 Hussainpura)', 'Others'];
+  final List<String> _productCategories = [
+    'MDF',
+    'Kappa Box (Gora)',
+    'Packaging',
+    'Shagun Envelopes',
+    'Rigid Box (unit 2 Hussainpura)',
+    'Others',
+  ];
   String? _selectedUnit;
+  String? _dispatchType;
 
+  final List<String> _dispatchOptions = ['Transport', 'Vehicle'];
   final List<String> _units = [
     'Unit 1',
     'Unit 2',
@@ -196,19 +206,20 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
   double get _finalTotal =>
       (_grossTotal - _advanceAmount).clamp(0, double.infinity);
 
-String generateProductCode(int index) {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  String code = '';
-  int i = index;
+  String generateProductCode(int index) {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    String code = '';
+    int i = index;
 
-  while (i >= 0) {
-    code = letters[i % 26] + code;
-    i = (i ~/ 26) - 1;
+    while (i >= 0) {
+      code = letters[i % 26] + code;
+      i = (i ~/ 26) - 1;
+    }
+    return code;
   }
-  return code;
-}
 
   bool _isLoading = false;
+  bool _isDesignerRequired = false;
   final ImagePicker _picker = ImagePicker();
 
   final TextEditingController _otherSalesPersonController =
@@ -573,7 +584,10 @@ String generateProductCode(int index) {
 
   Future<void> _submitOrder() async {
     if (!_validateBasicDetails()) return;
-
+    if (_dispatchType == null || _dispatchType!.isEmpty) {
+      _showError('Please select dispatch type');
+      return;
+    }
     if (!_validateProducts()) return;
 
     if (!_formKey.currentState!.validate()) return;
@@ -647,12 +661,15 @@ String generateProductCode(int index) {
         'orderId': salesOrderNo,
         'salesOrderNo': salesOrderNo,
         'customerName': _customerNameController.text,
+        'designerRequired': _isDesignerRequired,
         'companyName': _companyNameController.text,
         'phone': _phoneController.text,
         'email': _emailController.text,
         'customerGstNumber': _gstNumberController.text,
         'location': _locationController.text,
-      //  'productCategory': _selectedProductCategory,
+        //  'productCategory': _selectedProductCategory,
+        'dispatchType': _dispatchType, // ✅ yaha add karo
+
         'unit': _selectedUnit,
         'salesPerson': _selectedSalesPerson == 'Others'
             ? _customSalesPerson
@@ -717,26 +734,24 @@ String generateProductCode(int index) {
     }
   }
 
+  void _addProduct() {
+    setState(() {
+      _products.add({
+        'code': generateProductCode(_products.length), // ✅ UNLIMITED
+        'category': 'MDF',
+        'name': TextEditingController(),
+        'quantity': TextEditingController(),
+        'price': TextEditingController(),
+        'remarks': TextEditingController(),
+        'images': <XFile>[],
+        'fetchedImages': <String>[],
+        'autoFilled': false,
+        'userEdited': false,
+      });
 
-
-void _addProduct() {
-  setState(() {
-    _products.add({
-      'code': generateProductCode(_products.length), // ✅ UNLIMITED
-      'category': 'MDF',
-      'name': TextEditingController(),
-      'quantity': TextEditingController(),
-      'price': TextEditingController(),
-      'remarks': TextEditingController(),
-      'images': <XFile>[],
-      'fetchedImages': <String>[],
-      'autoFilled': false,
-      'userEdited': false,
+      _attachProductListeners(_products.length - 1);
     });
-
-    _attachProductListeners(_products.length - 1);
-  });
-}
+  }
 
   void _removeProduct(int index) {
     if (index == 0) {
@@ -785,9 +800,9 @@ void _addProduct() {
 
       _products.removeAt(index);
 
-   for (int i = 0; i < _products.length; i++) {
-  _products[i]['code'] = generateProductCode(i);
-}
+      for (int i = 0; i < _products.length; i++) {
+        _products[i]['code'] = generateProductCode(i);
+      }
     });
   }
 
@@ -821,114 +836,114 @@ void _addProduct() {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
- appBar: PreferredSize(
-  preferredSize: const Size.fromHeight(60),
-  child: AppBar(
-    automaticallyImplyLeading: false,
-    elevation: 0,
-    backgroundColor: Colors.transparent,
-    flexibleSpace: Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.purple.shade600,
-            Colors.blue.shade600,
-            Colors.teal.shade600,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-    ),
-    titleSpacing: 0,
-    title: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          Container(
-            padding: const EdgeInsets.all(8),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: AppBar(
+          automaticallyImplyLeading: false,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          flexibleSpace: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.purple.shade600,
+                  Colors.blue.shade600,
+                  Colors.teal.shade600,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
-            child: Image.asset('assets/dpl.png', height: 36),
           ),
-
-          const SizedBox(width: 8),
-
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Row(
               children: [
-                Text(
-                  'New Sales Order',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: Colors.white,
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Create and manage new sales orders',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
+
+                const SizedBox(width: 10),
+
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Image.asset('assets/dpl.png', height: 36),
+                ),
+
+                const SizedBox(width: 8),
+
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'New Sales Order',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Create and manage new sales orders',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    ),
 
-    // 🔥 RIGHT SIDE HISTORY ICON
-    actions: [
-      Padding(
-        padding: const EdgeInsets.only(right: 12),
-        child: GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const OrderHistoryScreen(),
+          // 🔥 RIGHT SIDE HISTORY ICON
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const OrderHistoryScreen(),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.history,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
               ),
-            );
-          },
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.history,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
+          ],
         ),
       ),
-    ],
-  ),
-),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -953,7 +968,7 @@ void _addProduct() {
                     });
 
                     return TextFormField(
-                      controller: controller,
+                      controller: controller, // ✅ सही
                       focusNode: focusNode,
                       decoration: InputDecoration(
                         labelText: 'Customer Name',
@@ -1049,6 +1064,40 @@ void _addProduct() {
               ],
             ),
 
+            const SizedBox(height: 20),
+            _buildSection(
+              title: 'Dispatch Type',
+              icon: Icons.local_shipping_rounded,
+              gradientColors: [Colors.green.shade400, Colors.green.shade600],
+              children: [
+                DropdownButtonFormField<String>(
+                  value: _dispatchOptions.contains(_dispatchType)
+                      ? _dispatchType
+                      : null,
+                  decoration: InputDecoration(
+                    labelText: 'Select Dispatch Type',
+                    prefixIcon: Icon(Icons.local_shipping),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  items: _dispatchOptions
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _dispatchType = val;
+                    });
+                  },
+                  validator: (val) {
+                    if (val == null || val.isEmpty) {
+                      return 'Please select dispatch type';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
 
             // Order Location Section
@@ -1371,10 +1420,14 @@ void _addProduct() {
                               option['productName'],
                           fieldViewBuilder:
                               (context, controller, focusNode, onSubmit) {
-                                _products[index]['name'] = controller;
+                                if (controller.text.isEmpty) {
+                                  controller.text =
+                                      _products[index]['name'].text;
+                                }
 
                                 return TextFormField(
-                                  controller: controller,
+                                  controller: controller, // ✅ IMPORTANT
+
                                   focusNode: focusNode,
                                   decoration: InputDecoration(
                                     labelText: 'Product Name',
@@ -1398,6 +1451,9 @@ void _addProduct() {
                                     filled: true,
                                     fillColor: Colors.white,
                                   ),
+                                  onChanged: (value) {
+                                    _products[index]['name'].text = value;
+                                  },
                                   validator: (value) =>
                                       value == null || value.isEmpty
                                       ? 'Product name required'
@@ -1406,6 +1462,9 @@ void _addProduct() {
                               },
                           onSelected: (data) {
                             setState(() {
+                              _products[index]['name'].text =
+                                  data['productName']; // ✅ ADD THIS
+
                               _products[index]['price']!.text =
                                   (data['price'] ?? 0).toString();
                               _products[index]['quantity']!.text =
@@ -1823,8 +1882,99 @@ void _addProduct() {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
+Container(
+  margin: const EdgeInsets.symmetric(vertical: 10),
+  padding: const EdgeInsets.all(14),
+  decoration: BoxDecoration(
+    borderRadius: BorderRadius.circular(16),
+    gradient: _isDesignerRequired
+        ? LinearGradient(
+            colors: [Colors.purple.shade400, Colors.blue.shade500],
+          )
+        : LinearGradient(
+            colors: [const Color.fromARGB(255, 239, 216, 216), const Color.fromARGB(255, 237, 188, 188)],
+          ),
+    boxShadow: [
+      BoxShadow(
+        color: _isDesignerRequired
+            ? Colors.purple.withOpacity(0.3)
+            : Colors.grey.withOpacity(0.2),
+        blurRadius: 8,
+        offset: const Offset(0, 4),
+      )
+    ],
+  ),
+  child: InkWell(
+    borderRadius: BorderRadius.circular(16),
+    onTap: () {
+      setState(() {
+        _isDesignerRequired = !_isDesignerRequired;
+      });
+    },
+    child: Row(
+      children: [
 
+        // 🔥 ICON
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            Icons.design_services_rounded,
+            color: _isDesignerRequired ? Colors.white : const Color.fromARGB(255, 250, 1, 1),
+            size: 26,
+          ),
+        ),
+
+        const SizedBox(width: 14),
+
+        // 🔥 TEXT
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Designer Required",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color:
+                      _isDesignerRequired ? Colors.white : const Color.fromARGB(221, 243, 2, 2),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _isDesignerRequired
+                    ? "Design team will handle this order"
+                    : "No design work needed",
+                style: TextStyle(
+                  fontSize: 12,
+                  color:
+                      _isDesignerRequired ? Colors.white70 : const Color.fromARGB(255, 244, 3, 3),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 🔥 SWITCH
+        Switch(
+          value: _isDesignerRequired,
+          activeColor: Colors.white,
+          onChanged: (val) {
+            setState(() {
+              _isDesignerRequired = val;
+            });
+          },
+        ),
+      ],
+    ),
+  ),
+),
+const SizedBox(height: 10),
             // Total Amount Section
             Container(
               padding: const EdgeInsets.all(24),

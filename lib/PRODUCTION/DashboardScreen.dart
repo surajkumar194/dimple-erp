@@ -1,8 +1,10 @@
 import 'package:dimple_erp/PRODUCTION/KappaProductionListScreen.dart';
-import 'package:dimple_erp/PRODUCTION/MdfProductionScreen.dart';
-import 'package:dimple_erp/PRODUCTION/ProductionDashobard.dart';
-import 'package:dimple_erp/PRODUCTION/MachineFormScreen.dart';
-import 'package:dimple_erp/PRODUCTION/allprodctiondata.dart';
+import 'package:dimple_erp/PRODUCTION/MDFStockScreen.dart';
+import 'package:dimple_erp/PRODUCTION/ReadyForDispatchScreen.dart';
+// import 'package:dimple_erp/PRODUCTION/MdfProductionScreen.dart';
+// import 'package:dimple_erp/PRODUCTION/ProductionDashobard.dart';
+// import 'package:dimple_erp/PRODUCTION/MachineFormScreen.dart';
+// import 'package:dimple_erp/PRODUCTION/allprodctiondata.dart';
 import 'package:dimple_erp/PRODUCTION/mdfproductionlist.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,23 +18,10 @@ class ProductionDashboard extends StatefulWidget {
 }
 
 class _ProductionDashboardState extends State<ProductionDashboard> {
-  String role = '';
-
   @override
   void initState() {
     super.initState();
-    _loadRole();
   }
-
-  Future<void> _loadRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      role = prefs.getString('role') ?? '';
-    });
-  }
-
-  bool get isAdmin => role == 'admin';
-  bool get isProduction => role == 'production';
 
   @override
   Widget build(BuildContext context) {
@@ -70,96 +59,126 @@ class _ProductionDashboardState extends State<ProductionDashboard> {
                   mainAxisSpacing: 24,
                   childAspectRatio: childAspectRatio,
                   children: [
-                    if (isAdmin || isProduction)
-                      _dashboardCard(
-                        title: "Production",
-                        subtitle: "Machine performance & efficiency",
-                        icon: Icons.precision_manufacturing,
-                        gradient: [Colors.indigo[700]!, Colors.indigo[400]!],
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  const UltraFlowProductionDashboard(),
-                            ),
-                          );
-                        },
-                      ),
+                    //  if (isAdmin || hasProductionAccess)
+                    //   _dashboardCard(
+                    //     title: "Production",
+                    //     subtitle: "Machine performance & efficiency",
+                    //     icon: Icons.precision_manufacturing,
+                    //     gradient: [Colors.indigo[700]!, Colors.indigo[400]!],
+                    //     onTap: () {
+                    //       Navigator.push(
+                    //         context,
+                    //         MaterialPageRoute(
+                    //           builder: (_) =>
+                    //               const UltraFlowProductionDashboard(),
+                    //         ),
+                    //       );
+                    //     },
+                    //   ),
 
-                    if (isAdmin || isProduction)
-                      _dashboardCard(
-                        title: "Machine Production",
-                        subtitle: "Configure machines & operators",
-                        icon: Icons.settings_suggest,
-                        gradient: [Colors.cyan[700]!, Colors.cyan[400]!],
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => AddProductionScreen(),
-                            ),
-                          );
-                        },
-                      ),
+                    // if (isAdmin || hasProductionAccess)
+                    //   _dashboardCard(
+                    //     title: "Machine Production",
+                    //     subtitle: "Configure machines & operators",
+                    //     icon: Icons.settings_suggest,
+                    //     gradient: [Colors.cyan[700]!, Colors.cyan[400]!],
+                    //     onTap: () {
+                    //       Navigator.push(
+                    //         context,
+                    //         MaterialPageRoute(
+                    //           builder: (_) => AddProductionScreen(),
+                    //         ),
+                    //       );
+                    //     },
+                    //   ),
 
-                    if (isAdmin || isProduction)
-                      _dashboardCard(
-                        title: "All Production Data",
-                        subtitle: "View & manage production records",
-                        icon: Icons.assignment_turned_in,
-                        gradient: [
-                          Colors.deepOrange[600]!,
-                          Colors.deepOrange[400]!,
-                        ],
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ViewProductionScreen(),
-                            ),
-                          );
-                        },
-                      ),
+                    // if (isAdmin || hasProductionAccess)
+                    //   _dashboardCard(
+                    //     title: "All Production Data",
+                    //     subtitle: "View & manage production records",
+                    //     icon: Icons.assignment_turned_in,
+                    //     gradient: [
+                    //       Colors.deepOrange[600]!,
+                    //       Colors.deepOrange[400]!,
+                    //     ],
+                    //     onTap: () {
+                    //       Navigator.push(
+                    //         context,
+                    //         MaterialPageRoute(
+                    //           builder: (_) => ViewProductionScreen(),
+                    //         ),
+                    //       );
+                    //     },
+                    //   ),
+                    _dashboardCard(
+                      title: "MDF Production",
+                      subtitle: "View & manage production records",
+                      icon: Icons.assignment_turned_in,
+                      gradient: [
+                        Colors.deepOrange[600]!,
+                        Colors.deepOrange[400]!,
+                      ],
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MdfProductionListScreen(),
+                          ),
+                        );
+                      },
+                    ),
 
-                       if (isAdmin || isProduction)
-                      _dashboardCard(
-                        title: "Mdf Production Screen",
-                        subtitle: "View & manage production records",
-                        icon: Icons.assignment_turned_in,
-                        gradient: [
-                          Colors.deepOrange[600]!,
-                          Colors.deepOrange[400]!,
-                        ],
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MdfProductionListScreen(),
-                            ),
-                          );
-                        },
-                      ),
+                    _dashboardCard(
+                      title: "KAPPA Production",
+                      subtitle: "View & manage production records",
+                      icon: Icons.assignment_turned_in,
+                      gradient: [
+                        const Color.fromARGB(255, 140, 242, 73)!,
+                        const Color.fromARGB(255, 140, 242, 73)!,
+                      ],
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => KappaProductionListScreen(),
+                          ),
+                        );
+                      },
+                    ),
 
-                      
-                       if (isAdmin || isProduction)
-                      _dashboardCard(
-                        title: "kappa Production Screen",
-                        subtitle: "View & manage production records",
-                        icon: Icons.assignment_turned_in,
-                        gradient: [
-                          Colors.deepOrange[600]!,
-                          Colors.deepOrange[400]!,
-                        ],
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => KappaProductionListScreen(),
-                            ),
-                          );
-                        },
-                      ),
+                    _dashboardCard(
+                      title: "Ready for Dispatched",
+                      subtitle: "View & manage ready for dispatch records",
+                      icon: Icons.assignment_turned_in,
+                      gradient: [
+                        const Color.fromARGB(255, 81, 84, 247)!,
+                        const Color.fromARGB(255, 81, 84, 247)!,
+                      ],
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DispatchManagerScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    _dashboardCard(
+                      title: "Material for Ready MDF Stocking (Stock Area)",
+                      subtitle: "View & manage ready for dispatch common records",
+                      icon: Icons.assignment_turned_in,
+                      gradient: [
+                        const Color.fromARGB(255, 79, 203, 249)!,
+                        const Color.fromARGB(255, 79, 203, 249)!,
+                      ],
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => MDFCommonScreen()),
+                        );
+                      },
+                    ),
                   ],
                 );
               },

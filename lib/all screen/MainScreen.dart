@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dimple_erp/AdminDashboard/admin.dart';
+import 'package:dimple_erp/AdminDashboard/clientdashbord.dart';
 import 'package:dimple_erp/AdminDashboard/constrcutiondashboard.dart';
 import 'package:dimple_erp/UNIT%202/unit2.dart';
 import 'package:dimple_erp/UNIT%202/unit2_sales.dart';
+import 'package:dimple_erp/extra.dart/PaymentApprovalScreen.dart';
 import 'package:dimple_erp/main.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,12 +17,13 @@ import 'package:dimple_erp/PRODUCTION/DashboardScreen.dart';
 import 'package:dimple_erp/all screen/PurchaseOrderScreen.dart';
 import 'package:dimple_erp/all screen/QualityCheckScreen.dart';
 import 'package:dimple_erp/all screen/MOMScreen.dart';
-import 'package:dimple_erp/ready stock/LoginScreen.dart';
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
+
 class _MainScreenState extends State<MainScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   TabController? _tabController;
@@ -29,17 +32,13 @@ class _MainScreenState extends State<MainScreen>
   Map<String, dynamic> _permissions = {};
   bool _loading = true;
 
-
-  // ================= INIT =================
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadUserData();
-   
   }
 
-  // ================= LOAD ROLE + PERMISSIONS =================
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -63,25 +62,27 @@ class _MainScreenState extends State<MainScreen>
               'quality': true,
               'mom': true,
               'master': true,
-              'unit2 stock':true,
-              'unit2 sales':true,
-              'Contractor':true,
+              'unit2 stock': true,
+              'unit2 sales': true,
+              'contractor': true,
+              'customer':true,
+              'paymentapproval':true,
             }
           : Map<String, dynamic>.from(permissions);
 
-        final tabs = _buildTabs();
+      final tabs = _buildTabs();
 
-    if (tabs.isNotEmpty) {
-      _tabController?.dispose();
-      _tabController = TabController(length: tabs.length, vsync: this);
-    }
+      if (tabs.isNotEmpty) {
+        _tabController?.dispose();
+        _tabController = TabController(length: tabs.length, vsync: this);
+      }
 
-    _loading = false;
-  });
+      _loading = false;
+    });
 
-  debugPrint('ROLE => $_role');
-  debugPrint('PERMISSIONS => $_permissions');
-}
+    debugPrint('ROLE => $_role');
+    debugPrint('PERMISSIONS => $_permissions');
+  }
 
   // ================= BUILD TABS =================
   List<Tab> _buildTabs() {
@@ -95,8 +96,9 @@ class _MainScreenState extends State<MainScreen>
       if (_permissions['master'] == true) const Tab(text: 'Master'),
       if (_permissions['unit2 stock'] == true) const Tab(text: 'Unit 2 Stock'),
       if (_permissions['unit2 sales'] == true) const Tab(text: 'Unit 2 Sales'),
-      if (_permissions['Contractor'] == true) const Tab(text: 'Contractor'),
-
+      if (_permissions['contractor'] == true) const Tab(text: 'Contractor'),
+      if (_permissions['customer'] == true) const Tab(text: 'Customer'),
+      if (_permissions['paymentapproval'] == true) const Tab(text: 'PaymentApproval'),
 
     ];
   }
@@ -113,26 +115,27 @@ class _MainScreenState extends State<MainScreen>
       if (_permissions['master'] == true) AdminDashboardScreen(),
       if (_permissions['unit2 stock'] == true) Unit2(),
       if (_permissions['unit2 sales'] == true) const Unit2Sales(),
-if (_permissions['Contractor'] == true) const Constrcutiondashboard(),    ];
+      if (_permissions['contractor'] == true) const contractordashboard(),
+      if (_permissions['customer'] == true) const Clientdashboard(),
+      if (_permissions['paymentapproval'] == true) const PaymentApprovalScreen(),
+
+    ];
   }
 
-  
+  // ================= LOGOUT =================
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
 
- // ================= LOGOUT =================
-Future<void> _logout() async {
-  await FirebaseAuth.instance.signOut();
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.clear();
+    if (!mounted) return;
 
-  if (!mounted) return;
-
-Navigator.pushAndRemoveUntil(
-  context,
-  MaterialPageRoute(builder: (_) => const AppModeHandler()),
-  (_) => false,
-);
-}
-
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const AppModeHandler()),
+      (_) => false,
+    );
+  }
 
   // ================= DISPOSE =================
   @override
@@ -155,7 +158,7 @@ Navigator.pushAndRemoveUntil(
     return SafeArea(
       child: Scaffold(
         backgroundColor: Colors.white,
-      
+
         body: Column(
           children: [
             Container(
@@ -176,7 +179,7 @@ Navigator.pushAndRemoveUntil(
                       tabs: tabs,
                     ),
                   ),
-                          IconButton(
+                  IconButton(
                     tooltip: 'Logout',
                     icon: const Icon(Icons.logout, color: Colors.white),
                     onPressed: _logout,
@@ -184,7 +187,7 @@ Navigator.pushAndRemoveUntil(
                 ],
               ),
             ),
-                    Expanded(
+            Expanded(
               child: TabBarView(controller: _tabController, children: screens),
             ),
           ],
