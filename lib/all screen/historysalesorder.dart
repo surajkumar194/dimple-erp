@@ -12,11 +12,24 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:http/http.dart' as http;
 
+String _hsnForCategory(String? category) {
+  if (category == 'MDF') return '44111200';
+  if (category == 'Laddu Paper') return '48062000';
+  return '48192090';
+}
+
+double _gstPctForCategory(String? category) {
+  if (category == 'MDF') return 18.0;
+  if (category == 'Laddu Paper') return 18.0;
+  return 5.0;
+}
+
 class OrderHistoryScreen extends StatefulWidget {
   const OrderHistoryScreen({super.key});
   @override
   State<OrderHistoryScreen> createState() => _OrderHistoryScreenState();
 }
+
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -29,84 +42,95 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     'Cancelled',
   ];
 
-  void _showTermsSelectionDialog(Map<String, dynamic> data) {
+  void _showTermsSelectionDialog(
+    Map<String, dynamic> data, {
+    required bool withHsn,
+  }) {
     bool payment = true;
     bool freight = true;
     bool packing = true;
     bool gst = true;
+    bool balancePayment = true;
     bool advance50 = true;
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: const Text(
-                'Select Terms & Conditions',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CheckboxListTile(
-                    value: advance50,
-                    onChanged: (v) => setState(() => advance50 = v ?? true),
-                    title: const Text(
-                      '50% advance for start working rest payment before delivery',
-                    ),
-                  ),
-                  CheckboxListTile(
-                    value: payment,
-                    onChanged: (v) => setState(() => payment = v ?? true),
-                    title: const Text('All payments within 15 days'),
-                  ),
-                  CheckboxListTile(
-                    value: freight,
-                    onChanged: (v) => setState(() => freight = v ?? true),
-                    title: const Text('Freight charges extra'),
-                  ),
-                  CheckboxListTile(
-                    value: packing,
-                    onChanged: (v) => setState(() => packing = v ?? true),
-                    title: const Text('Packing charges extra'),
-                  ),
-                  CheckboxListTile(
-                    value: gst,
-                    onChanged: (v) => setState(() => gst = v ?? true),
-                    title: const Text('GST extra as per invoice'),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Select Terms & Conditions',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CheckboxListTile(
+                value: advance50,
+                onChanged: (v) => setState(() => advance50 = v ?? true),
+                title: const Text(
+                  '50% advance payment is required to commence production',
                 ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _generatePDF(
-                      data,
-                      termsOptions: {
-                        'payment': payment,
-                        'advance50': advance50,
-                        'freight': freight,
-                        'packing': packing,
-                        'gst': gst,
-                      },
-                    );
+              ),
+
+               CheckboxListTile(
+                value: balancePayment,
+                onChanged: (v) => setState(() => balancePayment = v ?? true),
+                title: const Text(
+                  'Balance payment must be paid before dispatch.',
+                ),
+              ),
+              CheckboxListTile(
+                value: payment,
+                onChanged: (v) => setState(() => payment = v ?? true),
+                title: const Text('Goods will be dispatched only after receipt of full payment.'),
+              ),
+              CheckboxListTile(
+                value: freight,
+                onChanged: (v) => setState(() => freight = v ?? true),
+                title: const Text('Freight charges are extra'),
+              ),
+              CheckboxListTile(
+                value: packing,
+                onChanged: (v) => setState(() => packing = v ?? true),
+                title: const Text('Packing charges are extra'),
+              ),
+              CheckboxListTile(
+                value: gst,
+                onChanged: (v) => setState(() => gst = v ?? true),
+                title: const Text('GST will be charged as per applicable rates (MDF Products - 18%; Cardboard Boxes - 5%).'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _generatePDF(
+                  data,
+                  withHsn: withHsn,
+                  termsOptions: {
+                    'payment': payment,
+                    'advance50': advance50,
+                    'freight': freight,
+                    'packing': packing,
+                    'gst': gst,
+                    'balancePayment': balancePayment,
                   },
-                  child: const Text('Generate PDF'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+                );
+              },
+              child: const Text('Generate PDF'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -156,6 +180,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       ),
       body: Column(
         children: [
+          // Search + filter bar
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -188,11 +213,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   ),
                   child: TextField(
                     controller: _searchController,
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value.toLowerCase();
-                      });
-                    },
+                    onChanged: (value) =>
+                        setState(() => _searchQuery = value.toLowerCase()),
                     decoration: InputDecoration(
                       hintText: 'Search orders, customers...',
                       hintStyle: TextStyle(color: Colors.grey.shade400),
@@ -210,12 +232,10 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                                 Icons.clear_rounded,
                                 color: Colors.grey.shade600,
                               ),
-                              onPressed: () {
-                                setState(() {
-                                  _searchController.clear();
-                                  _searchQuery = '';
-                                });
-                              },
+                              onPressed: () => setState(() {
+                                _searchController.clear();
+                                _searchQuery = '';
+                              }),
                             )
                           : null,
                       border: OutlineInputBorder(
@@ -235,8 +255,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: _statusOptions.asMap().entries.map((entry) {
-                      final status = entry.value;
+                    children: _statusOptions.map((status) {
                       final isSelected = _statusFilter == status;
                       Color chipColor;
                       switch (status) {
@@ -267,11 +286,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                             ),
                           ),
                           selected: isSelected,
-                          onSelected: (selected) {
-                            setState(() {
-                              _statusFilter = status;
-                            });
-                          },
+                          onSelected: (_) =>
+                              setState(() => _statusFilter = status),
                           avatar: isSelected
                               ? const Icon(
                                   Icons.check_circle,
@@ -301,6 +317,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ],
             ),
           ),
+
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -308,7 +325,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                // Loading
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(
                     child: Column(
@@ -326,7 +342,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -335,147 +350,52 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 }
                 if (snapshot.hasError) {
                   return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 80,
-                          color: Colors.red.shade300,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error loading orders',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                    child: Icon(
+                      Icons.error_outline,
+                      size: 80,
+                      color: Colors.red.shade300,
                     ),
                   );
                 }
-
-                // Empty collection
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(30),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.blue.shade100,
-                                Colors.purple.shade100,
-                              ],
-                            ),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.inbox_rounded,
-                            size: 80,
-                            color: Colors.blue.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'No orders found',
-                          style: TextStyle(
-                            fontSize: 22,
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Start creating orders to see them here',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
-                    ),
+                  return _emptyState(
+                    'No orders found',
+                    'Start creating orders to see them here',
+                    Icons.inbox_rounded,
+                    Colors.blue,
                   );
                 }
 
-                // Filter
                 final orders = snapshot.data!.docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
-
-                  if (_statusFilter != 'All' &&
-                      data['status'] != _statusFilter) {
+                  if (_statusFilter != 'All' && data['status'] != _statusFilter)
                     return false;
-                  }
-
                   if (_searchQuery.isNotEmpty) {
                     final orderNo = (data['salesOrderNo'] ?? '')
                         .toString()
                         .toLowerCase();
-                    final customerName = (data['customerName'] ?? '')
+                    final customer = (data['customerName'] ?? '')
                         .toString()
                         .toLowerCase();
-                    final companyName = (data['companyName'] ?? '')
+                    final company = (data['companyName'] ?? '')
                         .toString()
                         .toLowerCase();
-
                     return orderNo.contains(_searchQuery) ||
-                        customerName.contains(_searchQuery) ||
-                        companyName.contains(_searchQuery);
+                        customer.contains(_searchQuery) ||
+                        company.contains(_searchQuery);
                   }
-
                   return true;
                 }).toList();
 
-                // No match after filter
                 if (orders.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(30),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.orange.shade100,
-                                Colors.red.shade100,
-                              ],
-                            ),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.search_off_rounded,
-                            size: 80,
-                            color: Colors.orange.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'No matching orders',
-                          style: TextStyle(
-                            fontSize: 22,
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Try adjusting your filters',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
-                    ),
+                  return _emptyState(
+                    'No matching orders',
+                    'Try adjusting your filters',
+                    Icons.search_off_rounded,
+                    Colors.orange,
                   );
                 }
 
-                // List
                 return ListView.builder(
                   padding: const EdgeInsets.all(20),
                   itemCount: orders.length,
@@ -493,6 +413,46 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
+  Widget _emptyState(
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+  ) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color.withOpacity(0.2), color.withOpacity(0.1)],
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 80, color: color.withOpacity(0.7)),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 22,
+              color: Colors.grey.shade700,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Order Card ────────────────────────────────────────────────────────────
   Widget _buildOrderCard(String docId, Map<String, dynamic> data, int index) {
     final orderNo = data['salesOrderNo'] ?? 'N/A';
     final customerName = data['customerName'] ?? 'N/A';
@@ -536,8 +496,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.white, gradient[0].withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: gradient[0].withOpacity(0.2), width: 2),
@@ -554,186 +512,164 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         child: InkWell(
           onTap: () => _showOrderDetails(docId, data),
           borderRadius: BorderRadius.circular(20),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                colors: [gradient[0].withOpacity(0.03), Colors.white],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: gradient),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(18),
+                    topRight: Radius.circular(18),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.receipt_long_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            orderNo,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            customerName,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(statusIcon, color: statusColor, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            status,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            child: Column(
-              children: [
-                // ── Card Header ─────────────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: gradient,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+              // Body
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildInfoTile(
+                            icon: Icons.currency_rupee_rounded,
+                            label: 'Total Amount',
+                            value: 'Rs${totalAmount.toStringAsFixed(0)}',
+                            color: Colors.green,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildInfoTile(
+                            icon: Icons.calendar_today_rounded,
+                            label: 'Order Date',
+                            value: orderDate != null
+                                ? DateFormat('dd MMM yyyy').format(orderDate)
+                                : 'N/A',
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ],
                     ),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(18),
-                      topRight: Radius.circular(18),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildInfoTile(
+                            icon: Icons.local_shipping,
+                            label: 'Dispatch',
+                            value: dispatchType.isEmpty ? 'N/A' : dispatchType,
+                            color: Colors.purple,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildActionButton(
+                            onPressed: () => _editOrder(docId, data),
+                            icon: Icons.edit_rounded,
+                            label: 'Edit Order',
+                            gradient: [
+                              Colors.blue.shade400,
+                              Colors.blue.shade600,
+                            ],
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.receipt_long_rounded,
-                          color: Colors.white,
-                          size: 28,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildActionButton(
+                            onPressed: () => _showDownloadOptions(data),
+                            icon: Icons.download_rounded,
+                            label: 'Download',
+                            gradient: [
+                              Colors.green.shade400,
+                              Colors.green.shade600,
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              orderNo,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              customerName,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.white.withOpacity(0.9),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Status badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(statusIcon, color: statusColor, size: 18),
-                            const SizedBox(width: 6),
-                            Text(
-                              status,
-                              style: TextStyle(
-                                color: statusColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
-
-                // ── Card Body ───────────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildInfoTile(
-                              icon: Icons.currency_rupee_rounded,
-                              label: 'Total Amount',
-                              value: '₹${totalAmount.toStringAsFixed(0)}',
-                              color: Colors.green,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildInfoTile(
-                              icon: Icons.calendar_today_rounded,
-                              label: 'Order Date',
-                              value: orderDate != null
-                                  ? DateFormat('dd MMM yyyy').format(orderDate)
-                                  : 'N/A',
-                              color: Colors.blue,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildInfoTile(
-                              icon: Icons.local_shipping,
-                              label: 'Dispatch',
-                              value: dispatchType.isEmpty
-                                  ? 'N/A'
-                                  : dispatchType,
-                              color: Colors.purple,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildActionButton(
-                              onPressed: () => _editOrder(docId, data),
-                              icon: Icons.edit_rounded,
-                              label: 'Edit Order',
-                              gradient: [
-                                Colors.blue.shade400,
-                                Colors.blue.shade600,
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildActionButton(
-                              onPressed: () => _showDownloadOptions(data),
-                              icon: Icons.download_rounded,
-                              label: 'Download',
-                              gradient: [
-                                Colors.green.shade400,
-                                Colors.green.shade600,
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -751,8 +687,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.3)),
@@ -794,6 +728,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       ),
     );
   }
+
   Widget _buildActionButton({
     required VoidCallback onPressed,
     required IconData icon,
@@ -832,9 +767,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // DOWNLOAD OPTIONS BOTTOM SHEET
-  // -----------------------------------------------------------------------
+  // ── Download Options ──────────────────────────────────────────────────────
   void _showDownloadOptions(Map<String, dynamic> data) {
     showModalBottomSheet(
       context: context,
@@ -881,7 +814,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            // PDF option
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(12),
@@ -905,59 +837,60 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 ),
               ),
               title: const Text(
-                'Download as PDF',
+                'Download PDF (Standard)',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
-              subtitle: const Text('Professional PDF with images'),
+              subtitle: const Text(
+                'PDF with images, GST breakdown — no HSN codes',
+              ),
               onTap: () {
                 Navigator.pop(ctx);
-                _showTermsSelectionDialog(data);
+                _showTermsSelectionDialog(data, withHsn: false);
               },
             ),
-            // const SizedBox(height: 8),
-            // // JPG option
-            // ListTile(
-            //   leading: Container(
-            //     padding: const EdgeInsets.all(12),
-            //     decoration: BoxDecoration(
-            //       gradient: LinearGradient(
-            //         colors: [Colors.green.shade400, Colors.green.shade700],
-            //       ),
-            //       borderRadius: BorderRadius.circular(14),
-            //       boxShadow: [
-            //         BoxShadow(
-            //           color: Colors.green.shade200,
-            //           blurRadius: 8,
-            //           offset: const Offset(0, 4),
-            //         ),
-            //       ],
-            //     ),
-            //     child: const Icon(
-            //       Icons.image_rounded,
-            //       color: Colors.white,
-            //       size: 26,
-            //     ),
-            //   ),
-            //   title: const Text(
-            //     'Download as JPG',
-            //     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-            //   ),
-            //   subtitle: const Text('High-quality image file'),
-            //   onTap: () async {
-            //     Navigator.pop(ctx);
-            //     await _generateJPG(data);
-            //   },
-            // ),
-            // const SizedBox(height: 28),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.indigo.shade400, Colors.indigo.shade700],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.indigo.shade200,
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.receipt_long_rounded,
+                  color: Colors.white,
+                  size: 26,
+                ),
+              ),
+              title: const Text(
+                'Download PDF (With HSN Codes)',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              ),
+              subtitle: const Text(
+                'MDF: 44111200 | Laddu Paper: 48062000 | Others: 48192090',
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showTermsSelectionDialog(data, withHsn: true);
+              },
+            ),
+            const SizedBox(height: 28),
           ],
         ),
       ),
     );
   }
 
-  // -----------------------------------------------------------------------
-  // ORDER DETAILS BOTTOM SHEET
-  // -----------------------------------------------------------------------
+  // ── Order Detail Bottom Sheet ─────────────────────────────────────────────
   void _showOrderDetails(String docId, Map<String, dynamic> data) {
     showModalBottomSheet(
       context: context,
@@ -1098,9 +1031,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // DETAIL SECTION (Customer / Order info cards)
-  // -----------------------------------------------------------------------
   Widget _buildDetailSection(
     String title,
     IconData icon,
@@ -1158,19 +1088,12 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // PRODUCTS SECTION
-  // -----------------------------------------------------------------------
   Widget _buildProductsSection(Map<String, dynamic> data) {
-    List products = [];
-
     final rawProducts = data['products'];
+    List products = rawProducts is List
+        ? rawProducts
+        : (rawProducts is Map ? [rawProducts] : []);
 
-    if (rawProducts is List) {
-      products = rawProducts;
-    } else if (rawProducts is Map) {
-      products = [rawProducts];
-    }
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -1189,7 +1112,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1239,14 +1161,36 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ],
             ),
           ),
-          // Product list
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: products.map((product) {
                 final images = product['images'] is List
-                    ? product['images']
+                    ? product['images'] as List
                     : [];
+                final category =
+                    product['productCategory'] ?? product['category'] ?? '';
+                final gstPct =
+                    (product['gstPercent'] ?? _gstPctForCategory(category))
+                        .toDouble();
+                final qty =
+                    (double.tryParse(product['quantity']?.toString() ?? '0') ??
+                    0);
+                final price =
+                    (double.tryParse(product['price']?.toString() ?? '0') ?? 0);
+                final subAmt = qty * price;
+                final gstAmt = (product['gstAmount'] != null)
+                    ? (product['gstAmount'] as num).toDouble()
+                    : subAmt * gstPct / 100;
+                final totalAmt = subAmt + gstAmt;
+                final isMdf = category == 'MDF';
+                final isLadduPaper = category == 'Laddu Paper';
+                final isHighGst = isMdf || isLadduPaper;
+                final hsnCode =
+                    product['hsnCode']?.toString().isNotEmpty == true
+                    ? product['hsnCode']
+                    : _hsnForCategory(category);
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(14),
@@ -1265,7 +1209,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Code + Name row
                       Row(
                         children: [
                           Container(
@@ -1304,13 +1247,12 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      // Category + Quantity
                       Row(
                         children: [
                           Expanded(
                             child: _buildProductDetail(
                               'Category',
-                              product['productCategory'] ?? 'N/A',
+                              category,
                               Icons.category_rounded,
                             ),
                           ),
@@ -1324,29 +1266,149 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      // Price + Amount
                       Row(
                         children: [
                           Expanded(
                             child: _buildProductDetail(
                               'Price/Unit',
-                              '₹${product['price'] ?? 0}',
+                              'Rs${product['price'] ?? 0}',
                               Icons.currency_rupee_rounded,
                             ),
                           ),
                           Expanded(
                             child: _buildProductDetail(
-                              'Amount',
-                              '₹${(product['amount'] ?? 0).toStringAsFixed()}',
-                              Icons.account_balance_wallet_rounded,
+                              'Subtotal',
+                              'Rs${subAmt.toStringAsFixed(0)}',
+                              Icons.calculate_rounded,
                             ),
                           ),
                         ],
                       ),
-                      // Remarks
+
+                      // ── UPDATED: HSN code shown in detail view ────────
+                      if (hsnCode != null && hsnCode.toString().isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isHighGst
+                                ? Colors.orange.shade50
+                                : Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isHighGst
+                                  ? Colors.orange.shade200
+                                  : Colors.blue.shade200,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.tag_rounded,
+                                size: 14,
+                                color: isHighGst
+                                    ? Colors.orange.shade700
+                                    : Colors.blue.shade700,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'HSN: $hsnCode',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: isHighGst
+                                      ? Colors.orange.shade700
+                                      : Colors.blue.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isHighGst
+                              ? Colors.orange.shade50
+                              : Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isHighGst
+                                ? Colors.orange.shade200
+                                : Colors.blue.shade200,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.percent_rounded,
+                                      size: 14,
+                                      color: isHighGst
+                                          ? Colors.orange.shade700
+                                          : Colors.blue.shade700,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'GST @ ${gstPct.toInt()}%',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: isHighGst
+                                            ? Colors.orange.shade700
+                                            : Colors.blue.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  '+ Rs${gstAmt.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: isHighGst
+                                        ? Colors.orange.shade700
+                                        : Colors.blue.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Product Total (with GST)',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  'Rs${totalAmt.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                       if (product['remarks'] != null &&
                           product['remarks'].toString().isNotEmpty) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
@@ -1355,7 +1417,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                             border: Border.all(color: Colors.amber.shade200),
                           ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Icon(
                                 Icons.note_rounded,
@@ -1377,7 +1438,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                           ),
                         ),
                       ],
-                      // Images
                       if (images.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Container(
@@ -1411,74 +1471,45 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                               Wrap(
                                 spacing: 10,
                                 runSpacing: 10,
-                                children: images.map((imageUrl) {
-                                  return GestureDetector(
-                                    onTap: () => _showImagePreview(imageUrl),
-                                    child: Hero(
-                                      tag: imageUrl,
-                                      child: Container(
-                                        width: 80,
-                                        height: 80,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.blue.shade300,
-                                            width: 2,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.blue.shade200,
-                                              blurRadius: 6,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
+                                children: images
+                                    .map(
+                                      (imageUrl) => GestureDetector(
+                                        onTap: () => _showImagePreview(
+                                          imageUrl.toString(),
                                         ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          child: Image.network(
-                                            imageUrl,
-                                            fit: BoxFit.cover,
-                                            loadingBuilder: (context, child, loadingProgress) {
-                                              if (loadingProgress == null) {
-                                                return child;
-                                              }
-                                              return Center(
-                                                child: CircularProgressIndicator(
-                                                  value:
-                                                      loadingProgress
-                                                              .expectedTotalBytes !=
-                                                          null
-                                                      ? loadingProgress
-                                                                .cumulativeBytesLoaded /
-                                                            loadingProgress
-                                                                .expectedTotalBytes!
-                                                      : null,
-                                                  strokeWidth: 2,
-                                                ),
-                                              );
-                                            },
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                                  return Container(
-                                                    color: Colors.grey.shade200,
-                                                    child: Icon(
+                                        child: Hero(
+                                          tag: imageUrl,
+                                          child: Container(
+                                            width: 80,
+                                            height: 80,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: Colors.blue.shade300,
+                                                width: 2,
+                                              ),
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              child: Image.network(
+                                                imageUrl.toString(),
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) =>
+                                                    Icon(
                                                       Icons
                                                           .broken_image_rounded,
                                                       color:
                                                           Colors.grey.shade400,
                                                     ),
-                                                  );
-                                                },
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  );
-                                }).toList(),
+                                    )
+                                    .toList(),
                               ),
                             ],
                           ),
@@ -1495,9 +1526,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // IMAGE PREVIEW DIALOG
-  // -----------------------------------------------------------------------
   void _showImagePreview(String imageUrl) {
     showDialog(
       context: context,
@@ -1518,19 +1546,10 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                     child: Image.network(
                       imageUrl,
                       fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          padding: const EdgeInsets.all(50),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              value: loadingProgress.expectedTotalBytes != null
-                                  ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                  : null,
-                              color: Colors.white,
-                            ),
-                          ),
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
                         );
                       },
                     ),
@@ -1555,7 +1574,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 child: IconButton(
                   onPressed: () => Navigator.pop(ctx),
                   icon: const Icon(Icons.close_rounded),
-                  color: Colors.black,
                 ),
               ),
             ),
@@ -1565,9 +1583,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // PRODUCT DETAIL ROW (inside product card)
-  // -----------------------------------------------------------------------
   Widget _buildProductDetail(String label, String value, IconData icon) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -1596,10 +1611,36 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // PAYMENT SECTION
-  // -----------------------------------------------------------------------
   Widget _buildPaymentSection(Map<String, dynamic> data) {
+    final rawProducts = data['products'];
+    List products = rawProducts is List
+        ? rawProducts
+        : (rawProducts is Map ? [rawProducts] : []);
+
+    double subTotal = 0;
+    double totalGst = 0;
+
+    for (var p in products) {
+      final category = p['productCategory'] ?? p['category'] ?? '';
+      final qty = double.tryParse(p['quantity']?.toString() ?? '0') ?? 0;
+      final price = double.tryParse(p['price']?.toString() ?? '0') ?? 0;
+      final sub = qty * price;
+      subTotal += sub;
+
+      final gstPct = (p['gstPercent'] ?? _gstPctForCategory(category))
+          .toDouble();
+      final gstAmt = (p['gstAmount'] != null)
+          ? (p['gstAmount'] as num).toDouble()
+          : sub * gstPct / 100;
+      totalGst += gstAmt;
+    }
+
+    final delivery = (data['deliveryCharges'] ?? 0).toDouble();
+    final advance = (data['advanceAmount'] ?? 0).toDouble();
+    final grandTotal =
+        (data['grandTotal'] ?? (subTotal + totalGst + delivery - advance))
+            .toDouble();
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -1645,26 +1686,47 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             child: Column(
               children: [
                 _buildPaymentRow(
-                  'Subtotal',
-                  '₹${(data['totalAmount'] ?? 0).toStringAsFixed(0)}',
+                  'Subtotal (before GST)',
+                  'Rs${subTotal.toStringAsFixed(0)}',
                 ),
+                const SizedBox(height: 4),
+                ...products.map((p) {
+                  final category = p['productCategory'] ?? p['category'] ?? '';
+                  final qty =
+                      double.tryParse(p['quantity']?.toString() ?? '0') ?? 0;
+                  final price =
+                      double.tryParse(p['price']?.toString() ?? '0') ?? 0;
+                  final sub = qty * price;
+                  final gstPct =
+                      (p['gstPercent'] ?? _gstPctForCategory(category))
+                          .toDouble();
+                  final gstAmt = (p['gstAmount'] != null)
+                      ? (p['gstAmount'] as num).toDouble()
+                      : sub * gstPct / 100;
+                  final code = p['productCode'] ?? '';
+                  return _buildPaymentRow(
+                    'GST ${gstPct.toInt()}% – $code ($category)',
+                    'Rs${gstAmt.toStringAsFixed(0)}',
+                    isGst: true,
+                  );
+                }),
                 _buildPaymentRow(
-                  'GST (${data['gstPercent'] ?? 0}%)',
-                  '₹${(data['gstAmount'] ?? 0).toStringAsFixed(0)}',
+                  'Total GST',
+                  'Rs${totalGst.toStringAsFixed(0)}',
+                  isBold: true,
                 ),
-                if ((data['deliveryCharges'] ?? 0) > 0)
+                if (delivery > 0)
                   _buildPaymentRow(
                     'Delivery Charges',
-                    '₹${(data['deliveryCharges'] ?? 0).toStringAsFixed(0)}',
+                    'Rs${delivery.toStringAsFixed(0)}',
                   ),
-                if ((data['advanceAmount'] ?? 0) > 0)
+                if (advance > 0)
                   _buildPaymentRow(
                     'Advance Paid',
-                    '-₹${(data['advanceAmount'] ?? 0).toStringAsFixed(0)}',
+                    '-Rs${advance.toStringAsFixed(0)}',
                     isNegative: true,
                   ),
                 const Divider(thickness: 2, height: 24),
-                // Grand total badge
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -1695,7 +1757,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                         ],
                       ),
                       Text(
-                        '₹${(data['grandTotal'] ?? 0).toStringAsFixed(0)}',
+                        'Rs${grandTotal.toStringAsFixed(0)}',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 24,
@@ -1717,22 +1779,32 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     String label,
     String value, {
     bool isNegative = false,
+    bool isBold = false,
+    bool isGst = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: isGst ? 12 : 14,
+                color: isGst ? Colors.grey.shade600 : Colors.grey.shade700,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
           ),
           Text(
             value,
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: isNegative ? Colors.red.shade600 : Colors.black,
+              fontSize: isGst ? 12 : 16,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              color: isNegative
+                  ? Colors.red.shade600
+                  : (isGst ? Colors.grey.shade700 : Colors.black),
             ),
           ),
         ],
@@ -1740,10 +1812,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // DETAIL ROW (label : value)
-  // -----------------------------------------------------------------------
-  Widget _buildDetailRow(String label, String value, {bool isBold = false}) {
+  Widget _buildDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -1764,10 +1833,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             flex: 3,
             child: Text(
               value,
-              style: TextStyle(
-                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                fontSize: isBold ? 16 : 14,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             ),
           ),
         ],
@@ -1775,9 +1841,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // NAVIGATE → EditOrderScreen
-  // -----------------------------------------------------------------------
   void _editOrder(String docId, Map<String, dynamic> data) {
     Navigator.push(
       context,
@@ -1787,11 +1850,12 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
+  // ══════════════════════════════════════════════════════════════════════════
   // PDF GENERATION
-  // -----------------------------------------------------------------------
+  // ══════════════════════════════════════════════════════════════════════════
   Future<void> _generatePDF(
     Map<String, dynamic> data, {
+    required bool withHsn,
     required Map<String, bool> termsOptions,
   }) async {
     try {
@@ -1818,8 +1882,14 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       }
 
       final pdf = pw.Document();
+final ByteData qrData = await rootBundle.load(
+  'assets/qr.jpeg',
+);
 
-      // Load logo
+final qrImage = pw.MemoryImage(
+  qrData.buffer.asUint8List(),
+);
+      // Logo
       pw.ImageProvider? logoImage;
       try {
         final ByteData logoData = await rootBundle.load('assets/dpl.png');
@@ -1828,111 +1898,128 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         debugPrint('Logo not found: $e');
       }
 
-      // Download ALL product images with timeout
-      List products = [];
-
+      // Products
       final rawProducts = data['products'];
+      List products = rawProducts is List
+          ? rawProducts
+          : (rawProducts is Map ? [rawProducts] : []);
 
-      if (rawProducts is List) {
-        products = rawProducts;
-      } else if (rawProducts is Map) {
-        products = [rawProducts];
-      }
       final List<Map<String, dynamic>> productsWithImages = [];
 
       for (var product in products) {
         final images = product['images'] is List ? product['images'] : [];
         final List<pw.MemoryImage> pdfImages = [];
-
         for (var imgUrl in images) {
           try {
             final response = await http
                 .get(Uri.parse(imgUrl))
-                .timeout(const Duration(seconds: 3));
-            if (response.statusCode == 200) {
+                .timeout(const Duration(seconds: 5));
+            if (response.statusCode == 200)
               pdfImages.add(pw.MemoryImage(response.bodyBytes));
-            }
-          } catch (_) {
-            // skip
-          }
+          } catch (_) {}
         }
 
         final double qty =
             double.tryParse(product['quantity']?.toString() ?? '0') ?? 0;
-
-        final double rate =
+        final double price =
             double.tryParse(product['price']?.toString() ?? '0') ?? 0;
-        final double amount = qty * rate;
+        final double subAmount = qty * price;
+        final String category =
+            product['productCategory'] ?? product['category'] ?? '';
+        final double gstPct =
+            (product['gstPercent'] ?? _gstPctForCategory(category)).toDouble();
+        final double gstAmt = (product['gstAmount'] != null)
+            ? (product['gstAmount'] as num).toDouble()
+            : subAmount * gstPct / 100;
+        final double totalAmt = subAmount + gstAmt;
+
+        // ── UPDATED: Use saved hsnCode if present, else derive from category
+        final String hsnCode =
+            (product['hsnCode']?.toString().isNotEmpty == true)
+            ? product['hsnCode'].toString()
+            : _hsnForCategory(category);
 
         productsWithImages.add({
           'productName': product['productName'] ?? 'N/A',
-          'productCategory': product['productCategory'] ?? '',
+          'productCategory': category,
+          'productCode': product['productCode'] ?? '',
           'quantity': qty.toStringAsFixed(0),
-          'price': rate.toStringAsFixed(2),
-          'amount': amount.toStringAsFixed(0),
+          'price': price.toStringAsFixed(2),
+          'subAmount': subAmount,
+          'gstPercent': gstPct,
+          'gstAmount': gstAmt,
+          'amount': totalAmt,
           'remarks': product['remarks'] ?? '',
           'pdfImages': pdfImages,
+          'hsnCode': hsnCode,
         });
       }
 
-      // Pre-calc totals
-      double subTotal = 0;
-      for (var p in productsWithImages) {
-        subTotal += double.parse(p['amount']);
-      }
-      final double gstPercent =
-          double.tryParse(data['gstPercent']?.toString() ?? '0') ?? 0;
-      final double gstAmount = subTotal * (gstPercent / 100);
-      final double deliveryCharges =
+      // Grand totals
+      double subTotal = productsWithImages.fold(
+        0.0,
+        (s, p) => s + (p['subAmount'] as double),
+      );
+      double totalGst = productsWithImages.fold(
+        0.0,
+        (s, p) => s + (p['gstAmount'] as double),
+      );
+      double deliveryCharges =
           double.tryParse(data['deliveryCharges']?.toString() ?? '0') ?? 0;
-      final double advanceAmount =
+      double advanceAmount =
           double.tryParse(data['advanceAmount']?.toString() ?? '0') ?? 0;
-      final double grandTotal =
-          subTotal + gstAmount + deliveryCharges - advanceAmount;
+      double grandTotal = subTotal + totalGst + deliveryCharges - advanceAmount;
 
-      // Date helpers
+      // Order date
       String orderDateStr = 'N/A';
       if (data['orderDate'] != null && data['orderDate'] is Timestamp) {
         orderDateStr = DateFormat(
           'dd-MM-yyyy',
         ).format((data['orderDate'] as Timestamp).toDate());
       }
-      String dispatchDateStr = 'N/A';
-      if (data['deliveryDate'] != null && data['deliveryDate'] is Timestamp) {
-        dispatchDateStr = DateFormat(
-          'dd-MM-yyyy',
-        ).format((data['deliveryDate'] as Timestamp).toDate());
-      }
-      List<String> termsLines = [];
-      if (termsOptions['advance50'] == true) {
-        termsLines.add(
-          '50% advance for start working, rest payment before delivery.',
-        );
-      }
 
-      if (termsOptions['payment'] == true) {
+      // Terms
+      List<String> termsLines = [];
+      if (termsOptions['advance50'] == true)
         termsLines.add(
-          'All payments will be cleared within 15 days of delivery.',
+          '50% advance payment is required to commence production',
         );
+         if (termsOptions['balancePayment'] == true)
+        termsLines.add(
+          'Balance payment must be paid before dispatch.',
+        );
+    
+      if (termsOptions['payment'] == true)
+        termsLines.add(
+          'Goods will be dispatched only after receipt of full payment.',
+        );
+      if (termsOptions['freight'] == true)
+        termsLines.add('Freight charges are extra.');
+      if (termsOptions['packing'] == true)
+        termsLines.add('Packing charges are extra.');
+      if (termsOptions['gst'] == true)
+        termsLines.add('GST will be charged as per applicable rates (MDF Products - 18%; Cardboard Boxes - 5%).');
+//GSTextra as per invoice — MDF @18% & Cards/Boards @5%.
+//GST will be charged extra as per invoice.
+      // ── GST groups ────────────────────────────────────────────────────
+      final Map<double, Map<String, double>> gstGroups = {};
+      for (final p in productsWithImages) {
+        final pct = p['gstPercent'] as double;
+        final sub = p['subAmount'] as double;
+        final gst = p['gstAmount'] as double;
+        gstGroups[pct] ??= {'taxable': 0.0, 'gstAmt': 0.0};
+        gstGroups[pct]!['taxable'] = gstGroups[pct]!['taxable']! + sub;
+        gstGroups[pct]!['gstAmt'] = gstGroups[pct]!['gstAmt']! + gst;
       }
-      if (termsOptions['freight'] == true) {
-        termsLines.add('Freight charges will be extra.');
-      }
-      if (termsOptions['packing'] == true) {
-        termsLines.add('Packing charges will be extra.');
-      }
-      if (termsOptions['gst'] == true) {
-        termsLines.add('GST will be charged extra as per invoice.');
-      }
+      final sortedPcts = gstGroups.keys.toList()..sort();
 
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(32),
-          build: (pw.Context context) {
+          build: (pw.Context ctx) {
             return [
-              // ── Logo + Company Header (no outer border box) ──────────
-              pw.Row(
+       pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
                   if (logoImage != null)
@@ -1953,10 +2040,11 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                           color: PdfColors.teal900,
                         ),
                       ),
-                      pw.SizedBox(height: 5),
+                      pw.SizedBox(height: 3),
                       pw.Text(
-                        'Grand Trunk Rd, near Navdeep Resorts, adjoining Sidak Resorts,\n'
-                        'West, Bhattian Ludhiana, Punjab - 141008\nContact No.: 9872518000, 7888696774',
+                        'Grand Trunk Rd, Near Navdeep Resorts, Adjoining Sidak Resorts,\n'
+                        'West, Bhattian Ludhiana, Punjab - 141008\n'
+                        'Contact No.: 9872518000, 7888696774',
                         style: const pw.TextStyle(fontSize: 10),
                       ),
                       pw.SizedBox(height: 3),
@@ -1968,10 +2056,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   ),
                 ],
               ),
-              pw.SizedBox(height: 10),
+              pw.SizedBox(height: 5),
               pw.Divider(thickness: 1),
-
-              // ── Centered "SALES ORDER" title ──────────────────────────
               pw.Center(
                 child: pw.Text(
                   'Estimate Order',
@@ -1982,7 +2068,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   ),
                 ),
               ),
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 3),
               pw.Text(
                 'Sales Order: ${data['salesOrderNo'] ?? 'N/A'}',
                 style: pw.TextStyle(
@@ -1990,9 +2076,9 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-              pw.SizedBox(height: 10),
+              pw.SizedBox(height: 7),
 
-              // ── Single bordered container — Customer + Order side by side ──
+              // ── Customer + Order info ──────────────────────────────────
               pw.Container(
                 padding: const pw.EdgeInsets.all(14),
                 decoration: pw.BoxDecoration(
@@ -2002,7 +2088,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                 child: pw.Row(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    // Customer column
                     pw.Expanded(
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -2030,7 +2115,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                       ),
                     ),
                     pw.SizedBox(width: 12),
-                    // Order details column
                     pw.Expanded(
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -2045,14 +2129,11 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                           ),
                           pw.Divider(),
                           _pdfInfoRow('Order Date', orderDateStr),
-
-                          //  _pdfInfoRow('Dispatch Date', dispatchDateStr),
                           _pdfInfoRow('Status', data['status'] ?? 'Pending'),
                           _pdfInfoRow(
                             'Dispatch Type',
                             data['dispatchType'] ?? 'N/A',
                           ),
-
                           _pdfInfoRow('Order Location', data['unit'] ?? 'N/A'),
                         ],
                       ),
@@ -2062,205 +2143,534 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               ),
               pw.SizedBox(height: 15),
 
-              // ── Products Table ────────────────────────────────────────
+              // ── Products table ─────────────────────────────────────────
               pw.Table(
                 border: pw.TableBorder.all(color: PdfColors.black, width: 0.8),
-                columnWidths: {
-                  0: const pw.FixedColumnWidth(25),
-                  1: const pw.FlexColumnWidth(1.8),
-                  2: const pw.FlexColumnWidth(4.0),
-                  3: const pw.FixedColumnWidth(40),
-                  4: const pw.FixedColumnWidth(40),
-                  5: const pw.FixedColumnWidth(60),
-                },
+                columnWidths: withHsn
+                    ? {
+                        0: const pw.FixedColumnWidth(25),
+                        1: const pw.FixedColumnWidth(55),
+                        2: const pw.FlexColumnWidth(1.8),
+                        3: const pw.FlexColumnWidth(3.5),
+                        4: const pw.FixedColumnWidth(38),
+                        5: const pw.FixedColumnWidth(45),
+                        6: const pw.FixedColumnWidth(55),
+                      }
+                    : {
+                        0: const pw.FixedColumnWidth(25),
+                        1: const pw.FlexColumnWidth(1.8),
+                        2: const pw.FlexColumnWidth(4.0),
+                        3: const pw.FixedColumnWidth(40),
+                        4: const pw.FixedColumnWidth(40),
+                        5: const pw.FixedColumnWidth(60),
+                      },
                 children: [
-                  // Header row — teal800
+                  // Header
                   pw.TableRow(
                     decoration: const pw.BoxDecoration(
                       color: PdfColors.teal800,
                     ),
-                    children: [
-                      _pdfTableHeader('Sr.'),
-                      _pdfTableHeader('SUMMARY'),
-                      _pdfTableHeader('DETAILS'),
-                      _pdfTableHeader('QTY'),
-                      _pdfTableHeader('RATE'),
-                      _pdfTableHeader('AMOUNT'),
-                    ],
+                    children: withHsn
+                        ? [
+                            _pdfTableHeader('Sr.'),
+                            _pdfTableHeader('HSN Code'),
+                            _pdfTableHeader('SUMMARY'),
+                            _pdfTableHeader('DETAILS'),
+                            _pdfTableHeader('QTY'),
+                            _pdfTableHeader('RATE'),
+                            _pdfTableHeader('AMOUNT'),
+                          ]
+                        : [
+                            _pdfTableHeader('Sr.'),
+                            _pdfTableHeader('SUMMARY'),
+                            _pdfTableHeader('DETAILS'),
+                            _pdfTableHeader('QTY'),
+                            _pdfTableHeader('RATE'),
+                            _pdfTableHeader('AMOUNT'),
+                          ],
                   ),
                   // Product rows
                   ...productsWithImages.asMap().entries.map((entry) {
                     final idx = entry.key;
-                    final product = entry.value;
+                    final p = entry.value;
                     final List<pw.MemoryImage> imgs =
-                        product['pdfImages'] as List<pw.MemoryImage>;
+                        p['pdfImages'] as List<pw.MemoryImage>;
+
+                    final detailsCol = pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          if (imgs.isNotEmpty) buildImageGrid(imgs),
+                          if (imgs.isNotEmpty) pw.SizedBox(height: 2),
+                          if (p['remarks'].toString().isNotEmpty)
+                            pw.Text(
+                              p['remarks'],
+                              style: const pw.TextStyle(
+                                fontSize: 9,
+                                color: PdfColors.red800,
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
 
                     return pw.TableRow(
-                      children: [
-                        // Sr.
-                        _pdfTableCell('${idx + 1}'),
-                        // SUMMARY — product name only
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Text(
-                            product['productName'],
-                            style: pw.TextStyle(
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        // DETAILS — images grid + remarks in red
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.end,
-                            children: [
-                              if (imgs.isNotEmpty) buildImageGrid(imgs),
-                              if (imgs.isNotEmpty) pw.SizedBox(height: 2),
-                              if (product['remarks'].toString().isNotEmpty)
-                                pw.Text(
-                                  product['remarks'],
-                                  style: const pw.TextStyle(
-                                    fontSize: 9,
-                                    color: PdfColors.red800,
+                      children: withHsn
+                          ? [
+                              _pdfTableCell('${idx + 1}'),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(4),
+                                child: pw.Column(
+                                  crossAxisAlignment:
+                                      pw.CrossAxisAlignment.center,
+                                  children: [
+                                    pw.Text(
+                                      p['hsnCode'],
+                                      style: pw.TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: pw.FontWeight.bold,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                    pw.Text(
+                                      'GST ${(p['gstPercent'] as double).toInt()}%',
+                                      style: const pw.TextStyle(
+                                        fontSize: 8,
+                                        color: PdfColors.grey700,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(4),
+                                child: pw.Text(
+                                  p['productName'],
+                                  style: pw.TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: pw.FontWeight.bold,
                                   ),
                                 ),
+                              ),
+                              detailsCol,
+                              _pdfTableCell(p['quantity']),
+                              _pdfTableCell(p['price']),
+                              _pdfTableCell(
+                                (p['subAmount'] as double).toStringAsFixed(0),
+                              ),
+                            ]
+                          : [
+                              _pdfTableCell('${idx + 1}'),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(4),
+                                child: pw.Text(
+                                  p['productName'],
+                                  style: pw.TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              detailsCol,
+                              _pdfTableCell(p['quantity']),
+                              _pdfTableCell(p['price']),
+                              _pdfTableCell(
+                                (p['subAmount'] as double).toStringAsFixed(0),
+                              ),
                             ],
-                          ),
-                        ),
-                        // QTY
-                        _pdfTableCell(product['quantity']),
-                        // RATE
-                        _pdfTableCell(product['price']),
-                        // AMOUNT
-                        _pdfTableCell(product['amount']),
-                      ],
                     );
                   }),
-                  // SUB TOTAL
+                  // Subtotal row
                   pw.TableRow(
-                    children: [
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      _pdfTableCell('SUB TOTAL', isBold: true),
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(4),
-                        child: pw.Text(
-                          subTotal.toStringAsFixed(0),
-                          textAlign: pw.TextAlign.center,
-                          style: const pw.TextStyle(fontSize: 10),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // GST
-                  pw.TableRow(
-                    children: [
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      _pdfTableCell(
-                        'GST @ ${gstPercent.toStringAsFixed(0)}%',
-                        isBold: true,
-                      ),
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(4),
-                        child: pw.Text(
-                          gstAmount.toStringAsFixed(0),
-                          textAlign: pw.TextAlign.center,
-                          style: const pw.TextStyle(fontSize: 10),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Delivery (conditional)
-                  if (deliveryCharges > 0)
-                    pw.TableRow(
-                      children: [
-                        _pdfTableCell(''),
-                        _pdfTableCell(''),
-                        _pdfTableCell('DELIVERY', isBold: true),
-                        _pdfTableCell(''),
-                        _pdfTableCell(''),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Text(
-                            deliveryCharges.toStringAsFixed(0),
-                            textAlign: pw.TextAlign.center,
-                            style: const pw.TextStyle(fontSize: 10),
-                          ),
-                        ),
-                      ],
-                    ),
-                  // Advance (conditional)
-                  if (advanceAmount > 0)
-                    pw.TableRow(
-                      children: [
-                        _pdfTableCell(''),
-                        _pdfTableCell(''),
-                        _pdfTableCell('ADVANCE', isBold: true),
-                        _pdfTableCell(''),
-                        _pdfTableCell(''),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Text(
-                            '-${advanceAmount.toStringAsFixed(0)}',
-                            textAlign: pw.TextAlign.center,
-                            style: const pw.TextStyle(fontSize: 10),
-                          ),
-                        ),
-                      ],
-                    ),
-                  // GRAND TOTAL — grey300 bg
-                  pw.TableRow(
-                    decoration: const pw.BoxDecoration(
-                      color: PdfColors.grey300,
-                    ),
-                    children: [
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      _pdfTableCell('GRAND TOTAL', isBold: true, fontSize: 12),
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(4),
-                        child: pw.Text(
-                          grandTotal.toStringAsFixed(0),
-                          textAlign: pw.TextAlign.center,
-                          style: pw.TextStyle(
-                            fontSize: 12,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
+                    children: withHsn
+                        ? [
+                            _pdfTableCell(''),
+                            _pdfTableCell(''),
+                            _pdfTableCell(''),
+                            _pdfTableCell('SUBTOTAL', isBold: true),
+                            _pdfTableCell(''),
+                            _pdfTableCell(''),
+                            _pdfTableCell(
+                              subTotal.toStringAsFixed(0),
+                              isBold: true,
+                            ),
+                          ]
+                        : [
+                            _pdfTableCell(''),
+                            _pdfTableCell(''),
+                            _pdfTableCell('SUBTOTAL', isBold: true),
+                            _pdfTableCell(''),
+                            _pdfTableCell(''),
+                            _pdfTableCell(
+                              subTotal.toStringAsFixed(0),
+                              isBold: true,
+                            ),
+                          ],
                   ),
                 ],
               ),
-              pw.SizedBox(height: 1),
-              pw.Divider(thickness: 1, color: PdfColors.black),
 
-              // ── Footer text (yellow700, centered) ─────────────────────
+              pw.SizedBox(height: 10),
+
+              // ── GST Breakdown table ────────────────────────────────────
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey600, width: 0.8),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                  children: [
+                    pw.Container(
+                      color: PdfColors.blueGrey800,
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      child: pw.Row(
+                        children: [
+                          pw.Expanded(
+                            flex: 2,
+                            child: pw.Text(
+                              'Tax Rate',
+                              style: pw.TextStyle(
+                                fontSize: 9,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.white,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                          pw.Expanded(
+                            flex: 3,
+                            child: pw.Text(
+                              'Taxable Amt.',
+                              style: pw.TextStyle(
+                                fontSize: 9,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.white,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                          pw.Expanded(
+                            flex: 3,
+                            child: pw.Text(
+                              'CGST Amt.',
+                              style: pw.TextStyle(
+                                fontSize: 9,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.white,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                          pw.Expanded(
+                            flex: 3,
+                            child: pw.Text(
+                              'SGST Amt.',
+                              style: pw.TextStyle(
+                                fontSize: 9,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.white,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                          pw.Expanded(
+                            flex: 3,
+                            child: pw.Text(
+                              'Total Tax',
+                              style: pw.TextStyle(
+                                fontSize: 9,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.white,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    ...() {
+                      double sumTaxable = 0,
+                          sumCgst = 0,
+                          sumSgst = 0,
+                          sumTotal = 0;
+                      final List<pw.Widget> rows = [];
+
+                      for (int i = 0; i < sortedPcts.length; i++) {
+                        final pct = sortedPcts[i];
+                        final taxable = gstGroups[pct]!['taxable']!;
+                        final totalGstForGroup = gstGroups[pct]!['gstAmt']!;
+                        final cgst = totalGstForGroup / 2;
+                        final sgst = totalGstForGroup / 2;
+
+                        sumTaxable += taxable;
+                        sumCgst += cgst;
+                        sumSgst += sgst;
+                        sumTotal += totalGstForGroup;
+
+                        final bg = i % 2 == 0
+                            ? PdfColors.white
+                            : PdfColors.grey100;
+
+                        rows.add(
+                          pw.Container(
+                            color: bg,
+                            padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            child: pw.Row(
+                              children: [
+                                pw.Expanded(
+                                  flex: 2,
+                                  child: pw.Text(
+                                    '${pct.toInt()} %',
+                                    style: pw.TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: pw.FontWeight.bold,
+                                      color: PdfColors.blueGrey800,
+                                    ),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                                pw.Expanded(
+                                  flex: 3,
+                                  child: pw.Text(
+                                    taxable.toStringAsFixed(2),
+                                    style: const pw.TextStyle(fontSize: 9),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                                pw.Expanded(
+                                  flex: 3,
+                                  child: pw.Text(
+                                    cgst.toStringAsFixed(2),
+                                    style: const pw.TextStyle(fontSize: 9),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                                pw.Expanded(
+                                  flex: 3,
+                                  child: pw.Text(
+                                    sgst.toStringAsFixed(2),
+                                    style: const pw.TextStyle(fontSize: 9),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                                pw.Expanded(
+                                  flex: 3,
+                                  child: pw.Text(
+                                    totalGstForGroup.toStringAsFixed(2),
+                                    style: pw.TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: pw.FontWeight.bold,
+                                      color: PdfColors.orange900,
+                                    ),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+
+                        if (i == sortedPcts.length - 1) {
+                          rows.add(
+                            pw.Container(
+                              color: PdfColors.grey200,
+                              padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              child: pw.Row(
+                                children: [
+                                  pw.Expanded(
+                                    flex: 2,
+                                    child: pw.Text(
+                                      'Total',
+                                      style: pw.TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: pw.FontWeight.bold,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                  ),
+                                  pw.Expanded(
+                                    flex: 3,
+                                    child: pw.Text(
+                                      sumTaxable.toStringAsFixed(2),
+                                      style: pw.TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: pw.FontWeight.bold,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                  ),
+                                  pw.Expanded(
+                                    flex: 3,
+                                    child: pw.Text(
+                                      sumCgst.toStringAsFixed(2),
+                                      style: pw.TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: pw.FontWeight.bold,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                  ),
+                                  pw.Expanded(
+                                    flex: 3,
+                                    child: pw.Text(
+                                      sumSgst.toStringAsFixed(2),
+                                      style: pw.TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: pw.FontWeight.bold,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                  ),
+                                  pw.Expanded(
+                                    flex: 3,
+                                    child: pw.Text(
+                                      sumTotal.toStringAsFixed(2),
+                                      style: pw.TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: pw.FontWeight.bold,
+                                        color: PdfColors.orange900,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                      return rows;
+                    }(),
+
+                    if (deliveryCharges > 0)
+                      pw.Container(
+                        color: PdfColors.white,
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        child: pw.Row(
+                          children: [
+                            pw.Expanded(
+                              flex: 8,
+                              child: pw.Text(
+                                'Delivery Charges',
+                                style: const pw.TextStyle(fontSize: 9),
+                              ),
+                            ),
+                            pw.Expanded(
+                              flex: 6,
+                              child: pw.Text(
+                                'Rs${deliveryCharges.toStringAsFixed(0)}',
+                                style: const pw.TextStyle(fontSize: 9),
+                                textAlign: pw.TextAlign.center,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    if (advanceAmount > 0)
+                      pw.Container(
+                        color: PdfColors.white,
+                        padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        child: pw.Row(
+                          children: [
+                            pw.Expanded(
+                              flex: 8,
+                              child: pw.Text(
+                                'Advance Paid',
+                                style: const pw.TextStyle(fontSize: 9),
+                              ),
+                            ),
+                            pw.Expanded(
+                              flex: 6,
+                              child: pw.Text(
+                                '-Rs${advanceAmount.toStringAsFixed(0)}',
+                                style: const pw.TextStyle(
+                                  fontSize: 9,
+                                  color: PdfColors.red,
+                                ),
+                                textAlign: pw.TextAlign.center,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    pw.Container(
+                      color: PdfColors.green100,
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      child: pw.Row(
+                        children: [
+                          pw.Expanded(
+                            flex: 8,
+                            child: pw.Text(
+                              'GRAND TOTAL',
+                              style: pw.TextStyle(
+                                fontSize: 11,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.green900,
+                              ),
+                            ),
+                          ),
+                          pw.Expanded(
+                            flex: 6,
+                            child: pw.Text(
+                              'Rs${grandTotal.toStringAsFixed(0)}',
+                              style: pw.TextStyle(
+                                fontSize: 11,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.green900,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              pw.SizedBox(height: 2),
+
               pw.Center(
                 child: pw.Text(
                   'All Rights Reserved © Dimple Packaging Pvt. Ltd.',
                   style: pw.TextStyle(
                     fontSize: 12,
                     fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.yellow700,
+                    color: PdfColors.blue,
                   ),
                   textAlign: pw.TextAlign.center,
                 ),
               ),
+
               if (termsLines.isNotEmpty)
                 pw.Container(
                   width: double.infinity,
-                  margin: const pw.EdgeInsets.only(top: 12),
-                  padding: const pw.EdgeInsets.all(14),
+                 // margin: const pw.EdgeInsets.only(top: 1),
+                  padding: const pw.EdgeInsets.all(12),
                   decoration: pw.BoxDecoration(
                     border: pw.Border.all(color: PdfColors.grey700),
                     borderRadius: pw.BorderRadius.circular(10),
@@ -2277,11 +2687,80 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                           color: PdfColors.red800,
                         ),
                       ),
-                      pw.SizedBox(height: 6),
+                   pw.SizedBox(height: 1),
+
+// ── Bank Details Section ─────────────────────
+pw.Container(
+  padding: const pw.EdgeInsets.all(6),
+  decoration: pw.BoxDecoration(
+    border: pw.Border.all(color: PdfColors.grey400),
+    borderRadius: pw.BorderRadius.circular(8),
+  ),
+  child: pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+
+      pw.Expanded(
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+
+            pw.Text(
+              'Bank Details',
+              style: pw.TextStyle(
+                fontSize: 8,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue800,
+              ),
+            ),
+
+            pw.SizedBox(height: 1),
+
+            _pdfInfoRow(
+              'Account Title',
+              'DIMPLE PACKAGING PRIVATE LIMITED',
+            ),
+
+            _pdfInfoRow(
+              'Account Number',
+              '924030018463563',
+            ),
+
+            _pdfInfoRow(
+              'IFSC',
+              'UTIB0000042',
+            ),
+
+            _pdfInfoRow(
+              'Bank',
+              'Axis Bank Ltd., Mall Road, Ludhiana',
+            ),
+
+            _pdfInfoRow(
+              'SWIFT',
+              'AXISINBB042',
+            ),
+          ],
+        ),
+      ),
+
+      pw.SizedBox(width: 10),
+
+      pw.Container(
+        width: 90,
+        height: 80,
+        child: pw.Image(qrImage),
+      ),
+    ],
+  ),
+),
                       pw.Text(
                         termsLines.join('\n'),
                         textAlign: pw.TextAlign.center,
-                        style: const pw.TextStyle(fontSize: 11, lineSpacing: 3),
+                        style: const pw.TextStyle(
+                          fontSize: 11,
+                          lineSpacing: 1.1,
+                        ),
                       ),
                     ],
                   ),
@@ -2294,8 +2773,10 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       if (mounted) Navigator.pop(context);
 
       await Printing.layoutPdf(
-        onLayout: (format) async => pdf.save(),
-        name: 'SalesOrder_${data['salesOrderNo']}.pdf',
+        onLayout: (_) async => pdf.save(),
+        name: withHsn
+            ? 'SalesOrder_${data['salesOrderNo']}_WithHSN.pdf'
+            : 'SalesOrder_${data['salesOrderNo']}.pdf',
       );
     } catch (e) {
       if (mounted) Navigator.pop(context);
@@ -2307,478 +2788,19 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     }
   }
 
-  // -----------------------------------------------------------------------
-  // JPG GENERATION (shares PDF as fallback via share sheet)
-  // -----------------------------------------------------------------------
-  Future<void> _generateJPG(Map<String, dynamic> data) async {
-    try {
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => const Center(
-            child: Card(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('Generating JPG...'),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-
-      final pdf = pw.Document();
-
-      pw.ImageProvider? logoImage;
-      try {
-        final ByteData logoData = await rootBundle.load('assets/dpl.png');
-        logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
-      } catch (e) {
-        debugPrint('Logo not found: $e');
-      }
-
-      // Download ALL product images with timeout
-      List products = [];
-
-      final rawProducts = data['products'];
-
-      if (rawProducts is List) {
-        products = rawProducts;
-      } else if (rawProducts is Map) {
-        products = [rawProducts];
-      }
-      final List<Map<String, dynamic>> productsWithImages = [];
-
-      for (var product in products) {
-        final images = product['images'] is List ? product['images'] : [];
-        final List<pw.MemoryImage> pdfImages = [];
-
-        for (var imgUrl in images) {
-          try {
-            final response = await http
-                .get(Uri.parse(imgUrl))
-                .timeout(const Duration(seconds: 3));
-            if (response.statusCode == 200) {
-              pdfImages.add(pw.MemoryImage(response.bodyBytes));
-            }
-          } catch (_) {
-            // skip
-          }
-        }
-
-        final double qty =
-            double.tryParse(product['quantity']?.toString() ?? '0') ?? 0;
-
-        final double rate =
-            double.tryParse(product['price']?.toString() ?? '0') ?? 0;
-        final double amount = qty * rate;
-
-        productsWithImages.add({
-          'productName': product['productName'] ?? 'N/A',
-          'productCategory': product['productCategory'] ?? '',
-          'quantity': qty.toStringAsFixed(0),
-          'price': rate.toStringAsFixed(2),
-          'amount': amount.toStringAsFixed(0),
-          'remarks': product['remarks'] ?? '',
-          'pdfImages': pdfImages,
-        });
-      }
-
-      // Pre-calc totals
-      double subTotal = 0;
-      for (var p in productsWithImages) {
-        subTotal += double.parse(p['amount']);
-      }
-      final double gstPercent =
-          double.tryParse(data['gstPercent']?.toString() ?? '0') ?? 0;
-      final double gstAmount = subTotal * (gstPercent / 100);
-      final double deliveryCharges =
-          double.tryParse(data['deliveryCharges']?.toString() ?? '0') ?? 0;
-      final double advanceAmount =
-          double.tryParse(data['advanceAmount']?.toString() ?? '0') ?? 0;
-      final double grandTotal =
-          subTotal + gstAmount + deliveryCharges - advanceAmount;
-
-      // Date helpers
-      String orderDateStr = 'N/A';
-      if (data['orderDate'] != null && data['orderDate'] is Timestamp) {
-        orderDateStr = DateFormat(
-          'dd-MM-yyyy',
-        ).format((data['orderDate'] as Timestamp).toDate());
-      }
-      String dispatchDateStr = 'N/A';
-      if (data['deliveryDate'] != null && data['deliveryDate'] is Timestamp) {
-        dispatchDateStr = DateFormat(
-          'dd-MM-yyyy',
-        ).format((data['deliveryDate'] as Timestamp).toDate());
-      }
-
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(32),
-          build: (pw.Context context) {
-            return [
-              // ── Logo + Company Header ─────────────────────────────────
-              pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.center,
-                children: [
-                  if (logoImage != null)
-                    pw.Container(
-                      width: 80,
-                      height: 80,
-                      child: pw.Image(logoImage),
-                    ),
-                  pw.SizedBox(width: 15),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'DIMPLE PACKAGING PVT. LTD.',
-                        style: pw.TextStyle(
-                          fontSize: 18,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.teal900,
-                        ),
-                      ),
-                      pw.SizedBox(height: 5),
-                      pw.Text(
-                        'Grand Trunk Rd, near Navdeep Resorts, adjoining Sidak Resorts,\n'
-                        'West, Bhattian Ludhiana, Punjab - 141008\nContact No.: 9872518000, 7888696774',
-                        style: const pw.TextStyle(fontSize: 10),
-                      ),
-                      pw.SizedBox(height: 3),
-                      pw.Text(
-                        'GST No.: 03AADCD5371K1ZP     PAN No.: AADCD5371K',
-                        style: const pw.TextStyle(fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 10),
-              pw.Divider(thickness: 1),
-
-              // ── Centered title ────────────────────────────────────────
-              pw.Center(
-                child: pw.Text(
-                  'SALES ORDER',
-                  style: pw.TextStyle(
-                    fontSize: 22,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.blue700,
-                  ),
-                ),
-              ),
-              pw.SizedBox(height: 6),
-              pw.Text(
-                'Sales Order: ${data['salesOrderNo'] ?? 'N/A'}',
-                style: pw.TextStyle(
-                  fontSize: 16,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(height: 10),
-
-              // ── Single bordered info container ─────────────────────────
-              pw.Container(
-                padding: const pw.EdgeInsets.all(14),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey400),
-                  borderRadius: pw.BorderRadius.circular(8),
-                ),
-                child: pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Expanded(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            'CUSTOMER INFORMATION',
-                            style: pw.TextStyle(
-                              fontSize: 14,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.blue700,
-                            ),
-                          ),
-                          pw.Divider(),
-                          _pdfInfoRow(
-                            'Customer',
-                            data['customerName'] ?? 'N/A',
-                          ),
-                          _pdfInfoRow('Phone', data['phone'] ?? 'N/A'),
-                          _pdfInfoRow('Location', data['location'] ?? 'N/A'),
-                          _pdfInfoRow(
-                            'Sales Person',
-                            data['salesPerson'] ?? 'N/A',
-                          ),
-                        ],
-                      ),
-                    ),
-                    pw.SizedBox(width: 12),
-                    pw.Expanded(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            'ORDER DETAILS',
-                            style: pw.TextStyle(
-                              fontSize: 14,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.blue700,
-                            ),
-                          ),
-                          pw.Divider(),
-                          _pdfInfoRow('Order Date', orderDateStr),
-                          _pdfInfoRow('Dispatch Date', dispatchDateStr),
-                          _pdfInfoRow('Status', data['status'] ?? 'Pending'),
-                          _pdfInfoRow('Order Location', data['unit'] ?? 'N/A'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 15),
-
-              // ── Products Table ──────────────────────────────────────────
-              pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.black, width: 0.8),
-                columnWidths: {
-                  0: const pw.FixedColumnWidth(25),
-                  1: const pw.FlexColumnWidth(1.8),
-                  2: const pw.FlexColumnWidth(4.0),
-                  3: const pw.FixedColumnWidth(40),
-                  4: const pw.FixedColumnWidth(40),
-                  5: const pw.FixedColumnWidth(60),
-                },
-                children: [
-                  // Header — teal800
-                  pw.TableRow(
-                    decoration: const pw.BoxDecoration(
-                      color: PdfColors.teal800,
-                    ),
-                    children: [
-                      _pdfTableHeader('Sr.'),
-                      _pdfTableHeader('SUMMARY'),
-                      _pdfTableHeader('DETAILS'),
-                      _pdfTableHeader('QTY'),
-                      _pdfTableHeader('RATE'),
-                      _pdfTableHeader('AMOUNT'),
-                    ],
-                  ),
-                  // Product rows
-                  ...productsWithImages.asMap().entries.map((entry) {
-                    final idx = entry.key;
-                    final product = entry.value;
-                    final List<pw.MemoryImage> imgs =
-                        product['pdfImages'] as List<pw.MemoryImage>;
-
-                    return pw.TableRow(
-                      children: [
-                        _pdfTableCell('${idx + 1}'),
-                        // SUMMARY
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Text(
-                            product['productName'],
-                            style: pw.TextStyle(
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        // DETAILS — images + remarks
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              if (imgs.isNotEmpty) buildImageGrid(imgs),
-                              if (imgs.isNotEmpty) pw.SizedBox(height: 6),
-                              if (product['remarks'].toString().isNotEmpty)
-                                pw.Text(
-                                  product['remarks'],
-                                  style: const pw.TextStyle(
-                                    fontSize: 12,
-                                    color: PdfColors.red800,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        _pdfTableCell(product['quantity']),
-                        _pdfTableCell(product['price']),
-                        _pdfTableCell(product['amount']),
-                      ],
-                    );
-                  }),
-                  // SUB TOTAL
-                  pw.TableRow(
-                    children: [
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      _pdfTableCell('SUB TOTAL', isBold: true),
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(4),
-                        child: pw.Text(
-                          subTotal.toStringAsFixed(0),
-                          textAlign: pw.TextAlign.center,
-                          style: const pw.TextStyle(fontSize: 10),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // GST
-                  pw.TableRow(
-                    children: [
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      _pdfTableCell(
-                        'GST @ ${gstPercent.toStringAsFixed(0)}%',
-                        isBold: true,
-                      ),
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(4),
-                        child: pw.Text(
-                          gstAmount.toStringAsFixed(0),
-                          textAlign: pw.TextAlign.center,
-                          style: const pw.TextStyle(fontSize: 10),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Delivery
-                  if (deliveryCharges > 0)
-                    pw.TableRow(
-                      children: [
-                        _pdfTableCell(''),
-                        _pdfTableCell(''),
-                        _pdfTableCell('DELIVERY', isBold: true),
-                        _pdfTableCell(''),
-                        _pdfTableCell(''),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Text(
-                            deliveryCharges.toStringAsFixed(0),
-                            textAlign: pw.TextAlign.center,
-                            style: const pw.TextStyle(fontSize: 10),
-                          ),
-                        ),
-                      ],
-                    ),
-                  // Advance
-                  if (advanceAmount > 0)
-                    pw.TableRow(
-                      children: [
-                        _pdfTableCell(''),
-                        _pdfTableCell(''),
-                        _pdfTableCell('ADVANCE', isBold: true),
-                        _pdfTableCell(''),
-                        _pdfTableCell(''),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Text(
-                            '-${advanceAmount.toStringAsFixed(0)}',
-                            textAlign: pw.TextAlign.center,
-                            style: const pw.TextStyle(fontSize: 10),
-                          ),
-                        ),
-                      ],
-                    ),
-                  // GRAND TOTAL
-                  pw.TableRow(
-                    decoration: const pw.BoxDecoration(
-                      color: PdfColors.grey300,
-                    ),
-                    children: [
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      _pdfTableCell('GRAND TOTAL', isBold: true, fontSize: 12),
-                      _pdfTableCell(''),
-                      _pdfTableCell(''),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(4),
-                        child: pw.Text(
-                          grandTotal.toStringAsFixed(0),
-                          textAlign: pw.TextAlign.center,
-                          style: pw.TextStyle(
-                            fontSize: 12,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 1),
-              pw.Divider(thickness: 1, color: PdfColors.black),
-
-              // ── Footer ────────────────────────────────────────────────
-              pw.Center(
-                child: pw.Text(
-                  'All Rights Reserved © Dimple Packaging Pvt. Ltd.\n'
-                  'G.S.T., Packing & Freight Will Be Extra',
-                  style: pw.TextStyle(
-                    fontSize: 12,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.yellow700,
-                  ),
-                  textAlign: pw.TextAlign.center,
-                ),
-              ),
-            ];
-          },
-        ),
-      );
-
-      final pdfData = await pdf.save();
-
-      if (mounted) Navigator.pop(context);
-
-      await Printing.sharePdf(
-        bytes: pdfData,
-        filename: 'SalesOrder_${data['salesOrderNo']}.pdf',
-      );
-    } catch (e) {
-      if (mounted) Navigator.pop(context);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error generating JPG: $e')));
-      }
-    }
-  }
-
-  // -----------------------------------------------------------------------
-  // PDF HELPER WIDGETS
-  // -----------------------------------------------------------------------
   pw.Widget _pdfInfoRow(String label, String value) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 2),
       child: pw.Row(
         children: [
           pw.SizedBox(
-            width: 120,
+            width:70,
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold,fontSize: 8 ),
             ),
           ),
-          pw.Expanded(child: pw.Text(value)),
+          pw.Expanded(child: pw.Text(value, style: const pw.TextStyle(fontSize: 8))),
         ],
       ),
     );
@@ -2805,22 +2827,21 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     String text, {
     bool isBold = false,
     double fontSize = 11,
-    bool center = true,
   }) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(4),
       child: pw.Text(
         text,
-        style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold),
-        textAlign: center ? pw.TextAlign.center : pw.TextAlign.left,
+        style: pw.TextStyle(
+          fontSize: fontSize,
+          fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
+        textAlign: pw.TextAlign.center,
         maxLines: 3,
       ),
     );
   }
 
-  // -----------------------------------------------------------------------
-  // DISPOSE
-  // -----------------------------------------------------------------------
   @override
   void dispose() {
     _searchController.dispose();
@@ -2828,19 +2849,17 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   }
 }
 
-// ==========================================================================
+// =============================================================================
 // EDIT ORDER SCREEN
-// ==========================================================================
+// =============================================================================
 class EditOrderScreen extends StatefulWidget {
   final String orderId;
   final Map<String, dynamic> orderData;
-
   const EditOrderScreen({
     super.key,
     required this.orderId,
     required this.orderData,
   });
-
   @override
   State<EditOrderScreen> createState() => _EditOrderScreenState();
 }
@@ -2855,8 +2874,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   late TextEditingController _notesController;
   late TextEditingController _gstNumberController;
 
-  double _gstPercent = 5.0;
-  final List<double> _gstOptions = [5.0, 12.0, 18.0];
   late DateTime _selectedDate;
   late String _selectedPriority;
   String? _selectedSalesPerson;
@@ -2865,6 +2882,316 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
   String? _selectedStatus;
   double _advanceAmount = 0.0;
   double _deliveryCharges = 0.0;
+  String? _dispatchType;
+
+  final List<String> _statusOptions = [
+    'Pending',
+    'Processing',
+    'Completed',
+    'Cancelled',
+  ];
+  final List<String> _units = [
+    'Unit 1',
+    'Unit 2',
+    'Meena Bazar',
+    'College Road',
+  ];
+
+  // ─── UPDATED: Added Laddu Paper ───────────────────────────────────────────
+  final List<String> _productCategories = [
+    'MDF',
+    'Kappa Box (Gora)',
+    'Packaging',
+    'Shagun Envelopes',
+    'Rigid Box (unit 2 Hussainpura)',
+    'Laddu Paper',
+    'Others',
+  ];
+
+  final List<String> _salesPersons = [
+    "Abhijit Sinha",
+    "Komal Sir",
+    "Ajay Talwar",
+    "Amarjit Singh",
+    "Ashish",
+    "Harjap ji",
+    "Gunnet Singh",
+    "Hardeep Singh",
+    "Jagdish Suri",
+    "Karan",
+    "Krishna Arora",
+    "Kuldeep Singh",
+    "Neeraj Batta",
+    "Prabhu Dayal",
+    "Rajiv Markanda",
+    "Raju",
+    "Sanjeev Jain",
+    "Sumeet narula",
+    "Sunny Kalra",
+    "Others",
+  ];
+  final List<String> _dispatchOptions = ['Transport', 'Vehicle'];
+
+  List<Map<String, dynamic>> _products = [];
+  bool _isLoading = false;
+  final ImagePicker _picker = ImagePicker();
+
+  String generateProductCode(int index) {
+    String code = '';
+    int num = index;
+    do {
+      code = String.fromCharCode(65 + (num % 26)) + code;
+      num = (num ~/ 26) - 1;
+    } while (num >= 0);
+    return code;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeControllers();
+    _loadProductsFromOrder();
+    _dispatchType = widget.orderData['dispatchType'];
+  }
+
+  void _initializeControllers() {
+    final data = widget.orderData;
+    _customerNameController = TextEditingController(
+      text: data['customerName'] ?? '',
+    );
+    _companyNameController = TextEditingController(
+      text: data['companyName'] ?? '',
+    );
+    _phoneController = TextEditingController(text: data['phone'] ?? '');
+    _emailController = TextEditingController(text: data['email'] ?? '');
+    _locationController = TextEditingController(text: data['location'] ?? '');
+    _notesController = TextEditingController(text: data['notes'] ?? '');
+    _gstNumberController = TextEditingController(
+      text: data['customerGstNumber'] ?? '',
+    );
+    _selectedDate =
+        (data['deliveryDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+    _selectedPriority = data['priority'] ?? 'Medium';
+    final savedSales = data['salesPerson'];
+    if (_salesPersons.contains(savedSales)) {
+      _selectedSalesPerson = savedSales;
+    } else {
+      _selectedSalesPerson = 'Others';
+      _customSalesPerson = savedSales;
+    }
+    _selectedUnit = data['unit'];
+    _selectedStatus = data['status'] ?? 'Pending';
+    _advanceAmount = (data['advanceAmount'] ?? 0).toDouble();
+    _deliveryCharges = (data['deliveryCharges'] ?? 0).toDouble();
+  }
+
+  void _loadProductsFromOrder() {
+    final rawProducts = widget.orderData['products'];
+    List productsList = rawProducts is List
+        ? rawProducts
+        : (rawProducts is Map ? [rawProducts] : []);
+
+    _products = productsList.map((p) {
+      final category = p['productCategory'] ?? p['category'] ?? 'MDF';
+      final savedGst = p['gstPercent'];
+      final gstPct = savedGst != null
+          ? (savedGst as num).toDouble()
+          : _gstPctForCategory(category);
+      return {
+        'code': p['productCode'] ?? p['code'] ?? 'A',
+        'category': category,
+        'gstPercent': gstPct,
+        // ── UPDATED: Load saved hsnCode ───────────────────────────────
+        'hsnCode': p['hsnCode']?.toString() ?? '',
+        'name': TextEditingController(
+          text: p['productName'] ?? p['name'] ?? '',
+        ),
+        'quantity': TextEditingController(text: '${p['quantity'] ?? 0}'),
+        'price': TextEditingController(text: '${p['price'] ?? 0}'),
+        'remarks': TextEditingController(text: p['remarks'] ?? ''),
+        'images': <XFile>[],
+        'fetchedImages': p['images'] is List
+            ? List<String>.from(p['images'])
+            : <String>[],
+      };
+    }).toList();
+
+    if (_products.isEmpty) {
+      _products.add({
+        'code': 'A',
+        'category': 'MDF',
+        'gstPercent': 18.0,
+        'hsnCode': '',
+        'name': TextEditingController(),
+        'quantity': TextEditingController(),
+        'price': TextEditingController(),
+        'remarks': TextEditingController(),
+        'images': <XFile>[],
+        'fetchedImages': <String>[],
+      });
+    }
+  }
+
+  double _productSubTotal(Map<String, dynamic> item) {
+    final qty = double.tryParse(item['quantity']!.text) ?? 0;
+    final price = double.tryParse(item['price']!.text) ?? 0;
+    return qty * price;
+  }
+
+  double _productGstAmt(Map<String, dynamic> item) {
+    final gstPct =
+        item['gstPercent'] as double? ?? _gstPctForCategory(item['category']);
+    return _productSubTotal(item) * gstPct / 100;
+  }
+
+  double get _subTotal =>
+      _products.fold(0.0, (s, item) => s + _productSubTotal(item));
+  double get _totalGst =>
+      _products.fold(0.0, (s, item) => s + _productGstAmt(item));
+  double get _grossTotal => _subTotal + _totalGst + _deliveryCharges;
+  double get _finalTotal =>
+      (_grossTotal - _advanceAmount).clamp(0, double.infinity);
+
+  Future<String?> _uploadImageToStorage(
+    XFile imageFile,
+    String productName,
+  ) async {
+    try {
+      final ref = FirebaseStorage.instance.ref().child(
+        'order_products/$productName/${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      if (kIsWeb) {
+        final bytes = await imageFile.readAsBytes();
+        await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+      } else {
+        await ref.putFile(File(imageFile.path));
+      }
+      return await ref.getDownloadURL();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> _updateOrder() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+    try {
+      final List<Map<String, dynamic>> productList = [];
+      for (var item in _products) {
+        final List<String> imageUrls = List<String>.from(
+          item['fetchedImages'] ?? [],
+        );
+        for (var img in item['images']) {
+          final url = await _uploadImageToStorage(img, item['name']!.text);
+          if (url != null) imageUrls.add(url);
+        }
+        final qty = double.tryParse(item['quantity']!.text) ?? 0;
+        final price = double.tryParse(item['price']!.text) ?? 0;
+        final gstPct = item['gstPercent'] as double;
+        final subAmount = qty * price;
+        final gstAmt = subAmount * gstPct / 100;
+
+        // ── UPDATED: Save hsnCode on update ───────────────────────────
+        productList.add({
+          'productCode': item['code'],
+          'productCategory': item['category'],
+          'productName': item['name']!.text,
+          'hsnCode': item['hsnCode'] ?? '',
+          'quantity': qty,
+          'price': price,
+          'subAmount': subAmount,
+          'gstPercent': gstPct,
+          'gstAmount': gstAmt,
+          'amount': subAmount + gstAmt,
+          'remarks': item['remarks']!.text,
+          'images': imageUrls,
+        });
+      }
+
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(widget.orderId)
+          .update({
+            'customerName': _customerNameController.text,
+            'companyName': _companyNameController.text,
+            'phone': _phoneController.text,
+            'email': _emailController.text,
+            'customerGstNumber': _gstNumberController.text,
+            'location': _locationController.text,
+            'unit': _selectedUnit,
+            'dispatchType': _dispatchType,
+            'salesPerson': _selectedSalesPerson == 'Others'
+                ? _customSalesPerson
+                : _selectedSalesPerson,
+            'products': productList,
+            'advanceAmount': _advanceAmount,
+            'deliveryCharges': _deliveryCharges,
+            'subTotal': _subTotal,
+            'totalGstAmount': _totalGst,
+            'grossTotal': _grossTotal,
+            'grandTotal': _finalTotal,
+            'deliveryDate': _selectedDate,
+            'priority': _selectedPriority,
+            'notes': _notesController.text,
+            'status': _selectedStatus,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Order updated successfully!'),
+            backgroundColor: Color(0xFF4CAF50),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _addProduct() {
+    setState(() {
+      _products.add({
+        'code': generateProductCode(_products.length),
+        'category': 'MDF',
+        'gstPercent': 18.0,
+        'hsnCode': '',
+        'name': TextEditingController(),
+        'quantity': TextEditingController(),
+        'price': TextEditingController(),
+        'remarks': TextEditingController(),
+        'images': <XFile>[],
+        'fetchedImages': <String>[],
+      });
+    });
+  }
+
+  void _removeProduct(int index) {
+    if (_products.length <= 1) return;
+    _products[index]['name'].dispose();
+    _products[index]['quantity'].dispose();
+    _products[index]['price'].dispose();
+    _products[index]['remarks'].dispose();
+    setState(() {
+      _products.removeAt(index);
+      for (int i = 0; i < _products.length; i++)
+        _products[i]['code'] = generateProductCode(i);
+    });
+  }
+
+  Future<void> _pickProductImages(int index) async {
+    final files = await _picker.pickMultiImage(imageQuality: 85);
+    if (files.isNotEmpty)
+      setState(() => _products[index]['images'].addAll(files));
+  }
 
   void _showFullScreenImage(String imageUrl) {
     showDialog(
@@ -2899,329 +3226,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     );
   }
 
-  final List<String> _statusOptions = [
-    'Pending',
-    'Processing',
-    'Completed',
-    'Cancelled',
-  ];
-  final List<String> _units = [
-    'Unit 1',
-    'Unit 2',
-    'Meena Bazar',
-    'College Road',
-  ];
-  final List<String> _productCategories = [
-    'MDF',
-    'Kappa Box (Gora)',
-    'Packaging',
-    'Shagun Envelope',
-    'Rigid Box (unit 2 Hussainpura)',
-    'Others',
-  ];
-  final List<String> _salesPersons = [
-    "Abhijit Sinha",
-    "Komal Sir",
-    "Ajay Talwar",
-    "Amarjit Singh",
-    "Ashish",
-    "Harjap ji",
-    "Gunnet Singh",
-    "Hardeep Singh",
-    "Jagdish Suri",
-    "Karan",
-    "Krishna Arora",
-    "Kuldeep Singh",
-    "Neeraj Batta",
-    "Prabhu Dayal",
-    "Rajiv Markanda",
-    "Raju",
-    "Sanjeev Jain",
-    "Sumeet narula",
-    "Sunny Kalra",
-    "Others",
-  ];
-
-  String? _dispatchType;
-
-  final List<String> _dispatchOptions = ['Transport', 'Vehicle'];
-  List<Map<String, dynamic>> _products = [];
-  bool _isLoading = false;
-  final ImagePicker _picker = ImagePicker();
-  String generateProductCode(int index) {
-    String code = '';
-    int num = index;
-
-    do {
-      code = String.fromCharCode(65 + (num % 26)) + code;
-      num = (num ~/ 26) - 1;
-    } while (num >= 0);
-
-    return code;
-  }
-
-  // -----------------------------------------------------------------------
-  @override
-  void initState() {
-    super.initState();
-    _initializeControllers();
-    _loadProductsFromOrder();
-    _dispatchType = widget.orderData['dispatchType'];
-  }
-
-  void _initializeControllers() {
-    final data = widget.orderData;
-    _customerNameController = TextEditingController(
-      text: data['customerName'] ?? '',
-    );
-    _companyNameController = TextEditingController(
-      text: data['companyName'] ?? '',
-    );
-    _phoneController = TextEditingController(text: data['phone'] ?? '');
-    _emailController = TextEditingController(text: data['email'] ?? '');
-    _locationController = TextEditingController(text: data['location'] ?? '');
-    _notesController = TextEditingController(text: data['notes'] ?? '');
-    _gstNumberController = TextEditingController(
-      text: data['customerGstNumber'] ?? '',
-    );
-
-    _gstPercent = (data['gstPercent'] ?? 5.0).toDouble();
-    _selectedDate =
-        (data['deliveryDate'] as Timestamp?)?.toDate() ?? DateTime.now();
-    _selectedPriority = data['priority'] ?? 'Medium';
-    final savedSales = data['salesPerson'];
-
-    if (_salesPersons.contains(savedSales)) {
-      _selectedSalesPerson = savedSales;
-    } else {
-      _selectedSalesPerson = 'Others';
-      _customSalesPerson = savedSales;
-    }
-    _selectedUnit = data['unit'];
-    _selectedStatus = data['status'] ?? 'Pending';
-    _advanceAmount = (data['advanceAmount'] ?? 0).toDouble();
-    _deliveryCharges = (data['deliveryCharges'] ?? 0).toDouble();
-  }
-
-  void _loadProductsFromOrder() {
-    final rawProducts = widget.orderData['products'];
-
-    List productsList = [];
-
-    if (rawProducts is List) {
-      productsList = rawProducts;
-    } else if (rawProducts is Map) {
-      productsList = [rawProducts];
-    }
-
-    _products = productsList.map((p) {
-      return {
-        'code': p['productCode'] ?? p['code'] ?? 'A',
-        'category': p['productCategory'] ?? p['category'] ?? 'MDF',
-
-        'name': TextEditingController(
-          text: p['productName'] ?? p['name'] ?? '',
-        ),
-
-        'quantity': TextEditingController(
-          text: '${p['quantity'] ?? p['qty'] ?? 0}',
-        ),
-
-        'price': TextEditingController(text: '${p['price'] ?? p['rate'] ?? 0}'),
-
-        'remarks': TextEditingController(text: p['remarks'] ?? ''),
-
-        'images': <XFile>[],
-
-        'fetchedImages': p['images'] is List
-            ? List<String>.from(p['images'])
-            : <String>[],
-      };
-    }).toList();
-
-    if (_products.isEmpty) {
-      _products.add({
-        'code': 'A',
-        'category': 'MDF',
-        'name': TextEditingController(),
-        'quantity': TextEditingController(),
-        'price': TextEditingController(),
-        'remarks': TextEditingController(),
-        'images': <XFile>[],
-        'fetchedImages': <String>[],
-      });
-    }
-  }
-
-  // ── Computed totals ──────────────────────────────────────────────────
-  double get _subTotal {
-    double total = 0;
-    for (var item in _products) {
-      final qty = double.tryParse(item['quantity']!.text) ?? 0;
-      final price = double.tryParse(item['price']!.text) ?? 0;
-      total += qty * price;
-    }
-    return total;
-  }
-
-  double get _gstAmount => _subTotal * _gstPercent / 100;
-  double get _grossTotal => _subTotal + _gstAmount + _deliveryCharges;
-  double get _finalTotal =>
-      (_grossTotal - _advanceAmount).clamp(0, double.infinity);
-
-  // -----------------------------------------------------------------------
-  Future<String?> _uploadImageToStorage(
-    XFile imageFile,
-    String productName,
-  ) async {
-    try {
-      final ref = FirebaseStorage.instance.ref().child(
-        'order_products/$productName/${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-
-      if (kIsWeb) {
-        final bytes = await imageFile.readAsBytes();
-        await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
-      } else {
-        await ref.putFile(File(imageFile.path));
-      }
-
-      return await ref.getDownloadURL();
-    } catch (e) {
-      debugPrint("❌ Image upload failed: $e");
-      return null;
-    }
-  }
-
-  Future<void> _updateOrder() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final List<Map<String, dynamic>> productList = [];
-
-      for (var item in _products) {
-        final List<String> imageUrls = List<String>.from(
-          item['fetchedImages'] ?? [],
-        );
-
-        for (var img in item['images']) {
-          final url = await _uploadImageToStorage(img, item['name']!.text);
-          if (url != null) imageUrls.add(url);
-        }
-
-        final double qty = double.tryParse(item['quantity']!.text) ?? 0;
-
-        final double price = double.tryParse(item['price']!.text) ?? 0;
-
-        final double amount = qty * price;
-
-        productList.add({
-          'productCode': item['code'],
-          'productCategory': item['category'],
-          'productName': item['name']!.text,
-          'quantity': qty,
-          'price': price,
-          'amount': amount,
-          'remarks': item['remarks']!.text,
-          'images': imageUrls,
-        });
-      }
-
-      await FirebaseFirestore.instance
-          .collection('orders')
-          .doc(widget.orderId)
-          .update({
-            'customerName': _customerNameController.text,
-            'companyName': _companyNameController.text,
-            'phone': _phoneController.text,
-            'email': _emailController.text,
-            'customerGstNumber': _gstNumberController.text,
-            'location': _locationController.text,
-            'unit': _selectedUnit,
-            'salesPerson': _selectedSalesPerson == 'Others'
-                ? _customSalesPerson
-                : _selectedSalesPerson,
-            'products': productList,
-            'advanceAmount': _advanceAmount,
-            'deliveryCharges': _deliveryCharges,
-            'taxableAmount': _subTotal,
-            'totalAmount': _subTotal,
-            'gstAmount': _gstAmount,
-            'grandTotal': _finalTotal,
-            'gstPercent': _gstPercent,
-            'deliveryDate': _selectedDate,
-            'priority': _selectedPriority,
-            'notes': _notesController.text,
-            'status': _selectedStatus,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Order updated successfully!'),
-            backgroundColor: Color(0xFF4CAF50),
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _addProduct() {
-    setState(() {
-      final code = generateProductCode(_products.length);
-
-      _products.add({
-        'code': code,
-        'category': 'MDF',
-        'name': TextEditingController(),
-        'quantity': TextEditingController(),
-        'price': TextEditingController(),
-        'remarks': TextEditingController(),
-        'images': <XFile>[],
-        'fetchedImages': <String>[],
-      });
-    });
-  }
-
-  void _removeProduct(int index) {
-    if (_products.length <= 1) return;
-
-    _products[index]['name'].dispose();
-    _products[index]['quantity'].dispose();
-    _products[index]['price'].dispose();
-    _products[index]['remarks'].dispose();
-
-    setState(() {
-      _products.removeAt(index);
-
-      // reindex codes
-      for (int i = 0; i < _products.length; i++) {
-        _products[i]['code'] = generateProductCode(i);
-      }
-    });
-  }
-
-  Future<void> _pickProductImages(int index) async {
-    final files = await _picker.pickMultiImage(imageQuality: 85);
-    if (files.isNotEmpty) {
-      setState(() {
-        _products[index]['images'].addAll(files);
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3243,7 +3247,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // ── Customer Info ───────────────────────────────────────────
             _buildSection('Customer Information', Icons.person, [
               _buildTextField(
                 _customerNameController,
@@ -3274,8 +3277,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
               ),
             ]),
             const SizedBox(height: 16),
-
-            // ── Order Details ───────────────────────────────────────────
             _buildSection('Order Details', Icons.receipt_long, [
               DropdownButtonFormField<String>(
                 value: _selectedUnit,
@@ -3313,7 +3314,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                   onChanged: (v) => _customSalesPerson = v,
                 ),
               const SizedBox(height: 12),
-
               DropdownButtonFormField<String>(
                 value: _selectedStatus,
                 decoration: const InputDecoration(
@@ -3352,19 +3352,13 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
               items: _dispatchOptions
                   .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                   .toList(),
-              onChanged: (val) {
-                setState(() {
-                  _dispatchType = val;
-                });
-              },
+              onChanged: (val) => setState(() => _dispatchType = val),
             ),
             const SizedBox(height: 16),
-
-            // ── Products ────────────────────────────────────────────────
             _buildSection('Products', Icons.inventory, [
-              ..._products.asMap().entries.map((entry) {
-                return _buildProductCard(entry.key, entry.value);
-              }),
+              ..._products.asMap().entries.map(
+                (e) => _buildProductCard(e.key, e.value),
+              ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _addProduct,
@@ -3373,56 +3367,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
               ),
             ]),
             const SizedBox(height: 16),
-
-            // ── Payment ─────────────────────────────────────────────────
-            _buildSection('Payment Details', Icons.payment, [
-              Row(
-                children: [
-                  const Text('GST: '),
-                  DropdownButton<double>(
-                    value: _gstPercent,
-                    items: _gstOptions
-                        .map(
-                          (g) => DropdownMenuItem(
-                            value: g,
-                            child: Text('${g.toInt()}%'),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => _gstPercent = v!),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                initialValue: _deliveryCharges.toString(),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                onChanged: (v) =>
-                    setState(() => _deliveryCharges = double.tryParse(v) ?? 0),
-                decoration: const InputDecoration(
-                  labelText: 'Delivery Charges',
-                  prefixIcon: Icon(Icons.local_shipping),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                initialValue: _advanceAmount.toString(),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                onChanged: (v) =>
-                    setState(() => _advanceAmount = double.tryParse(v) ?? 0),
-                decoration: const InputDecoration(
-                  labelText: 'Advance Amount',
-                  prefixIcon: Icon(Icons.money),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Summary box
+            _buildSection('Payment Summary', Icons.payment, [
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -3436,7 +3381,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                       children: [
                         const Text('Subtotal:'),
                         Text(
-                          '₹${_subTotal.toStringAsFixed(0)}',
+                          'Rs${_subTotal.toStringAsFixed(0)}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -3444,22 +3389,14 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('GST (${_gstPercent.toInt()}%):'),
-                        Text('₹${_gstAmount.toStringAsFixed(0)}'),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Delivery:'),
-                        Text('₹${_deliveryCharges.toStringAsFixed(0)}'),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Advance:'),
-                        Text('-₹${_advanceAmount.toStringAsFixed(0)}'),
+                        const Text('Total GST:'),
+                        Text(
+                          'Rs${_totalGst.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
                       ],
                     ),
                     const Divider(),
@@ -3467,17 +3404,18 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'TOTAL:',
+                          'Grand Total:',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 18,
+                            fontSize: 16,
                           ),
                         ),
                         Text(
-                          '₹${_finalTotal.toStringAsFixed(0)}',
-                          style: const TextStyle(
+                          'Rs${_finalTotal.toStringAsFixed(0)}',
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 18,
+                            fontSize: 16,
+                            color: Colors.green.shade700,
                           ),
                         ),
                       ],
@@ -3486,9 +3424,7 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                 ),
               ),
             ]),
-            const SizedBox(height: 24),
-
-            // ── Submit button ───────────────────────────────────────────
+            const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _isLoading ? null : _updateOrder,
               style: ElevatedButton.styleFrom(
@@ -3515,9 +3451,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // SECTION WRAPPER
-  // -----------------------------------------------------------------------
   Widget _buildSection(String title, IconData icon, List<Widget> children) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -3551,9 +3484,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // TEXT FIELD HELPER
-  // -----------------------------------------------------------------------
   Widget _buildTextField(
     TextEditingController controller,
     String label,
@@ -3573,10 +3503,15 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // PRODUCT CARD
-  // -----------------------------------------------------------------------
+  // ── UPDATED: Product card with Laddu Paper + Others HSN/GST support ────────
   Widget _buildProductCard(int index, Map<String, dynamic> product) {
+    final gstPct =
+        product['gstPercent'] as double? ??
+        _gstPctForCategory(product['category']);
+    final category = product['category'] as String? ?? '';
+    final isLadduPaper = category == 'Laddu Paper';
+    final isOthers = category == 'Others';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -3608,8 +3543,148 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
               items: _productCategories
                   .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                   .toList(),
-              onChanged: (v) => setState(() => product['category'] = v),
+              onChanged: (v) => setState(() {
+                product['category'] = v;
+                product['gstPercent'] = _gstPctForCategory(v);
+                // Auto-set HSN for known categories
+                if (v != 'Others') {
+                  product['hsnCode'] = v == 'Laddu Paper' ? '48062000' : '';
+                }
+              }),
             ),
+
+            // ── Laddu Paper: fixed info banner ─────────────────────────
+            if (isLadduPaper) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: Colors.orange.shade700,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'HSN Code: 48062000',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          'GST: 18% — Fixed for Laddu Paper',
+                          style: TextStyle(
+                            color: Colors.orange.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // ── Others: custom HSN + GST selector ─────────────────────
+            if (isOthers) ...[
+              const SizedBox(height: 10),
+              TextFormField(
+                initialValue: product['hsnCode'] ?? '',
+                decoration: const InputDecoration(
+                  labelText: 'HSN Code (Optional)',
+                  hintText: 'e.g. 48062000',
+                  prefixIcon: Icon(Icons.tag_rounded),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (val) =>
+                    setState(() => product['hsnCode'] = val.trim()),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Select GST Rate',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue.shade700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [5.0, 18.0].map((pct) {
+                        final isActive = gstPct == pct;
+                        final btnColor = pct == 18.0
+                            ? Colors.orange.shade600
+                            : Colors.blue.shade600;
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () =>
+                                setState(() => product['gstPercent'] = pct),
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                gradient: isActive
+                                    ? LinearGradient(
+                                        colors: [
+                                          btnColor.withOpacity(0.85),
+                                          btnColor,
+                                        ],
+                                      )
+                                    : null,
+                                color: isActive ? null : Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isActive
+                                      ? Colors.transparent
+                                      : btnColor,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${pct.toInt()}%',
+                                  style: TextStyle(
+                                    color: isActive ? Colors.white : btnColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             const SizedBox(height: 8),
             _buildTextField(
               product['name'],
@@ -3639,7 +3714,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-
                     onChanged: (_) => setState(() {}),
                   ),
                 ),
@@ -3653,7 +3727,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
               icon: const Icon(Icons.add_photo_alternate),
               label: const Text('Add Images'),
             ),
-            // Image previews
             if ((product['fetchedImages'] as List).isNotEmpty ||
                 (product['images'] as List).isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -3661,9 +3734,8 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  // Already-uploaded images
-                  ...(product['fetchedImages'] as List<String>).map((url) {
-                    return Stack(
+                  ...(product['fetchedImages'] as List<String>).map(
+                    (url) => Stack(
                       children: [
                         GestureDetector(
                           onTap: () => _showFullScreenImage(url),
@@ -3683,55 +3755,50 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                               color: Colors.red,
                               size: 20,
                             ),
-                            onPressed: () {
-                              setState(() {
-                                (product['fetchedImages'] as List).remove(url);
-                              });
-                            },
+                            onPressed: () => setState(
+                              () => (product['fetchedImages'] as List).remove(
+                                url,
+                              ),
+                            ),
                           ),
                         ),
                       ],
-                    );
-                  }),
-                  // Newly picked images
-                  ...(product['images'] as List<XFile>).map((file) {
-                    return Stack(
+                    ),
+                  ),
+                  ...(product['images'] as List<XFile>).map(
+                    (file) => Stack(
                       children: [
                         GestureDetector(
-                          onTap: () {
-                            showDialog(
-                              context: context,
-                              barrierColor: Colors.black,
-                              builder: (ctx) => Dialog(
-                                backgroundColor: Colors.transparent,
-                                child: Stack(
-                                  children: [
-                                    Center(
-                                      child: InteractiveViewer(
-                                        minScale: 0.5,
-                                        maxScale: 4.0,
-                                        child: kIsWeb
-                                            ? Image.network(file.path)
-                                            : Image.file(File(file.path)),
-                                      ),
+                          onTap: () => showDialog(
+                            context: context,
+                            barrierColor: Colors.black,
+                            builder: (ctx) => Dialog(
+                              backgroundColor: Colors.transparent,
+                              child: Stack(
+                                children: [
+                                  Center(
+                                    child: InteractiveViewer(
+                                      child: kIsWeb
+                                          ? Image.network(file.path)
+                                          : Image.file(File(file.path)),
                                     ),
-                                    Positioned(
-                                      top: 16,
-                                      right: 16,
-                                      child: IconButton(
-                                        icon: const Icon(
-                                          Icons.close,
-                                          color: Colors.white,
-                                          size: 30,
-                                        ),
-                                        onPressed: () => Navigator.pop(ctx),
+                                  ),
+                                  Positioned(
+                                    top: 16,
+                                    right: 16,
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 30,
                                       ),
+                                      onPressed: () => Navigator.pop(ctx),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            );
-                          },
+                            ),
+                          ),
                           child: kIsWeb
                               ? Image.network(
                                   file.path,
@@ -3755,40 +3822,56 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
                               color: Colors.red,
                               size: 20,
                             ),
-                            onPressed: () {
-                              setState(() {
-                                (product['images'] as List).remove(file);
-                              });
-                            },
+                            onPressed: () => setState(
+                              () => (product['images'] as List).remove(file),
+                            ),
                           ),
                         ),
                       ],
-                    );
-                  }),
+                    ),
+                  ),
                 ],
               ),
             ],
             const SizedBox(height: 8),
-            // Line total
             Align(
               alignment: Alignment.centerRight,
               child: Builder(
                 builder: (context) {
                   final qty = double.tryParse(product['quantity']!.text) ?? 0;
                   final price = double.tryParse(product['price']!.text) ?? 0;
-                  final total = qty * price;
+                  final sub = qty * price;
+                  final gst = sub * gstPct / 100;
                   return Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 6,
+                      vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade100,
+                      gradient: LinearGradient(
+                        colors: [Colors.green.shade400, Colors.green.shade600],
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(
-                      'Total: ₹${total.toStringAsFixed(0)}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Sub: Rs${sub.toStringAsFixed(0)} + GST ${gstPct.toInt()}%: Rs${gst.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                        ),
+                        Text(
+                          'Total: Rs${(sub + gst).toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -3800,9 +3883,6 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     );
   }
 
-  // -----------------------------------------------------------------------
-  // DISPOSE
-  // -----------------------------------------------------------------------
   @override
   void dispose() {
     _customerNameController.dispose();
@@ -3812,42 +3892,26 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     _locationController.dispose();
     _notesController.dispose();
     _gstNumberController.dispose();
-    for (var product in _products) {
-      product['name']!.dispose();
-      product['quantity']!.dispose();
-      product['price']!.dispose();
-      product['remarks']!.dispose();
+    for (var p in _products) {
+      p['name']!.dispose();
+      p['quantity']!.dispose();
+      p['price']!.dispose();
+      p['remarks']!.dispose();
     }
     super.dispose();
   }
 }
 
-// ==========================================================================
-// TOP-LEVEL PDF HELPER — IMAGE GRID (matches JobCardHistoryTab exactly)
-// ==========================================================================
 pw.Widget buildImageGrid(List<pw.MemoryImage> images) {
   if (images.isEmpty) return pw.SizedBox();
-
   const double fixedHeight = 90;
-
-  int columns;
-  if (images.length == 1) {
-    columns = 1;
-  } else if (images.length == 2) {
-    columns = 2;
-  } else {
-    columns = 3;
-  }
-
+  final int columns = images.length == 1 ? 1 : (images.length == 2 ? 2 : 3);
   return pw.SizedBox(
     height: fixedHeight,
     child: pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: List.generate(columns, (index) {
-        if (index >= images.length) {
-          return pw.Expanded(child: pw.SizedBox());
-        }
-
+        if (index >= images.length) return pw.Expanded(child: pw.SizedBox());
         return pw.Expanded(
           child: pw.Padding(
             padding: const pw.EdgeInsets.all(2),

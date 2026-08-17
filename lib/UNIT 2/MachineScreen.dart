@@ -48,12 +48,11 @@ const _kGreen700 = Color(0xFF1B6B3A);
 //  DATA MODELS
 // ══════════════════════════════════════════════════════════
 
-/// Ek product row ka data — doc reference ke saath
 class _ProductEntry {
   final String inventoryDocId;
   final String jobCardNumber;
   final String companyName;
-  final int productIndexInDoc; // us doc ke andar index
+  final int productIndexInDoc;
   final Map<String, dynamic> productData;
   final int dispatchedQty;
   final Map<String, dynamic> fullDocData;
@@ -72,8 +71,21 @@ class _ProductEntry {
 // ══════════════════════════════════════════════════════════
 //  MAIN SCREEN
 // ══════════════════════════════════════════════════════════
-class Unit2MachineScreen extends StatelessWidget {
+class Unit2MachineScreen extends StatefulWidget {
   const Unit2MachineScreen({super.key});
+
+  @override
+  State<Unit2MachineScreen> createState() => _Unit2MachineScreenState();
+}
+
+class _Unit2MachineScreenState extends State<Unit2MachineScreen> {
+  // ── Saare saved machine doc IDs ek baar fetch karo ──────────────────────
+  Future<Set<String>> _fetchSavedKeys() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('unit2MachineProcess')
+        .get();
+    return snap.docs.map((d) => d.id).toSet();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -165,127 +177,124 @@ class Unit2MachineScreen extends StatelessWidget {
 
           final docs = snap.data!.docs;
           if (docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.teal.shade50, Colors.cyan.shade50],
-                      ),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _C.primary.withOpacity(0.3),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _C.primary.withOpacity(0.1),
-                          blurRadius: 16,
+            return _buildEmptyState();
+          }
+
+          // ── FutureBuilder se saved keys fetch karo, phir filter karo ──
+          return FutureBuilder<Set<String>>(
+            future: _fetchSavedKeys(),
+            builder: (context, savedSnap) {
+              if (!savedSnap.hasData) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 52,
+                        height: 52,
+                        child: CircularProgressIndicator(
+                          valueColor: const AlwaysStoppedAnimation(_C.primary),
+                          backgroundColor: Colors.teal.shade100,
+                          strokeWidth: 3,
                         ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.inbox_outlined,
-                      color: _C.primary,
-                      size: 36,
-                    ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        "Checking assignments…",
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    "No Inventory Found",
-                    style: TextStyle(
-                      color: _C.darkText,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    "Add inventory to get started",
-                    style: TextStyle(
-                      color: Colors.grey.shade500,
-                      fontSize: 13.5,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
+                );
+              }
 
-          // ════════════════════════════════════════════════
-          // KEY CHANGE: Saare docs ke saare products ko
-          // productName se group karo (cross-document grouping)
-          // Normalize key: lowercase + collapse whitespace + trim
-          // Taaki "8x8 " aur "8x8" same group mein aayein
-          // ════════════════════════════════════════════════
+              final savedKeys = savedSnap.data!;
 
-          // normalizedKey -> {displayName, entries}
-          final Map<String, String> keyToDisplay = {};
-          final Map<String, List<_ProductEntry>> grouped = {};
+              final Map<String, String> keyToDisplay = {};
+              final Map<String, List<_ProductEntry>> grouped = {};
 
-          String _normalizeKey(String name) =>
-              name.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+              String normalizeKey(String name) =>
+                  name.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 
-          for (final doc in docs) {
-            final data = doc.data() as Map<String, dynamic>;
-List<Map<String, dynamic>> products = [];
+              for (final doc in docs) {
+                final data = doc.data() as Map<String, dynamic>;
 
-if (data['products'] is List && (data['products'] as List).isNotEmpty) {
-  products = List<Map<String, dynamic>>.from(data['products']);
-} else if (data['product'] != null) {
-  products = [Map<String, dynamic>.from(data['product'])];
-}            final dispatchedQty =
-                int.tryParse(data['dispatchedQty']?.toString() ?? '') ?? 0;
+                List<Map<String, dynamic>> products = [];
+                if (data['products'] is List &&
+                    (data['products'] as List).isNotEmpty) {
+                  products = List<Map<String, dynamic>>.from(data['products']);
+                } else if (data['product'] != null) {
+                  products = [Map<String, dynamic>.from(data['product'])];
+                }
 
-            final companyName =
-                (data['companyName']?.toString().trim().isNotEmpty == true
-                    ? data['companyName']?.toString().trim()
-                    : data['customerName']?.toString().trim()) ??
-                '';
+                final dispatchedQty =
+                    int.tryParse(data['dispatchedQty']?.toString() ?? '') ?? 0;
 
-            final jobCardNumber = data['jobCardNumber']?.toString() ?? '';
+                final companyName =
+                    (data['companyName']?.toString().trim().isNotEmpty == true
+                        ? data['companyName']?.toString().trim()
+                        : data['customerName']?.toString().trim()) ??
+                    '';
 
-            for (int i = 0; i < products.length; i++) {
-              final product = Map<String, dynamic>.from(products[i] as Map);
-              final rawName = product['productName']?.toString().trim() ?? '—';
-              final groupKey = _normalizeKey(rawName);
+                final jobCardNumber = data['jobCardNumber']?.toString() ?? '';
 
-              // Pehli baar aane wala display name rakh lo
-              keyToDisplay.putIfAbsent(groupKey, () => rawName);
+                for (int i = 0; i < products.length; i++) {
+                  final product = Map<String, dynamic>.from(products[i] as Map);
+                  final rawName =
+                      product['productName']?.toString().trim() ?? '—';
+                  final groupKey = normalizeKey(rawName);
 
-              grouped
-                  .putIfAbsent(groupKey, () => [])
-                  .add(
-                    _ProductEntry(
-                      inventoryDocId: doc.id,
-                      jobCardNumber: jobCardNumber,
-                      companyName: companyName,
-                      productIndexInDoc: i,
-                      productData: product,
-                      dispatchedQty: dispatchedQty,
-                      fullDocData: data,
-                    ),
+                  // ── KEY FIX: Dono (top + bottom) saved hain toh skip ──
+                  final topDocId = '${doc.id}_${i}_top';
+                  final botDocId = '${doc.id}_${i}_bottom';
+                  if (savedKeys.contains(topDocId) &&
+                      savedKeys.contains(botDocId)) {
+                    continue; // already assigned — list mein nahi dikhao
+                  }
+                  // ────────────────────────────────────────────────────────
+
+                  keyToDisplay.putIfAbsent(groupKey, () => rawName);
+
+                  grouped
+                      .putIfAbsent(groupKey, () => [])
+                      .add(
+                        _ProductEntry(
+                          inventoryDocId: doc.id,
+                          jobCardNumber: jobCardNumber,
+                          companyName: companyName,
+                          productIndexInDoc: i,
+                          productData: product,
+                          dispatchedQty: dispatchedQty,
+                          fullDocData: data,
+                        ),
+                      );
+                }
+              }
+
+              // Agar sab assigned ho gaye
+              if (grouped.isEmpty) {
+                return _buildAllDoneState();
+              }
+
+              final groupKeys = grouped.keys.toList();
+
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+                itemCount: groupKeys.length,
+                itemBuilder: (context, i) {
+                  final key = groupKeys[i];
+                  final entries = grouped[key]!;
+                  final displayName = keyToDisplay[key] ?? key;
+                  return _ProductGroupCard(
+                    productName: displayName,
+                    entries: entries,
+                    // Jab save hota hai toh screen refresh karo
+                    onEntrySaved: () => setState(() {}),
                   );
-            }
-          }
-
-          final groupKeys = grouped.keys.toList();
-
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
-            itemCount: groupKeys.length,
-            itemBuilder: (context, i) {
-              final key = groupKeys[i];
-              final entries = grouped[key]!;
-              // Display name: original casing wala naam use karo
-              final displayName = keyToDisplay[key] ?? key;
-              return _ProductGroupCard(
-                productName: displayName,
-                entries: entries,
+                },
               );
             },
           );
@@ -293,24 +302,114 @@ if (data['products'] is List && (data['products'] as List).isNotEmpty) {
       ),
     );
   }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.teal.shade50, Colors.cyan.shade50],
+              ),
+              shape: BoxShape.circle,
+              border: Border.all(color: _C.primary.withOpacity(0.3), width: 2),
+              boxShadow: [
+                BoxShadow(color: _C.primary.withOpacity(0.1), blurRadius: 16),
+              ],
+            ),
+            child: const Icon(
+              Icons.inbox_outlined,
+              color: _C.primary,
+              size: 36,
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            "No Inventory Found",
+            style: TextStyle(
+              color: _C.darkText,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Add inventory to get started",
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 13.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAllDoneState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.green.shade50, Colors.teal.shade50],
+              ),
+              shape: BoxShape.circle,
+              border: Border.all(color: _C.success.withOpacity(0.5), width: 2),
+              boxShadow: [
+                BoxShadow(color: _C.success.withOpacity(0.15), blurRadius: 16),
+              ],
+            ),
+            child: const Icon(
+              Icons.check_circle_rounded,
+              color: _C.success,
+              size: 40,
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            "All Assigned! ✅",
+            style: TextStyle(
+              color: _C.darkText,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "all products have been assigned to machines",
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 13.5),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════
 //  PRODUCT GROUP CARD
-//  Ek product name ka card — andar multiple customer rows
 // ══════════════════════════════════════════════════════════
 class _ProductGroupCard extends StatefulWidget {
   final String productName;
   final List<_ProductEntry> entries;
+  final VoidCallback onEntrySaved; // ← screen refresh callback
 
-  const _ProductGroupCard({required this.productName, required this.entries});
+  const _ProductGroupCard({
+    required this.productName,
+    required this.entries,
+    required this.onEntrySaved,
+  });
 
   @override
   State<_ProductGroupCard> createState() => _ProductGroupCardState();
 }
 
 class _ProductGroupCardState extends State<_ProductGroupCard> {
-  final Set<int> _savedIndexes = {}; // entries list ke indexes
+  final Set<int> _savedIndexes = {};
   final Set<int> _selected = {};
   bool _showMachinePanel = false;
   bool _loadingSaved = true;
@@ -322,12 +421,10 @@ class _ProductGroupCardState extends State<_ProductGroupCard> {
   }
 
   Future<void> _loadSavedIndexes() async {
-    // Saare unique inventoryDocIds collect karo
     final docIds = widget.entries.map((e) => e.inventoryDocId).toSet().toList();
 
     final Set<String> savedKeys = {};
 
-    // Har doc ke liye saved check karo
     for (final docId in docIds) {
       final snapshot = await FirebaseFirestore.instance
           .collection('unit2MachineProcess')
@@ -336,7 +433,6 @@ class _ProductGroupCardState extends State<_ProductGroupCard> {
 
       for (final d in snapshot.docs) {
         final pName = d['productName']?.toString() ?? '';
-        // key = docId + productName (unique combination)
         savedKeys.add('${docId}_$pName');
       }
     }
@@ -377,7 +473,6 @@ class _ProductGroupCardState extends State<_ProductGroupCard> {
           (int.tryParse(e.productData['quantity']?.toString() ?? '0') ?? 0),
     );
 
-    // Unique customers
     final customers = widget.entries.map((e) => e.companyName).toSet().toList();
 
     return Container(
@@ -449,7 +544,6 @@ class _ProductGroupCardState extends State<_ProductGroupCard> {
                     'Total Qty: $totalQty',
                     _C.success,
                   ),
-                  // Customers badges
                   ...customers.map(
                     (c) => _chip(Icons.business_rounded, c, _C.primary),
                   ),
@@ -1126,6 +1220,8 @@ class _ProductGroupCardState extends State<_ProductGroupCard> {
                         _selected.addAll(savedSet);
                         _showMachinePanel = false;
                       });
+                      // Parent screen ko bhi refresh karo
+                      widget.onEntrySaved();
                     },
                   ),
                 ),
@@ -1213,7 +1309,6 @@ class _ProductGroupCardState extends State<_ProductGroupCard> {
 
 // ══════════════════════════════════════════════════════════
 //  SHARED MACHINE PANEL
-//  Ab multiple entries handle karta hai (cross-doc)
 // ══════════════════════════════════════════════════════════
 class _SharedMachinePanel extends StatefulWidget {
   final String productName;
@@ -1363,7 +1458,6 @@ class _SharedMachinePanelState extends State<_SharedMachinePanel> {
         ),
       );
 
-      // Parent ko saved indexes bhejo
       widget.onSaved(
         Set<int>.from(List.generate(widget.selectedEntries.length, (i) => i)),
       );
@@ -1657,7 +1751,7 @@ class _SharedMachinePanelState extends State<_SharedMachinePanel> {
 }
 
 // ══════════════════════════════════════════════════════════
-//  MACHINE SELECTOR WIDGET  (unchanged)
+//  MACHINE SELECTOR WIDGET
 // ══════════════════════════════════════════════════════════
 class _MachineSelector extends StatelessWidget {
   final String part;

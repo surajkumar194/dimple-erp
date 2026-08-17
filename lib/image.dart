@@ -2,11 +2,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+
 class ImageUploadScreen extends StatefulWidget {
   const ImageUploadScreen({super.key});
   @override
   State<ImageUploadScreen> createState() => _ImageUploadScreenState();
 }
+
 class _ImageUploadScreenState extends State<ImageUploadScreen> {
   final ImagePicker _picker = ImagePicker();
   Uint8List? _imageBytes;

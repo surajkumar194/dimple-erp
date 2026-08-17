@@ -1,4 +1,5 @@
 import 'dart:io' show File;
+import 'package:dimple_erp/ready%20stock/IssueHistoryScreen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,7 +24,6 @@ class StoreStockScreen extends StatefulWidget {
   @override
   _StoreStockScreenState createState() => _StoreStockScreenState();
 }
-
 class _StoreStockScreenState extends State<StoreStockScreen>
     with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -129,9 +129,9 @@ class _StoreStockScreenState extends State<StoreStockScreen>
       if (item['image'] != null && item['image'].toString().isNotEmpty) {
         imageBytes = await _networkImageToBytes(item['image']);
       }
-      final located = int.tryParse(item['located']?.toString() ?? '0') ?? 0;
-      final received = item['received'] ?? 0;
-      final issue = item['issue'] ?? 0;
+      final located = double.tryParse(item['located']?.toString() ?? '0') ?? 0;
+      final received = (item['received'] ?? 0).toDouble();
+      final issue = (item['issue'] ?? 0).toDouble();
       final stockInHand = located + received - issue;
 
       tableData.add([
@@ -142,10 +142,10 @@ class _StoreStockScreenState extends State<StoreStockScreen>
         imageBytes != null
             ? pw.Image(pw.MemoryImage(imageBytes), width: 40, height: 40)
             : pw.Text('No Image'),
-        located.toString(),
-        received.toString(),
-        issue.toString(),
-        stockInHand.toString(),
+        _formatNum(located),
+        _formatNum(received),
+        _formatNum(issue),
+        _formatNum(stockInHand),
         item['moving'] ?? '',
         item['dateEdit'] ?? '',
       ]);
@@ -229,6 +229,12 @@ class _StoreStockScreenState extends State<StoreStockScreen>
       await OpenFile.open(file.path);
     }
     _showSnackBar('PDF Generated');
+  }
+
+  // Helper: show number without trailing .0 if whole number
+  String _formatNum(double v) {
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    return v.toString();
   }
 
   Future<int> _getNextSrNumber() async {
@@ -569,7 +575,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     );
   }
 
-  // ==================== ISSUE STOCK (FIXED - OTHER SUPPORT) ====================
+  // ==================== ISSUE STOCK ====================
 
   void _issueStockWithDepartment(Map<String, dynamic> item) {
     final qtyCtrl = TextEditingController();
@@ -580,32 +586,31 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     bool isLoadingJobs = true;
     bool isSubmitting = false;
 
-    _firestore
-        .collection('orders')
-        .orderBy('createdAt', descending: true)
-        .get()
-        .then((snapshot) {
+    Future<void> loadJobCards(StateSetter setStateDialog) async {
+      try {
+        final snapshot = await _firestore
+            .collection('orders')
+            .orderBy('createdAt', descending: true)
+            .get();
+        setStateDialog(() {
           jobCardDocs = snapshot.docs;
           isLoadingJobs = false;
         });
+      } catch (e) {
+        setStateDialog(() {
+          isLoadingJobs = false;
+        });
+      }
+    }
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) {
           if (isLoadingJobs) {
-            _firestore
-                .collection('orders')
-                .orderBy('createdAt', descending: true)
-                .get()
-                .then((snapshot) {
-                  jobCardDocs = snapshot.docs;
-                  isLoadingJobs = false;
-                  setStateDialog(() {});
-                });
+            loadJobCards(setStateDialog);
           }
 
-          // Button enable condition
           final bool canSubmit =
               !isSubmitting &&
               qtyCtrl.text.isNotEmpty &&
@@ -679,10 +684,16 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                     Builder(
                       builder: (_) {
                         final located =
-                            int.tryParse(item['located']?.toString() ?? '0') ??
+                            double.tryParse(
+                              item['located']?.toString() ?? '0',
+                            ) ??
                             0;
-                        final received = item['received'] ?? 0;
-                        final issue = item['issue'] ?? 0;
+                        final received = (item['received'] ?? 0) is double
+                            ? item['received']
+                            : (item['received'] ?? 0).toDouble();
+                        final issue = (item['issue'] ?? 0) is double
+                            ? item['issue']
+                            : (item['issue'] ?? 0).toDouble();
                         final stockInHand = located + received - issue;
                         return Container(
                           width: double.infinity,
@@ -712,7 +723,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                 ),
                               ),
                               Text(
-                                '$stockInHand',
+                                _formatNum(stockInHand),
                                 style: TextStyle(
                                   color: Colors.red[900],
                                   fontWeight: FontWeight.bold,
@@ -749,7 +760,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                     ),
                     const SizedBox(height: 14),
 
-                    // ── Job Card Section ──
+                    // ── Job Card Section with Search ──
                     if (issueType == 'jobcard') ...[
                       Text(
                         'Select Job Card',
@@ -774,49 +785,11 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                 style: TextStyle(color: Colors.grey[600]),
                               ),
                             )
-                          : Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey[50],
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.red.shade300),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              child: DropdownButton<String>(
-                                value: selectedJobCard,
-                                isExpanded: true,
-                                underline: const SizedBox(),
-                                hint: const Text('Select Job Card'),
-                                icon: Icon(
-                                  Icons.arrow_drop_down,
-                                  color: Colors.red[700],
-                                ),
-                                items: jobCardDocs.map((d) {
-                                  final data = d.data() as Map<String, dynamic>;
-                                  final List products = data['products'] ?? [];
-                                  final qty = products.isNotEmpty
-                                      ? products[0]['quantity']?.toString() ??
-                                            ''
-                                      : '';
-                                  final customer = data['customerName'] ?? '';
-                                  final label =
-                                      'JobCard: ${d.id} | $customer | Qty: $qty';
-                                  return DropdownMenuItem<String>(
-                                    value: d.id,
-                                    child: Text(
-                                      label,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (v) =>
-                                    setStateDialog(() => selectedJobCard = v),
-                              ),
+                          : _SearchableJobCardDropdown(
+                              jobCardDocs: jobCardDocs,
+                              selectedValue: selectedJobCard,
+                              onChanged: (v) =>
+                                  setStateDialog(() => selectedJobCard = v),
                             ),
                       const SizedBox(height: 14),
                     ],
@@ -877,13 +850,18 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                       ),
                       child: TextField(
                         controller: qtyCtrl,
-                        keyboardType: TextInputType.number,
+                        // ✅ FIXED: decimal allowed
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d*'),
+                          ),
                         ],
                         onChanged: (_) => setStateDialog(() {}),
                         decoration: InputDecoration(
-                          hintText: 'Enter quantity',
+                          hintText: 'Enter quantity (e.g. 23.5)',
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -922,22 +900,29 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                 ),
                 onPressed: canSubmit
                     ? () async {
-                        final qty = int.tryParse(qtyCtrl.text) ?? 0;
+                        // ✅ FIXED: parse as double
+                        final qty = double.tryParse(qtyCtrl.text) ?? 0;
                         if (qty <= 0) {
                           _showSnackBar('Valid quantity daalo', isError: true);
                           return;
                         }
 
                         final located =
-                            int.tryParse(item['located']?.toString() ?? '0') ??
+                            double.tryParse(
+                              item['located']?.toString() ?? '0',
+                            ) ??
                             0;
-                        final received = item['received'] ?? 0;
-                        final currentIssue = item['issue'] ?? 0;
+                        final received = (item['received'] ?? 0) is double
+                            ? item['received']
+                            : (item['received'] ?? 0).toDouble();
+                        final currentIssue = (item['issue'] ?? 0) is double
+                            ? item['issue']
+                            : (item['issue'] ?? 0).toDouble();
                         final currentStock = located + received - currentIssue;
 
                         if (qty > currentStock) {
                           _showSnackBar(
-                            'Stock mein sirf $currentStock bacha hai!',
+                            'Stock mein sirf ${_formatNum(currentStock)} bacha hai!',
                             isError: true,
                           );
                           return;
@@ -984,21 +969,21 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                           Navigator.pop(ctx);
 
                           // ✅ Navigate to Receipt Page
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => IssueReceiptPage(
-                                itemName: item['name'] ?? '',
-                                quantity: qty,
-                                issueType: issueType,
-                                reference: reference,
-                                remainingStock: (currentStock - qty).toInt(),
-                                date: DateFormat(
-                                  'dd MMM yyyy, hh:mm a',
-                                ).format(DateTime.now()),
-                              ),
-                            ),
-                          );
+                          // Navigator.push(
+                          //   context,
+                          //   MaterialPageRoute(
+                          //     builder: (_) => IssueReceiptPage(
+                          //       itemName: item['name'] ?? '',
+                          //       quantity: qty,
+                          //       issueType: issueType,
+                          //       reference: reference,
+                          //       remainingStock: (currentStock - qty),
+                          //       date: DateFormat(
+                          //         'dd MMM yyyy, hh:mm a',
+                          //       ).format(DateTime.now()),
+                          //     ),
+                          //   ),
+                          // );
                         } catch (e) {
                           _showSnackBar('Error: $e', isError: true);
                           setStateDialog(() => isSubmitting = false);
@@ -1109,8 +1094,13 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                   ),
                   child: TextField(
                     controller: qtyCtrl,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    // ✅ FIXED: decimal allowed
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                    ],
                     decoration: InputDecoration(
                       labelText: 'Quantity',
                       border: InputBorder.none,
@@ -1148,7 +1138,8 @@ class _StoreStockScreenState extends State<StoreStockScreen>
               onPressed: partyCtrl.text.trim().isEmpty || qtyCtrl.text.isEmpty
                   ? null
                   : () async {
-                      final qty = int.tryParse(qtyCtrl.text) ?? 0;
+                      // ✅ FIXED: parse as double
+                      final qty = double.tryParse(qtyCtrl.text) ?? 0;
                       if (qty <= 0) {
                         _showSnackBar('Enter valid quantity', isError: true);
                         return;
@@ -1160,11 +1151,14 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                         'quantity': qty,
                         'timestamp': FieldValue.serverTimestamp(),
                       });
+                      final currentReceived = (item['received'] ?? 0) is double
+                          ? item['received']
+                          : (item['received'] ?? 0).toDouble();
                       await _firestore
                           .collection('stock_items')
                           .doc(item['docId'])
                           .update({
-                            'received': (item['received'] ?? 0) + qty,
+                            'received': currentReceived + qty,
                             'dateEdit': DateFormat(
                               'dd-MM-yyyy',
                             ).format(DateTime.now()),
@@ -1308,10 +1302,20 @@ class _StoreStockScreenState extends State<StoreStockScreen>
       text: isEdit ? existingItem['group'] : '',
     );
     final locatedCtrl = TextEditingController(
-      text: isEdit ? (existingItem['located'] ?? 0).toString() : '0',
+      text: isEdit
+          ? _formatNum(
+              double.tryParse(existingItem['located']?.toString() ?? '0') ?? 0,
+            )
+          : '0',
     );
     final receivedCtrl = TextEditingController(
-      text: isEdit ? (existingItem['received'] ?? 0).toString() : '0',
+      text: isEdit
+          ? _formatNum(
+              (existingItem['received'] ?? 0) is double
+                  ? existingItem['received']
+                  : (existingItem['received'] ?? 0).toDouble(),
+            )
+          : '0',
     );
     final issueCtrl = TextEditingController(text: '0');
     String movingValue = isEdit
@@ -1325,8 +1329,10 @@ class _StoreStockScreenState extends State<StoreStockScreen>
               ? existingItem['sr']
               : await _getNextSrNumber())
         : await _getNextSrNumber();
-    final String currentDate = DateFormat('dd-MM-yyyy').format(DateTime.now());
-
+String currentDate = isEdit
+    ? (existingItem?['dateEdit'] ??
+        DateFormat('dd-MM-yyyy').format(DateTime.now()))
+    : DateFormat('dd-MM-yyyy').format(DateTime.now());
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -1528,6 +1534,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                 'Total Stock',
                                 Icons.inventory_2_outlined,
                                 isNumber: true,
+                                isDecimal: true,
                               ),
                               const SizedBox(height: 12),
                               _buildModernField(
@@ -1535,6 +1542,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                 isEdit ? 'Add More Received' : 'Received Stock',
                                 Icons.add_box,
                                 isNumber: true,
+                                isDecimal: true,
                               ),
                               const SizedBox(height: 12),
                               _buildModernField(
@@ -1542,35 +1550,55 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                 isEdit ? 'Add More Issue' : 'Issue Stock',
                                 Icons.remove_circle,
                                 isNumber: true,
+                                isDecimal: true,
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 20),
-                        Container(
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [bgOrange, cardOrange],
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: lightOrange, width: 1.5),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.calendar_today, color: primaryOrange),
-                              const SizedBox(width: 14),
-                              Text(
-                                'Date: $currentDate',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: darkOrange,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                       InkWell(
+  onTap: () async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateFormat('dd-MM-yyyy').parse(currentDate),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      setDialogState(() {
+        currentDate = DateFormat('dd-MM-yyyy').format(picked);
+      });
+    }
+  },
+  child: Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [bgOrange, cardOrange],
+      ),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: lightOrange, width: 1.5),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.calendar_today, color: primaryOrange),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            currentDate,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: darkOrange,
+              fontSize: 16,
+            ),
+          ),
+        ),
+        const Icon(Icons.edit_calendar),
+      ],
+    ),
+  ),
+)
                       ],
                     ),
                   ),
@@ -1648,17 +1676,26 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                   }
 
                                   final inputReceived =
-                                      int.tryParse(receivedCtrl.text) ?? 0;
+                                      double.tryParse(receivedCtrl.text) ?? 0;
                                   final inputIssue =
-                                      int.tryParse(issueCtrl.text) ?? 0;
+                                      double.tryParse(issueCtrl.text) ?? 0;
                                   final located =
-                                      int.tryParse(locatedCtrl.text) ?? 0;
-                                  int finalReceived = isEdit
-                                      ? (existingItem['received'] ?? 0) +
+                                      double.tryParse(locatedCtrl.text) ?? 0;
+
+                                  double finalReceived = isEdit
+                                      ? ((existingItem['received'] ?? 0)
+                                                    is double
+                                                ? existingItem['received']
+                                                : (existingItem['received'] ??
+                                                          0)
+                                                      .toDouble()) +
                                             inputReceived
                                       : inputReceived;
-                                  int finalIssue = isEdit
-                                      ? (existingItem['issue'] ?? 0) +
+                                  double finalIssue = isEdit
+                                      ? ((existingItem['issue'] ?? 0) is double
+                                                ? existingItem['issue']
+                                                : (existingItem['issue'] ?? 0)
+                                                      .toDouble()) +
                                             inputIssue
                                       : inputIssue;
                                   final stockInHand =
@@ -1744,7 +1781,6 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     );
   }
 
-  // ==================== EXCEL UPLOAD ====================
 
   Future<void> _uploadExcelFile() async {
     setState(() => _isLoading = true);
@@ -1815,7 +1851,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
             case 'located':
             case 'received':
             case 'issue':
-              item[header] = int.tryParse(value.toString()) ?? 0;
+              item[header] = double.tryParse(value.toString()) ?? 0.0;
               break;
             case 'code':
             case 'name':
@@ -1830,9 +1866,9 @@ class _StoreStockScreenState extends State<StoreStockScreen>
             item['name'] == null ||
             item['group'] == null)
           continue;
-        item['located'] = item['located'] ?? 0;
-        item['received'] = item['received'] ?? 0;
-        item['issue'] = item['issue'] ?? 0;
+        item['located'] = item['located'] ?? 0.0;
+        item['received'] = item['received'] ?? 0.0;
+        item['issue'] = item['issue'] ?? 0.0;
         item['moving'] = (item['moving'] ?? 'FAST MOVING')
             .toString()
             .toUpperCase();
@@ -1884,7 +1920,6 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     setState(() => _isLoading = false);
   }
 
-  // ==================== DELETE ====================
 
   void _deleteItem(String docId) {
     if (docId.isEmpty) {
@@ -1927,7 +1962,6 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     );
   }
 
-  // ==================== UI HELPERS ====================
 
   void _showSnackBar(String message, {bool isError = false}) {
     final overlay = Overlay.of(context);
@@ -1981,6 +2015,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     String label,
     IconData icon, {
     bool isNumber = false,
+    bool isDecimal = false,
     bool required = false,
     bool readOnly = false,
   }) {
@@ -1996,9 +2031,17 @@ class _StoreStockScreenState extends State<StoreStockScreen>
       child: TextField(
         controller: controller,
         readOnly: readOnly,
-        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        keyboardType: isNumber
+            ? (isDecimal
+                  ? const TextInputType.numberWithOptions(decimal: true)
+                  : TextInputType.number)
+            : TextInputType.text,
         inputFormatters: isNumber
-            ? [FilteringTextInputFormatter.digitsOnly]
+            ? [
+                isDecimal
+                    ? FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))
+                    : FilteringTextInputFormatter.digitsOnly,
+              ]
             : null,
         decoration: InputDecoration(
           labelText: label + (required ? ' *' : ''),
@@ -2166,7 +2209,6 @@ class _StoreStockScreenState extends State<StoreStockScreen>
     ),
   );
 
-  // ==================== BUILD ====================
 
   @override
   Widget build(BuildContext context) {
@@ -2181,12 +2223,12 @@ class _StoreStockScreenState extends State<StoreStockScreen>
           elevation: 0,
           backgroundColor: Colors.transparent,
           flexibleSpace: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Color(0xFFE65100),
-                  Color(0xFFFF9800),
-                  Color(0xFFFFB300),
+                  Colors.purple.shade600,
+                  Colors.blue.shade600,
+                  Colors.teal.shade600,
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -2229,7 +2271,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Store Stock Report',
+                        'Store Stock Issue Receipt',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 20,
@@ -2238,7 +2280,7 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Track & manage store stock',
+                        'Create and manage new stock issues',
                         style: TextStyle(fontSize: 12, color: Colors.white70),
                       ),
                     ],
@@ -2247,6 +2289,33 @@ class _StoreStockScreenState extends State<StoreStockScreen>
               ],
             ),
           ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const IssueFullHistoryScreen(),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.history,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       body: _isLoading
@@ -2480,12 +2549,17 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                 itemBuilder: (ctx, i) {
                                   final item = _paginatedData[i];
                                   final located =
-                                      int.tryParse(
+                                      double.tryParse(
                                         item['located']?.toString() ?? '0',
                                       ) ??
                                       0;
-                                  final received = item['received'] ?? 0;
-                                  final issue = item['issue'] ?? 0;
+                                  final received =
+                                      (item['received'] ?? 0) is double
+                                      ? item['received']
+                                      : (item['received'] ?? 0).toDouble();
+                                  final issue = (item['issue'] ?? 0) is double
+                                      ? item['issue']
+                                      : (item['issue'] ?? 0).toDouble();
                                   final stockInHand =
                                       located + received - issue;
 
@@ -2515,11 +2589,11 @@ class _StoreStockScreenState extends State<StoreStockScreen>
                                           color: Colors.blue[700],
                                         ),
                                         _cellFlex(item['group'] ?? '-', 2),
-                                        _cellFlex(located.toString(), 2),
-                                        _cellFlex(received.toString(), 2),
-                                        _cellFlex(issue.toString(), 2),
+                                        _cellFlex(_formatNum(located), 2),
+                                        _cellFlex(_formatNum(received), 2),
+                                        _cellFlex(_formatNum(issue), 2),
                                         _cellFlex(
-                                          stockInHand.toString(),
+                                          _formatNum(stockInHand),
                                           2,
                                           bold: true,
                                           color: stockInHand <= 0
@@ -2672,15 +2746,236 @@ class _StoreStockScreenState extends State<StoreStockScreen>
   }
 }
 
+class _SearchableJobCardDropdown extends StatefulWidget {
+  final List<QueryDocumentSnapshot> jobCardDocs;
+  final String? selectedValue;
+  final ValueChanged<String?> onChanged;
+
+
+  const _SearchableJobCardDropdown({
+    required this.jobCardDocs,
+    required this.selectedValue,
+    required this.onChanged,
+  });
+
+  @override
+  State<_SearchableJobCardDropdown> createState() =>
+      _SearchableJobCardDropdownState();
+}
+
+class _SearchableJobCardDropdownState
+    extends State<_SearchableJobCardDropdown> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  List<Map<String, String>> _allItems = [];
+  List<Map<String, String>> _filtered = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Build flat list of all job card + product combos
+    for (var d in widget.jobCardDocs) {
+      final data = d.data() as Map<String, dynamic>;
+      final List products = data['products'] ?? [];
+      final customer = data['customerName'] ?? '';
+      for (var p in products) {
+        final qty = p['quantity']?.toString() ?? '';
+        final name = p['productName'] ?? '';
+        _allItems.add({
+          'value': '${d.id}_$name',
+          'label': 'JobCard: ${d.id} | $customer | $name | Qty: $qty',
+          'search': '${d.id} $customer $name $qty'.toLowerCase(),
+        });
+      }
+    }
+    _filtered = List.from(_allItems);
+    _searchCtrl.addListener(_onSearch);
+  }
+
+  void _onSearch() {
+    final q = _searchCtrl.text.toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? List.from(_allItems)
+          : _allItems.where((e) => e['search']!.contains(q)).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color primaryOrange = Color(0xFFE65100);
+    const Color bgOrange = Color(0xFFFFF3E0);
+
+    // Find label for currently selected value
+    String selectedLabel = 'Select Job Card';
+    if (widget.selectedValue != null) {
+      final found = _allItems.firstWhere(
+        (e) => e['value'] == widget.selectedValue,
+        orElse: () => {'label': widget.selectedValue!},
+      );
+      selectedLabel = found['label'] ?? widget.selectedValue!;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Search box ──
+        Container(
+          decoration: BoxDecoration(
+            color: bgOrange,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.red.shade300),
+          ),
+          child: TextField(
+            controller: _searchCtrl,
+            decoration: InputDecoration(
+              hintText: 'Search by JobCard ID, Customer, Product...',
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              prefixIcon: Icon(Icons.search, color: Colors.red[700], size: 20),
+              suffixIcon: _searchCtrl.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _filtered = List.from(_allItems));
+                      },
+                    )
+                  : null,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+
+        // ── Selected item badge ──
+        if (widget.selectedValue != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 6),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade400),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.red[700], size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    selectedLabel,
+                    style: TextStyle(
+                      color: Colors.red[900],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Tap to clear selection
+                GestureDetector(
+                  onTap: () => widget.onChanged(null),
+                  child: Icon(Icons.close, color: Colors.red[400], size: 16),
+                ),
+              ],
+            ),
+          ),
+
+        // ── Scrollable results list ──
+        Container(
+          height: 200,
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: _filtered.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.search_off, color: Colors.grey[400], size: 32),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No results found',
+                        style: TextStyle(color: Colors.grey[500]),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  padding: EdgeInsets.zero,
+                  itemCount: _filtered.length,
+                  separatorBuilder: (_, __) =>
+                      Divider(height: 1, color: Colors.grey[200]),
+                  itemBuilder: (ctx, i) {
+                    final entry = _filtered[i];
+                    final isSelected = widget.selectedValue == entry['value'];
+                    return InkWell(
+                      onTap: () => widget.onChanged(entry['value']),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        color: isSelected
+                            ? Colors.red.shade50
+                            : Colors.transparent,
+                        child: Row(
+                          children: [
+                            if (isSelected)
+                              Icon(
+                                Icons.check,
+                                color: Colors.red[700],
+                                size: 16,
+                              )
+                            else
+                              const SizedBox(width: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                entry['label']!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isSelected
+                                      ? Colors.red[900]
+                                      : Colors.grey[800],
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ISSUE RECEIPT PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 class IssueReceiptPage extends StatelessWidget {
   final String itemName;
-  final int quantity;
+  final double quantity;
   final String issueType;
   final String reference;
-  final int remainingStock;
+  final double remainingStock;
   final String date;
 
   const IssueReceiptPage({
@@ -2692,6 +2987,12 @@ class IssueReceiptPage extends StatelessWidget {
     required this.remainingStock,
     required this.date,
   });
+
+  // Helper for display
+  String _fmt(double v) {
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    return v.toString();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2774,7 +3075,6 @@ class IssueReceiptPage extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    // Header
                     Container(
                       padding: const EdgeInsets.symmetric(
                         vertical: 10,
@@ -2818,7 +3118,7 @@ class IssueReceiptPage extends StatelessWidget {
                     const Divider(height: 24),
                     _receiptRow(
                       'Quantity Issued',
-                      quantity.toString(),
+                      _fmt(quantity),
                       valueColor: Colors.red[700]!,
                       bold: true,
                     ),
@@ -2836,7 +3136,7 @@ class IssueReceiptPage extends StatelessWidget {
                     const Divider(height: 24),
                     _receiptRow(
                       'Remaining Stock',
-                      remainingStock.toString(),
+                      _fmt(remainingStock),
                       valueColor: remainingStock <= 0
                           ? Colors.red[700]!
                           : Colors.green[700]!,

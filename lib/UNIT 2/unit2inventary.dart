@@ -29,7 +29,6 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
       _query.value = _searchCtrl.text;
     });
   }
-
   int _totalQty(List<QueryDocumentSnapshot> docs, String productName) {
     int total = 0;
     final q = productName.toLowerCase().trim();
@@ -44,7 +43,6 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
     }
     return total;
   }
-
   int _grandTotal(List<QueryDocumentSnapshot> docs) {
     int total = 0;
     for (final doc in docs) {
@@ -56,7 +54,6 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
     }
     return total;
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -84,7 +81,6 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             child: Row(
               children: [
-                // 🔙 BACK BUTTON
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
                   child: Container(
@@ -100,10 +96,7 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 10),
-
-                // 🏷️ LOGO
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -112,10 +105,7 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
                   ),
                   child: Image.asset('assets/dpl.png', height: 36),
                 ),
-
                 const SizedBox(width: 8),
-
-                // 📝 TITLE
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,8 +127,6 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
                     ],
                   ),
                 ),
-
-                // 🕘 HISTORY ICON
                 GestureDetector(
                   onTap: () {
                     Navigator.push(
@@ -182,23 +170,17 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
             final data = doc.data() as Map<String, dynamic>;
             return (data['jobCardNumber'] ?? '').toString().trim().isNotEmpty;
           }).toList();
-
           if (allDocs.isEmpty) return const _EmptyState();
-
           return ValueListenableBuilder<String>(
             valueListenable: _query,
             builder: (context, query, _) {
               final hasQuery = query.trim().isNotEmpty;
-
-              // Qty summary
               final summaryQty = hasQuery
                   ? _totalQty(allDocs, query.trim())
                   : _grandTotal(allDocs);
               final summaryLabel = hasQuery
                   ? 'Total qty — "${query.trim()}"'
                   : 'Total Qty (All Products)';
-
-              // Filter cards
               final filteredDocs = hasQuery
                   ? allDocs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
@@ -216,7 +198,6 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
 
               return Column(
                 children: [
-                  // ── Search bar ──────────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                     child: Container(
@@ -267,8 +248,6 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
                       ),
                     ),
                   ),
-
-                  // ── Qty Summary banner ──────────────────────────────
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                     child: Container(
@@ -348,10 +327,7 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 10),
-
-                  // ── Cards list ──────────────────────────────────────
                   Expanded(
                     child: filteredDocs.isEmpty
                         ? Center(
@@ -398,7 +374,6 @@ class _Unit2InventoryScreenState extends State<Unit2InventoryScreen> {
     );
   }
 }
-
 
 class _FullLoader extends StatelessWidget {
   const _FullLoader();
@@ -447,7 +422,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-
 class _InventoryCard extends StatefulWidget {
   final Map<String, dynamic> data;
   final String docId;
@@ -455,9 +429,9 @@ class _InventoryCard extends StatefulWidget {
   @override
   State<_InventoryCard> createState() => _InventoryCardState();
 }
+
 class _InventoryCardState extends State<_InventoryCard> {
   int? expandedIndex;
-
   @override
   Widget build(BuildContext context) {
     final products = List<Map<String, dynamic>>.from(
@@ -468,7 +442,6 @@ class _InventoryCardState extends State<_InventoryCard> {
     final customerName = widget.data['customerName'] ?? '';
     final status = widget.data['status'] ?? '';
     final isDispatched = status == 'Dispatched';
-
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
@@ -504,7 +477,6 @@ class _InventoryCardState extends State<_InventoryCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Job card number
                       Row(
                         children: [
                           const Icon(
@@ -542,7 +514,6 @@ class _InventoryCardState extends State<_InventoryCard> {
             ),
           ),
 
-     
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -688,7 +659,6 @@ class _StatusBadge extends StatelessWidget {
   final String label;
   final Color color;
   const _StatusBadge({required this.label, required this.color});
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -721,7 +691,6 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-
 class _ProcessChecklist extends StatefulWidget {
   final String jobCardId;
   final int productQty;
@@ -732,7 +701,6 @@ class _ProcessChecklist extends StatefulWidget {
 
 class _ProcessChecklistState extends State<_ProcessChecklist> {
   bool _isDispatching = false;
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
@@ -775,7 +743,8 @@ class _ProcessChecklistState extends State<_ProcessChecklist> {
         bool trayDone = processStatus['tray']?['done'] == true;
         bool grovingDone = processStatus['groving']?['done'] == true;
         bool pvcDone = processStatus['pvc/butter']?['done'] == true;
-        bool allDone =kappaDone && labelDone && trayDone && grovingDone && pvcDone;
+        bool allDone =
+            kappaDone && labelDone && trayDone && grovingDone && pvcDone;
         bool kappaEnabled = !isAlreadyDispatched;
         bool labelEnabled = kappaDone && !isAlreadyDispatched;
         bool trayEnabled = labelDone && !isAlreadyDispatched;
@@ -987,7 +956,6 @@ class _ProcessChecklistState extends State<_ProcessChecklist> {
           .where('originalJobCardId', isEqualTo: widget.jobCardId)
           .limit(1)
           .get();
-
       if (existing.docs.isEmpty) {
         final rawProducts = List<Map<String, dynamic>>.from(
           jobData['products'] ?? [],
@@ -1052,7 +1020,6 @@ class _ProcessChecklistState extends State<_ProcessChecklist> {
     );
   }
 }
-
 
 class _LabelSplitRow extends StatefulWidget {
   final bool enabled;
@@ -1642,7 +1609,6 @@ class _LabelSubCard extends StatelessWidget {
   }
 }
 
-
 class _SummaryChip extends StatelessWidget {
   final String label;
   final String value;
@@ -1856,9 +1822,6 @@ class _ProcessRow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Dispatch Button (unchanged)
-// ─────────────────────────────────────────────────────────────
 class _DispatchButton extends StatelessWidget {
   final bool allDone;
   final bool isDispatched;

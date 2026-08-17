@@ -10,10 +10,7 @@ class DesignerScreen extends StatefulWidget {
 }
 
 class _DesignerScreenState extends State<DesignerScreen> {
-
   Map<String, bool> expandedMap = {};
-
-  // 🔥 ONLY DATE (Dispatch)
   String formatDate(dynamic date) {
     if (date == null) return "-";
     try {
@@ -23,7 +20,6 @@ class _DesignerScreenState extends State<DesignerScreen> {
     }
   }
 
-  // 🔥 DATE + TIME (Completed)
   String formatDateTime(dynamic date) {
     if (date == null) return "-";
     try {
@@ -112,28 +108,21 @@ class _DesignerScreenState extends State<DesignerScreen> {
                 ),
               ],
             ),
-          ),
-
-          // 🔥 RIGHT SIDE HISTORY ICON
-       
+          ),       
         ),
       ),
-
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('orders')
             .where('designerRequired', isEqualTo: true)
             .snapshots(),
         builder: (context, snapshot) {
-
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text("No Designer Orders"));
           }
-
           final orders = snapshot.data!.docs;
 
           return ListView.builder(

@@ -1,65 +1,38 @@
 import 'package:archive/archive.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:dimple_erp/all%20screen/BackupManagerScreen.dart';
-import 'package:dimple_erp/all%20screen/EditSalesOrderScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
-import 'package:sizer/sizer.dart';
-import 'package:universal_html/html.dart' as html;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:universal_html/html.dart' as html;
 
-class SelectSalesOrderTab extends StatefulWidget {
-  const SelectSalesOrderTab({super.key});
-  @override
-  State<SelectSalesOrderTab> createState() => _SelectSalesOrderTabState();
+// ─── Color constants (same as rest of app) ───────────────────────────────────
+class _AppColors {
+  static const Color primary = Color(0xFF169a8d);
+  static const Gradient primaryGradient = LinearGradient(
+    colors: [Color(0xFF169a8d), Color(0xFF0d7c70)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 }
 
-class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
+class BackupOrdersTab extends StatefulWidget {
+  const BackupOrdersTab({super.key});
+  @override
+  State<BackupOrdersTab> createState() => _BackupOrdersTabState();
+}
+
+class _BackupOrdersTabState extends State<BackupOrdersTab> {
   String searchQuery = '';
   bool _isLoading = false;
   DateTimeRange? _selectedDateRange;
   String _selectedDateFilter = 'All';
   String _selectedUnit = 'All';
 
-  // ─── All original functions unchanged ────────────────────────────────────────
-
-  Future<bool> _checkIfJobCardExists(String orderId) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('jobCards')
-        .where('linkedOrderId', isEqualTo: orderId)
-        .limit(1)
-        .get();
-    return snapshot.docs.isNotEmpty;
-  }
-
-  Future<pw.ImageProvider?> _loadNetworkImage(String url) async {
-    try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        return pw.MemoryImage(response.bodyBytes);
-      }
-    } catch (e) {
-      print('Error loading image: $e');
-    }
-    return null;
-  }
-
-  Future<String?> _getJobNoFromOrder(String orderId) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('jobCards')
-        .where('linkedOrderId', isEqualTo: orderId)
-        .limit(1)
-        .get();
-    if (snap.docs.isNotEmpty) {
-      return snap.docs.first.id;
-    }
-    return null;
-  }
 
   List safeList(dynamic data) {
     if (data is List) return data;
@@ -76,16 +49,67 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
     html.Url.revokeObjectUrl(url);
   }
 
+  Future<pw.ImageProvider?> _loadNetworkImage(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        return pw.MemoryImage(response.bodyBytes);
+      }
+    } catch (e) {
+      debugPrint('Image load error: $e');
+    }
+    return null;
+  }
+
+  Future<String?> _getJobNoFromBackupOrder(String orderId) async {
+    // Check jobCards collection linked to this backup order
+    final snap = await FirebaseFirestore.instance
+        .collection('jobCards')
+        .where('linkedOrderId', isEqualTo: orderId)
+        .limit(1)
+        .get();
+    if (snap.docs.isNotEmpty) return snap.docs.first.id;
+    return null;
+  }
+
+  Future<bool> _checkIfJobCardExistsForBackup(String orderId) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('jobCards')
+        .where('linkedOrderId', isEqualTo: orderId)
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
+  }
+
+  // ─── PDF Row builder ─────────────────────────────────────────────────────
+
+  pw.TableRow _buildPdfRow(String label, String value) {
+    return pw.TableRow(
+      children: [
+        pw.Container(
+          padding: const pw.EdgeInsets.all(8),
+          color: PdfColors.grey200,
+          child: pw.Text(label,
+              style:
+                  pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+        ),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(8),
+          child: pw.Text(value, style: const pw.TextStyle(fontSize: 8)),
+        ),
+      ],
+    );
+  }
+
+  // ─── Generate PDF (same logic as SelectSalesOrderTab) ────────────────────
+
   Future<void> _generateAllProductsPDF(
     String orderId,
     Map<String, dynamic> orderData,
   ) async {
     final pdf = pw.Document();
-    final jobNo = await _getJobNoFromOrder(orderId) ?? orderId;
+    final jobNo = await _getJobNoFromBackupOrder(orderId) ?? orderId;
     final notes = orderData['notes'] ?? '';
-    final pageWidth = PdfPageFormat.a4.availableWidth;
-    int columns = pageWidth > 400 ? 3 : 2;
-    final imageSize = (pageWidth - ((columns - 1) * 10)) / columns;
     final products = safeList(orderData['products']);
     final orderDate =
         (orderData['orderDate'] as Timestamp?)?.toDate() ?? DateTime.now();
@@ -94,6 +118,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
     final customerName = orderData['customerName'] ?? '';
     final companyName = orderData['companyName'] ?? '';
     final salesPerson = orderData['salesPerson'] ?? '';
+
     for (int i = 0; i < products.length; i++) {
       final product = products[i];
       final dplNo = product['dplNo'] ?? '$jobNo-${i + 1}';
@@ -115,10 +140,10 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
 
       final trayDetail =
           getDetail(sections['trayDetail']) + getDetail(sections['tray']);
-      final salophinDetail = getDetail(sections['salophinDetail']) +
-          getDetail(sections['salophin']);
-      final boxCoverDetail = getDetail(sections['boxCoverDetail']) +
-          getDetail(sections['boxCover']);
+      final salophinDetail =
+          getDetail(sections['salophinDetail']) + getDetail(sections['salophin']);
+      final boxCoverDetail =
+          getDetail(sections['boxCoverDetail']) + getDetail(sections['boxCover']);
       final innerDetail =
           getDetail(sections['innerDetail']) + getDetail(sections['inner']);
       final bottomDetail =
@@ -127,10 +152,12 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
           getDetail(sections['dieDetail']) + getDetail(sections['die']);
       final otherDetail =
           getDetail(sections['otherDetail']) + getDetail(sections['other']);
-      final extraSections = product['customExtraSections'] is List
-          ? product['customExtraSections']
-          : [];
-      final images = product['images'] is List ? product['images'] : [];
+      final extraSections =
+          product['customExtraSections'] is List
+              ? product['customExtraSections']
+              : [];
+      final images =
+          product['images'] is List ? product['images'] : [];
 
       List<pw.ImageProvider> loadedImages = [];
       for (final url in images) {
@@ -143,7 +170,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4.copyWith(
-            marginTop: 1,
+             marginTop: 1,
             marginBottom: 5,
             marginLeft: 1,
             marginRight: 1,
@@ -181,6 +208,12 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                               style: pw.TextStyle(
                                   fontSize: 14,
                                   fontWeight: pw.FontWeight.bold)),
+                          // pw.Text(
+                          //     "[BACKUP ORDER]",
+                          //     style: pw.TextStyle(
+                          //         fontSize: 10,
+                          //         fontWeight: pw.FontWeight.bold,
+                          //         color: PdfColors.red700)),
                         ],
                       ),
                       pw.Column(
@@ -237,14 +270,25 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                     border: pw.TableBorder.all(color: PdfColors.grey600),
                     children: [
                       _buildPdfRow('Product', product['productName'] ?? ''),
-                      _buildPdfRow('Category', product['productCategory'] ?? ''),
-                      _buildPdfRow('Dimensions (L×H×W)',
+                      _buildPdfRow(
+                          'Category', product['productCategory'] ?? ''),
+                      _buildPdfRow(
+                          'Dimensions (L×H×W)',
                           '${product['length'] ?? ''} × ${product['height'] ?? ''} × ${product['width'] ?? ''}'),
-                      _buildPdfRow('Quantity', '${product['quantity'] ?? ''}'),
-                      if ((product['remarks'] ?? '').toString().trim().isNotEmpty)
+                      _buildPdfRow(
+                          'Quantity', '${product['quantity'] ?? ''}'),
+                      // _buildPdfRow(
+                      //     'HSN Code', product['hsnCode']?.toString() ?? ''),
+                      // _buildPdfRow(
+                      //     'GST %',
+                      //     '${product['gstPercent'] ?? ''}%'),
+                      if ((product['remarks'] ?? '')
+                          .toString()
+                          .trim()
+                          .isNotEmpty)
                         _buildPdfRow('Remark', product['remarks']),
                       _buildPdfRow('Assign Person', ''),
-                      if (trayDetail.toString().trim().isNotEmpty)
+                     if (trayDetail.toString().trim().isNotEmpty)
                         _buildPdfRow('Tray', trayDetail),
                       if (salophinDetail.toString().trim().isNotEmpty)
                         _buildPdfRow('Salophin', salophinDetail),
@@ -277,7 +321,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                         border: pw.Border.all(color: PdfColors.grey300),
                       ),
                       child: pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment:
+                            pw.MainAxisAlignment.spaceBetween,
                         children: [
                           pw.Text('Additional Notes:',
                               style: pw.TextStyle(
@@ -290,45 +335,75 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                       ),
                     ),
                   ],
-                  pw.SizedBox(height: 3),
-                  if (loadedImages.isNotEmpty)
-                    pw.Expanded(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text('Product Images:',
-                              style: pw.TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: pw.FontWeight.bold)),
-                          pw.SizedBox(height: 4),
-                          pw.Expanded(
-                            child: pw.GridView(
-                              crossAxisCount:
-                                  loadedImages.length <= 3
-                                      ? loadedImages.length
-                                      : 3,
-                              mainAxisSpacing: 8,
-                              crossAxisSpacing: 8,
-                              childAspectRatio: 1.2,
-                              children: loadedImages
-                                  .map((img) =>
-                                      pw.Image(img, fit: pw.BoxFit.contain))
-                                  .toList(),
+                pw.SizedBox(height: 3),
+                    if (loadedImages.isNotEmpty)
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('Product Images:',
+                                style: pw.TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.SizedBox(height: 4),
+                            pw.Expanded(
+                              child: pw.GridView(
+                                crossAxisCount:
+                                    loadedImages.length <= 3
+                                        ? loadedImages.length
+                                        : 3,
+                                mainAxisSpacing: 8,
+                                crossAxisSpacing: 8,
+                                childAspectRatio: 1.2,
+                                children: loadedImages
+                                    .map((img) =>
+                                        pw.Image(img, fit: pw.BoxFit.contain))
+                                    .toList(),
+                              ),
                             ),
-                          ),
-                          pw.SizedBox(height: 4),
-                        ],
+                                                      pw.SizedBox(height: 4),
+
+                          ],
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
-      );
-    }
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
-  }
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      }
+       final pdfBytes = await pdf.save();
+      final images = await Printing.raster(pdfBytes, dpi: 150).toList();
+
+      if (kIsWeb) {
+        final archive = Archive();
+        int page = 1;
+        for (final img in images) {
+          final pngBytes = await img.toPng();
+          archive.addFile(ArchiveFile(
+            'JobCard_${orderId}_Page$page.png',
+            pngBytes.length,
+            pngBytes,
+          ));
+          page++;
+        }
+        final zipData = ZipEncoder().encode(archive)!;
+        downloadFileWeb(
+            Uint8List.fromList(zipData), 'JobCard_$orderId.zip');
+      } else {
+        int page = 1;
+        for (final img in images) {
+          final pngBytes = await img.toPng();
+          await Printing.sharePdf(
+            bytes: pngBytes,
+            filename: 'JobCard_${orderId}_Page$page.png',
+          );
+          page++;
+        }
+      }
+    } 
+  // ─── Generate JPG ─────────────────────────────────────────────────────────
 
   Future<void> _generateAllProductsJPG(
     String orderId,
@@ -337,13 +412,14 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
     _showLoadingDialog();
     try {
       final pdf = pw.Document();
-      final jobNo = await _getJobNoFromOrder(orderId) ?? orderId;
+      final jobNo = await _getJobNoFromBackupOrder(orderId) ?? orderId;
       final notes = orderData['notes'] ?? '';
       final products = safeList(orderData['products']);
       final orderDate =
           (orderData['orderDate'] as Timestamp?)?.toDate() ?? DateTime.now();
       final deliveryDate =
-          (orderData['deliveryDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+          (orderData['deliveryDate'] as Timestamp?)?.toDate() ??
+              DateTime.now();
       final customerName = orderData['customerName'] ?? '';
       final companyName = orderData['companyName'] ?? '';
       final salesPerson = orderData['salesPerson'] ?? '';
@@ -369,22 +445,28 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
 
         final trayDetail =
             getDetail(sections['trayDetail']) + getDetail(sections['tray']);
-        final salophinDetail = getDetail(sections['salophinDetail']) +
-            getDetail(sections['salophin']);
-        final boxCoverDetail = getDetail(sections['boxCoverDetail']) +
-            getDetail(sections['boxCover']);
+        final salophinDetail =
+            getDetail(sections['salophinDetail']) +
+                getDetail(sections['salophin']);
+        final boxCoverDetail =
+            getDetail(sections['boxCoverDetail']) +
+                getDetail(sections['boxCover']);
         final innerDetail =
             getDetail(sections['innerDetail']) + getDetail(sections['inner']);
         final bottomDetail =
-            getDetail(sections['bottomDetail']) + getDetail(sections['bottom']);
+            getDetail(sections['bottomDetail']) +
+                getDetail(sections['bottom']);
         final dieDetail =
             getDetail(sections['dieDetail']) + getDetail(sections['die']);
         final otherDetail =
-            getDetail(sections['otherDetail']) + getDetail(sections['other']);
-        final extraSections = product['customExtraSections'] is List
-            ? product['customExtraSections']
-            : [];
-        final images = product['images'] is List ? product['images'] : [];
+            getDetail(sections['otherDetail']) +
+                getDetail(sections['other']);
+        final extraSections =
+            product['customExtraSections'] is List
+                ? product['customExtraSections']
+                : [];
+        final images =
+            product['images'] is List ? product['images'] : [];
 
         List<pw.ImageProvider> loadedImages = [];
         for (final url in images) {
@@ -435,6 +517,11 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                 style: pw.TextStyle(
                                     fontSize: 14,
                                     fontWeight: pw.FontWeight.bold)),
+                            // pw.Text('[BACKUP ORDER]',
+                            //     style: pw.TextStyle(
+                            //         fontSize: 10,
+                            //         fontWeight: pw.FontWeight.bold,
+                            //         color: PdfColors.red700)),
                           ],
                         ),
                         pw.Column(
@@ -460,7 +547,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                   pw.Text(
                                       DateFormat('dd-MM-yyyy')
                                           .format(deliveryDate),
-                                      style: const pw.TextStyle(fontSize: 10)),
+                                      style:
+                                          const pw.TextStyle(fontSize: 10)),
                                 ],
                               ),
                             ),
@@ -482,21 +570,33 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                               ? '$customerName ($companyName)'
                               : customerName,
                           style: pw.TextStyle(
-                              fontSize: 14, fontWeight: pw.FontWeight.bold),
+                              fontSize: 14,
+                              fontWeight: pw.FontWeight.bold),
                         ),
                       ),
                     ),
                     pw.SizedBox(height: 1),
                     pw.Table(
-                      border: pw.TableBorder.all(color: PdfColors.grey600),
+                      border:
+                          pw.TableBorder.all(color: PdfColors.grey600),
                       children: [
-                        _buildPdfRow('Product', product['productName'] ?? ''),
                         _buildPdfRow(
-                            'Category', product['productCategory'] ?? ''),
-                        _buildPdfRow('Dimensions (L×H×W)',
+                            'Product', product['productName'] ?? ''),
+                        _buildPdfRow(
+                            'Category',
+                            product['productCategory'] ?? ''),
+                        _buildPdfRow(
+                            'Dimensions (L×H×W)',
                             '${product['length'] ?? ''} × ${product['height'] ?? ''} × ${product['width'] ?? ''}'),
                         _buildPdfRow(
-                            'Quantity', '${product['quantity'] ?? ''}'),
+                            'Quantity',
+                            '${product['quantity'] ?? ''}'),
+                        // _buildPdfRow(
+                        //     'HSN Code',
+                        //     product['hsnCode']?.toString() ?? ''),
+                        // _buildPdfRow(
+                        //     'GST %',
+                        //     '${product['gstPercent'] ?? ''}%'),
                         if ((product['remarks'] ?? '')
                             .toString()
                             .trim()
@@ -535,18 +635,20 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                         padding: const pw.EdgeInsets.all(2),
                         decoration: pw.BoxDecoration(
                           color: PdfColors.white,
-                          border: pw.Border.all(color: PdfColors.grey300),
+                          border:
+                              pw.Border.all(color: PdfColors.grey300),
                         ),
                         child: pw.Row(
-                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment:
+                              pw.MainAxisAlignment.spaceBetween,
                           children: [
                             pw.Text('Additional Notes:',
                                 style: pw.TextStyle(
                                     fontSize: 12,
                                     fontWeight: pw.FontWeight.bold)),
-                            pw.SizedBox(height: 0.1),
                             pw.Text(notes,
-                                style: const pw.TextStyle(fontSize: 11)),
+                                style:
+                                    const pw.TextStyle(fontSize: 11)),
                           ],
                         ),
                       ),
@@ -572,8 +674,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                 crossAxisSpacing: 8,
                                 childAspectRatio: 1.2,
                                 children: loadedImages
-                                    .map((img) =>
-                                        pw.Image(img, fit: pw.BoxFit.contain))
+                                    .map((img) => pw.Image(img,
+                                        fit: pw.BoxFit.contain))
                                     .toList(),
                               ),
                             ),
@@ -589,7 +691,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
       }
 
       final pdfBytes = await pdf.save();
-      final images = await Printing.raster(pdfBytes, dpi: 150).toList();
+      final images =
+          await Printing.raster(pdfBytes, dpi: 150).toList();
 
       if (kIsWeb) {
         final archive = Archive();
@@ -597,7 +700,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
         for (final img in images) {
           final pngBytes = await img.toPng();
           archive.addFile(ArchiveFile(
-            'JobCard_${orderId}_Page$page.png',
+            'BackupJobCard_${orderId}_Page$page.png',
             pngBytes.length,
             pngBytes,
           ));
@@ -605,107 +708,45 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
         }
         final zipData = ZipEncoder().encode(archive)!;
         downloadFileWeb(
-            Uint8List.fromList(zipData), 'JobCard_$orderId.zip');
+            Uint8List.fromList(zipData),
+            'BackupJobCard_$orderId.zip');
       } else {
         int page = 1;
         for (final img in images) {
           final pngBytes = await img.toPng();
           await Printing.sharePdf(
             bytes: pngBytes,
-            filename: 'JobCard_${orderId}_Page$page.png',
+            filename: 'BackupJobCard_${orderId}_Page$page.png',
           );
           page++;
         }
       }
     } catch (e) {
-      print(e);
+      debugPrint('JPG generation error: $e');
     } finally {
       _hideLoadingDialog();
     }
   }
 
-  bool _hasExtraInstructions(Map<String, dynamic> sections) {
-    return sections['otherDetail']?.toString().trim().isNotEmpty == true;
-  }
+  // ─── Create Job Card from Backup Order ────────────────────────────────────
 
-  String _getExtraInstructions(Map<String, dynamic> sections) {
-    return '${sections['otherDetail']}'
-        '  |  Qty: ${sections['otherQty'] ?? ''}'
-        '  |  Price: ${sections['otherPrice'] ?? ''}';
-  }
-
-  void _showLoadingDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.white,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Row(
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(width: 20),
-              const Expanded(
-                child: Text(
-                  "Generating images… Please wait",
-                  style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _hideLoadingDialog() {
-    if (Navigator.canPop(context)) Navigator.pop(context);
-  }
-
-  pw.TableRow _buildPdfRow(String label, String value) {
-    return pw.TableRow(
-      children: [
-        pw.Container(
-          padding: const pw.EdgeInsets.all(8),
-          color: PdfColors.grey200,
-          child: pw.Text(label,
-              style: pw.TextStyle(
-                  fontSize: 9, fontWeight: pw.FontWeight.bold)),
-        ),
-        pw.Container(
-          padding: const pw.EdgeInsets.all(8),
-          child: pw.Text(value, style: const pw.TextStyle(fontSize: 8)),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _generateJobCardFromOrder(
+  Future<void> _generateJobCardFromBackupOrder(
     Map<String, dynamic> order,
     String orderId,
   ) async {
-    final alreadyExists = await _checkIfJobCardExists(orderId);
+    final alreadyExists =
+        await _checkIfJobCardExistsForBackup(orderId);
     if (alreadyExists) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Row(children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.info_outline,
-                  color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text('Job Card already created for this Sales Order!',
-                  style:
-                      TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+          content: const Row(children: [
+            Icon(Icons.info_outline, color: Colors.white, size: 20),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                  'Job Card already created for this Backup Order!',
+                  style: TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w500)),
             ),
           ]),
           backgroundColor: const Color(0xFFFF9800),
@@ -742,6 +783,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
           'dplNo': '$jobNo-${i + 1}',
           'productName': product['productName'] ?? '',
           'productCategory': product['productCategory'] ?? '',
+          'hsnCode': product['hsnCode'] ?? '',
+          'gstPercent': product['gstPercent'] ?? 0,
           'length': product['length'] ?? '',
           'height': product['height'] ?? '',
           'width': product['width'] ?? '',
@@ -755,7 +798,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
       }
 
       List<Map<String, dynamic>> partialDispatchesData = [];
-      final partialDispatches = order['partialDispatches'] as List? ?? [];
+      final partialDispatches =
+          order['partialDispatches'] as List? ?? [];
       for (var dispatch in partialDispatches) {
         partialDispatchesData.add({
           'name': dispatch['name'] ?? '',
@@ -773,34 +817,29 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
         'date': order['orderDate'] ?? DateTime.now(),
         'priority': order['priority'] ?? 'Medium',
         'customerName': order['customerName'] ?? '',
+        'companyName': order['companyName'] ?? '',
         'salesPerson': order['salesPerson'] ?? '',
         'products': jobCardProducts,
         'partialDispatches': partialDispatchesData,
         'extraInstruction': order['notes'] ?? '',
         'status': 'Pending',
         'createdAt': FieldValue.serverTimestamp(),
-        'source': 'sales_order',
+        'source': 'backup_order',
         'deliveryDate': order['deliveryDate'],
         'unit': order['unit'],
         'linkedOrderId': orderId,
+        'isFromBackup': true,
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Row(children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.check_circle,
-                  color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text('Job Card created successfully!',
-                  style:
-                      TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+          content: const Row(children: [
+            Icon(Icons.check_circle, color: Colors.white, size: 20),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text('Job Card created from Backup!',
+                  style: TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w500)),
             ),
           ]),
           backgroundColor: const Color(0xFF4CAF50),
@@ -812,48 +851,34 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
         ));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8)),
-            child:
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text('Error: $e',
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w500)),
-          ),
-        ]),
-        backgroundColor: const Color(0xFFF44336),
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.all(16),
-        elevation: 8,
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            const Icon(Icons.error_outline, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('Error: $e',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w500)),
+            ),
+          ]),
+          backgroundColor: const Color(0xFFF44336),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          margin: const EdgeInsets.all(16),
+          elevation: 8,
+        ));
+      }
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  void _openEditAndCreateJobCard(
-    String orderId,
-    Map<String, dynamic> orderData,
-  ) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            EditSalesOrderScreen(orderId: orderId, orderData: orderData),
-      ),
-    );
-
-    final jobCardExists = await _checkIfJobCardExists(orderId);
+  void _showCreateJobCardDialog(
+      String orderId, Map<String, dynamic> orderData) async {
+    final jobCardExists =
+        await _checkIfJobCardExistsForBackup(orderId);
     if (!jobCardExists && mounted) {
       showDialog(
         context: context,
@@ -865,60 +890,44 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                    colors: [Colors.blue.shade400, Colors.blue.shade600]),
+                gradient: LinearGradient(colors: [
+                  Colors.deepOrange.shade400,
+                  Colors.deepOrange.shade600
+                ]),
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.blue.shade200,
-                      blurRadius: 8,
-                      offset: const Offset(0, 4))
-                ],
               ),
               child: const Icon(Icons.assignment_outlined,
                   color: Colors.white, size: 24),
             ),
             const SizedBox(width: 14),
             const Expanded(
-              child: Text('Create Job Card?',
+              child: Text('Create Job Card from Backup?',
                   style: TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
+                      fontSize: 18, fontWeight: FontWeight.bold)),
             ),
           ]),
           content: const Text(
-            'Would you like to create a Job Card from this updated Sales Order?',
+            'Would you like to create a Job Card from this Backup Order?',
             style: TextStyle(fontSize: 16, color: Color(0xFF555555)),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12)),
-              child: Text('Not Now',
+              child: Text('Cancel',
                   style: TextStyle(
                       fontSize: 15, color: Colors.grey.shade700)),
             ),
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                final updatedDoc = await FirebaseFirestore.instance
-                    .collection('orders')
-                    .doc(orderId)
-                    .get();
-                if (updatedDoc.exists) {
-                  await _generateJobCardFromOrder(
-                    updatedDoc.data() as Map<String, dynamic>,
-                    orderId,
-                  );
-                }
+                await _generateJobCardFromBackupOrder(
+                    orderData, orderId);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2196F3),
+                backgroundColor: Colors.deepOrange.shade600,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                     horizontal: 24, vertical: 12),
-                elevation: 4,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
@@ -929,23 +938,57 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
           ],
         ),
       );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Row(children: [
+          Icon(Icons.info_outline, color: Colors.white),
+          SizedBox(width: 12),
+          Text('Job Card already exists for this order.'),
+        ]),
+        backgroundColor: Colors.orange,
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ));
     }
   }
 
-  Color _getStatusColor(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'completed':
-        return const Color(0xFF4CAF50);
-      case 'pending':
-        return const Color(0xFFFF9800);
-      case 'processing':
-        return const Color(0xFF2196F3);
-      case 'cancelled':
-        return const Color(0xFFF44336);
-      default:
-        return const Color(0xFF9E9E9E);
-    }
+  // ─── Loading Dialog ───────────────────────────────────────────────────────
+
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.white,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: const Padding(
+          padding: EdgeInsets.all(24),
+          child: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Expanded(
+                child: Text(
+                  "Generating images… Please wait",
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
+
+  void _hideLoadingDialog() {
+    if (Navigator.canPop(context)) Navigator.pop(context);
+  }
+
+  // ─── Color helpers ────────────────────────────────────────────────────────
 
   Color _getPriorityColor(String? priority) {
     switch (priority?.toLowerCase()) {
@@ -973,125 +1016,98 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
     }
   }
 
-  // ─── Build ────────────────────────────────────────────────────────────────────
+  // ─── Build ────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    // Responsive: phone = width < 600
     final bool isPhone = MediaQuery.of(context).size.width < 600;
 
     return Scaffold(
-    appBar: PreferredSize(
-  preferredSize: const Size.fromHeight(60),
-  child: AppBar(
-    automaticallyImplyLeading: false,
-    elevation: 0,
-    backgroundColor: Colors.transparent,
-    flexibleSpace: Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.purple.shade600,
-            Colors.blue.shade600,
-            Colors.teal.shade600,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-    ),
-    titleSpacing: 0,
-    title: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white, size: 20),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.all(8),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(60),
+        child: AppBar(
+          automaticallyImplyLeading: false,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          flexibleSpace: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.deepOrange.shade700,
+                  Colors.orange.shade600,
+                  Colors.amber.shade600,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
-            child: Image.asset('assets/dpl.png', height: 36),
           ),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 10, vertical: 5),
+            child: Row(
               children: [
-                Text(
-                  'Create Job Cards',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: Colors.white,
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white, size: 20),
                   ),
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Manage Job Cards from Sales Orders',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Image.asset('assets/dpl.png', height: 36),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Backup Orders',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'View & Manage Backed-up Orders',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
-    ),
-
-    // 🔥 👉 YAHAN ADD KRNA HAI
-  //   actions: [
-  //     Padding(
-  //       padding: const EdgeInsets.only(right: 12),
-  //       child: GestureDetector(
-  //         onTap: () {
-  //         Navigator.push(
-  //   context,
-  //   MaterialPageRoute(
-  //     builder: (_) =>EstimateOrderScreen(orderId: doc.id), // ✅ sahi
-  //   ),
-  // );
-  //         },
-  //         child: Container(
-  //           padding: const EdgeInsets.all(8),
-  //           decoration: BoxDecoration(
-  //             color: Colors.white.withOpacity(0.2),
-  //             borderRadius: BorderRadius.circular(12),
-  //           ),
-  //           child: const Icon(
-  //             Icons.backup_rounded,
-  //             color: Colors.white,
-  //             size: 22,
-  //           ),
-  //         ),
-  //       ),
-  //     ),
-  //   ],
-  ),
-),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFE3F2FD), Color(0xFFFFFFFF)],
+            colors: [Color(0xFFFFF3E0), Color(0xFFFFFFFF)],
           ),
         ),
         child: Column(
           children: [
-            // ── Search Bar ──────────────────────────────────────────────────
+            // ── Search Bar ─────────────────────────────────────────────
             Container(
               padding: EdgeInsets.fromLTRB(
                 isPhone ? 12 : 16,
@@ -1103,7 +1119,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.blue.shade100.withOpacity(0.5),
+                    color: Colors.orange.shade100.withOpacity(0.5),
                     blurRadius: 20,
                     offset: const Offset(0, 4),
                   ),
@@ -1113,10 +1129,10 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   gradient: LinearGradient(
-                      colors: [Colors.white, Colors.blue.shade50]),
+                      colors: [Colors.white, Colors.orange.shade50]),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.blue.shade100.withOpacity(0.4),
+                      color: Colors.orange.shade100.withOpacity(0.4),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -1125,9 +1141,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                 child: TextField(
                   style: TextStyle(fontSize: isPhone ? 14 : 15),
                   decoration: InputDecoration(
-                    hintText: isPhone
-                        ? 'Search orders, customers...'
-                        : 'Search orders, customers, products...',
+                    hintText: 'Search backup orders...',
                     hintStyle: TextStyle(
                       color: Colors.grey.shade400,
                       fontSize: isPhone ? 13 : 15,
@@ -1135,7 +1149,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                     prefixIcon: Padding(
                       padding: EdgeInsets.all(isPhone ? 10 : 12),
                       child: Icon(Icons.search_rounded,
-                          color: Colors.blue.shade700,
+                          color: Colors.deepOrange.shade600,
                           size: isPhone ? 22 : 26),
                     ),
                     suffixIcon: searchQuery.isNotEmpty
@@ -1164,7 +1178,7 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
               ),
             ),
 
-            // ── Filters ─────────────────────────────────────────────────────
+            // ── Filters ────────────────────────────────────────────────
             Padding(
               padding: EdgeInsets.fromLTRB(
                 isPhone ? 12 : 20,
@@ -1178,13 +1192,15 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                            colors: [Colors.white, Colors.purple.shade50]),
+                        gradient: LinearGradient(colors: [
+                          Colors.white,
+                          Colors.deepOrange.shade50
+                        ]),
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color:
-                                Colors.purple.shade100.withOpacity(0.3),
+                            color: Colors.orange.shade100
+                                .withOpacity(0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),
@@ -1195,9 +1211,10 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                         isExpanded: true,
                         isDense: isPhone,
                         decoration: InputDecoration(
-                          labelText: isPhone ? '📅 Date' : '📅 Date Filter',
+                          labelText:
+                              isPhone ? '📅 Date' : '📅 Date Filter',
                           labelStyle: TextStyle(
-                            color: Colors.purple.shade700,
+                            color: Colors.deepOrange.shade700,
                             fontWeight: FontWeight.w600,
                             fontSize: isPhone ? 12 : 14,
                           ),
@@ -1221,11 +1238,14 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                           DropdownMenuItem(
                               value: 'Day', child: Text('Today')),
                           DropdownMenuItem(
-                              value: 'Week', child: Text('This Week')),
+                              value: 'Week',
+                              child: Text('This Week')),
                           DropdownMenuItem(
-                              value: 'Month', child: Text('This Month')),
+                              value: 'Month',
+                              child: Text('This Month')),
                           DropdownMenuItem(
-                              value: 'Custom', child: Text('Custom Range')),
+                              value: 'Custom',
+                              child: Text('Custom Range')),
                         ],
                         onChanged: (val) async {
                           if (val == null) return;
@@ -1237,7 +1257,8 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                               builder: (context, child) => Theme(
                                 data: Theme.of(context).copyWith(
                                   colorScheme: ColorScheme.light(
-                                    primary: Colors.purple.shade600,
+                                    primary:
+                                        Colors.deepOrange.shade600,
                                     onPrimary: Colors.white,
                                   ),
                                 ),
@@ -1259,20 +1280,20 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                       ),
                     ),
                   ),
-
                   SizedBox(width: isPhone ? 8 : 14),
-
                   // Unit Filter
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                            colors: [Colors.white, Colors.orange.shade50]),
+                        gradient: LinearGradient(colors: [
+                          Colors.white,
+                          Colors.amber.shade50
+                        ]),
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color:
-                                Colors.orange.shade100.withOpacity(0.3),
+                            color: Colors.amber.shade100
+                                .withOpacity(0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),
@@ -1283,9 +1304,10 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                         isExpanded: true,
                         isDense: isPhone,
                         decoration: InputDecoration(
-                          labelText: isPhone ? '🏭 Unit' : '🏭 Unit Filter',
+                          labelText:
+                              isPhone ? '🏭 Unit' : '🏭 Unit Filter',
                           labelStyle: TextStyle(
-                            color: Colors.orange.shade700,
+                            color: Colors.amber.shade800,
                             fontWeight: FontWeight.w600,
                             fontSize: isPhone ? 12 : 14,
                           ),
@@ -1326,11 +1348,11 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
               ),
             ),
 
-            // ── Orders List ──────────────────────────────────────────────────
+            // ── Orders List ────────────────────────────────────────────
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
-                    .collection('orders')
+                    .collection('orders_backup')
                     .orderBy('orderDate', descending: true)
                     .snapshots(),
                 builder: (context, snapshot) {
@@ -1340,10 +1362,11 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           CircularProgressIndicator(
-                              color: Colors.blue.shade600, strokeWidth: 3),
+                              color: Colors.deepOrange.shade600,
+                              strokeWidth: 3),
                           const SizedBox(height: 20),
                           Text(
-                            'Loading orders...',
+                            'Loading backup orders...',
                             style: TextStyle(
                               color: Colors.grey.shade600,
                               fontSize: 16,
@@ -1355,54 +1378,76 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                     );
                   }
 
-                  var orders = snapshot.data!.docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
+                  // ── Filter logic ──────────────────────────────────
+                  var orders =
+                      snapshot.data!.docs.where((doc) {
+                    final data =
+                        doc.data() as Map<String, dynamic>;
                     final customer = (data['customerName'] ?? '')
                         .toString()
                         .toLowerCase();
-                    final searchMatch = customer.contains(searchQuery);
-                    final unit = (data['unit'] ?? '').toString();
-                    final unitMatch =
-                        _selectedUnit == 'All' || unit == _selectedUnit;
-                    final Timestamp? ts = data['orderDate'];
-                    if (ts == null) return false;
-                    final orderDate = ts.toDate().toLocal();
-                    final now = DateTime.now();
-                    bool dateMatch = true;
-                    if (_selectedDateFilter == 'Day') {
-                      final start =
-                          DateTime(now.year, now.month, now.day);
-                      final end = start.add(const Duration(days: 1));
-                      dateMatch = orderDate.isAfter(
-                              start.subtract(
-                                  const Duration(milliseconds: 1))) &&
-                          orderDate.isBefore(end);
-                    } else if (_selectedDateFilter == 'Week') {
-                      final start = now
-                          .subtract(Duration(days: now.weekday - 1));
-                      final weekStart =
-                          DateTime(start.year, start.month, start.day);
-                      final weekEnd =
-                          weekStart.add(const Duration(days: 7));
-                      dateMatch = orderDate.isAfter(weekStart.subtract(
-                              const Duration(milliseconds: 1))) &&
-                          orderDate.isBefore(weekEnd);
-                    } else if (_selectedDateFilter == 'Month') {
-                      final monthStart =
-                          DateTime(now.year, now.month, 1);
-                      final monthEnd =
-                          DateTime(now.year, now.month + 1, 1);
-                      dateMatch = orderDate.isAfter(monthStart.subtract(
-                              const Duration(milliseconds: 1))) &&
-                          orderDate.isBefore(monthEnd);
-                    } else if (_selectedDateFilter == 'Custom' &&
-                        _selectedDateRange != null) {
-                      dateMatch = orderDate.isAfter(
-                              _selectedDateRange!.start.subtract(
-                                  const Duration(milliseconds: 1))) &&
-                          orderDate.isBefore(_selectedDateRange!.end
-                              .add(const Duration(days: 1)));
+                    final searchMatch =
+                        customer.contains(searchQuery) ||
+                            (data['companyName'] ?? '')
+                                .toString()
+                                .toLowerCase()
+                                .contains(searchQuery);
+                    final unit =
+                        (data['unit'] ?? '').toString();
+                    final unitMatch = _selectedUnit == 'All' ||
+                        unit == _selectedUnit;
+
+                    // orderDate may be Timestamp or missing
+                    final ts = data['orderDate'];
+                    DateTime? orderDate;
+                    if (ts is Timestamp) {
+                      orderDate = ts.toDate().toLocal();
                     }
+
+                    bool dateMatch = true;
+                    if (orderDate != null) {
+                      final now = DateTime.now();
+                      if (_selectedDateFilter == 'Day') {
+                        final start = DateTime(
+                            now.year, now.month, now.day);
+                        final end = start
+                            .add(const Duration(days: 1));
+                        dateMatch = orderDate.isAfter(start.subtract(
+                                const Duration(
+                                    milliseconds: 1))) &&
+                            orderDate.isBefore(end);
+                      } else if (_selectedDateFilter == 'Week') {
+                        final start = now.subtract(
+                            Duration(days: now.weekday - 1));
+                        final weekStart = DateTime(
+                            start.year, start.month, start.day);
+                        final weekEnd = weekStart
+                            .add(const Duration(days: 7));
+                        dateMatch = orderDate.isAfter(
+                                weekStart.subtract(const Duration(
+                                    milliseconds: 1))) &&
+                            orderDate.isBefore(weekEnd);
+                      } else if (_selectedDateFilter == 'Month') {
+                        final monthStart =
+                            DateTime(now.year, now.month, 1);
+                        final monthEnd = DateTime(
+                            now.year, now.month + 1, 1);
+                        dateMatch = orderDate.isAfter(
+                                monthStart.subtract(const Duration(
+                                    milliseconds: 1))) &&
+                            orderDate.isBefore(monthEnd);
+                      } else if (_selectedDateFilter == 'Custom' &&
+                          _selectedDateRange != null) {
+                        dateMatch = orderDate.isAfter(
+                                _selectedDateRange!.start.subtract(
+                                    const Duration(
+                                        milliseconds: 1))) &&
+                            orderDate.isBefore(
+                                _selectedDateRange!.end.add(
+                                    const Duration(days: 1)));
+                      }
+                    }
+
                     return searchMatch && unitMatch && dateMatch;
                   }).toList();
 
@@ -1412,30 +1457,32 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
-                            padding: EdgeInsets.all(isPhone ? 18 : 24),
+                            padding: EdgeInsets.all(
+                                isPhone ? 18 : 24),
                             decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
+                              color: Colors.orange.shade50,
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(Icons.inbox_outlined,
+                            child: Icon(Icons.backup_outlined,
                                 size: isPhone ? 60 : 80,
-                                color: Colors.blue.shade300),
+                                color:
+                                    Colors.deepOrange.shade300),
                           ),
                           const SizedBox(height: 24),
                           Text(
                             searchQuery.isEmpty
-                                ? 'No orders found'
-                                : 'No matching orders',
+                                ? 'No backup orders found'
+                                : 'No matching backup orders',
                             style: TextStyle(
                               fontSize: isPhone ? 18 : 22,
                               fontWeight: FontWeight.bold,
-                              color: const Color.fromARGB(255, 247, 2, 2),
+                              color: Colors.deepOrange.shade700,
                             ),
                           ),
                           const SizedBox(height: 12),
                           Text(
                             searchQuery.isEmpty
-                                ? 'Create your first sales order'
+                                ? 'Backup orders will appear here'
                                 : 'Try adjusting your filters',
                             style: TextStyle(
                                 fontSize: isPhone ? 13 : 15,
@@ -1456,15 +1503,24 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                     itemCount: orders.length,
                     itemBuilder: (context, i) {
                       final doc = orders[i];
-                      final data = doc.data() as Map<String, dynamic>;
+                      final data =
+                          doc.data() as Map<String, dynamic>;
                       final products = safeList(data['products']);
-                      final priority = data['priority'] ?? 'Medium';
-                      final status = data['status'] ?? 'Pending';
+                      final priority =
+                          data['priority'] ?? 'Medium';
+                      final orderDate =
+                          (data['orderDate'] as Timestamp?)
+                              ?.toDate();
+                      final deliveryDate =
+                          (data['deliveryDate'] as Timestamp?)
+                              ?.toDate();
 
                       return FutureBuilder<bool>(
-                        future: _checkIfJobCardExists(doc.id),
+                        future:
+                            _checkIfJobCardExistsForBackup(doc.id),
                         builder: (context, snapshot) {
-                          final jobCardExists = snapshot.data ?? false;
+                          final jobCardExists =
+                              snapshot.data ?? false;
 
                           return Container(
                             margin: EdgeInsets.only(
@@ -1473,16 +1529,21 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                               gradient: LinearGradient(
                                 colors: [
                                   Colors.white,
-                                  Colors.blue.shade50.withOpacity(0.3),
+                                  Colors.orange.shade50
+                                      .withOpacity(0.4),
                                 ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
                               borderRadius: BorderRadius.circular(
                                   isPhone ? 18 : 24),
+                              border: Border.all(
+                                color: Colors.deepOrange.shade100,
+                                width: 1.5,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.blue.shade100
+                                  color: Colors.orange.shade100
                                       .withOpacity(0.6),
                                   blurRadius: isPhone ? 12 : 20,
                                   offset: const Offset(0, 6),
@@ -1500,24 +1561,26 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                 childrenPadding:
                                     EdgeInsets.all(isPhone ? 10 : 14),
                                 leading: Container(
-                                  padding: EdgeInsets.all(isPhone ? 8 : 10),
+                                  padding: EdgeInsets.all(
+                                      isPhone ? 8 : 10),
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(colors: [
-                                      Colors.blue.shade400,
-                                      Colors.blue.shade700,
+                                      Colors.deepOrange.shade400,
+                                      Colors.deepOrange.shade700,
                                     ]),
                                     borderRadius: BorderRadius.circular(
                                         isPhone ? 12 : 16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.blue.shade300,
+                                        color: Colors
+                                            .deepOrange.shade300,
                                         blurRadius: 10,
                                         offset: const Offset(0, 4),
                                       ),
                                     ],
                                   ),
                                   child: Icon(
-                                    Icons.shopping_bag_rounded,
+                                    Icons.backup_rounded,
                                     color: Colors.white,
                                     size: isPhone ? 18 : 22,
                                   ),
@@ -1526,30 +1589,74 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                   children: [
-                                    // Customer name row
+                                    // Backup badge
+                                    Container(
+                                      margin: const EdgeInsets.only(
+                                          bottom: 4),
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.deepOrange
+                                            .withOpacity(0.1),
+                                        borderRadius:
+                                            BorderRadius.circular(6),
+                                        border: Border.all(
+                                            color: Colors.deepOrange
+                                                .shade200),
+                                      ),
+                                      child: Text(
+                                        '🗂️ BACKUP',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors
+                                              .deepOrange.shade700,
+                                        ),
+                                      ),
+                                    ),
                                     Text(
-                                      data['customerName'] ?? 'Unknown',
+                                      data['customerName'] ??
+                                          'Unknown',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: isPhone ? 15 : 18,
-                                        color: const Color(0xFF1A1A1A),
+                                        color:
+                                            const Color(0xFF1A1A1A),
                                       ),
                                     ),
+                                    if ((data['companyName'] ?? '')
+                                        .toString()
+                                        .isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        data['companyName'],
+                                        style: TextStyle(
+                                          fontSize: isPhone ? 12 : 13,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(height: 4),
                                     Row(
                                       children: [
                                         Icon(Icons.person_outline,
                                             size: isPhone ? 12 : 14,
-                                            color: Colors.grey.shade600),
+                                            color:
+                                                Colors.grey.shade600),
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
                                             data['salesPerson'] ??
                                                 'Unknown',
                                             style: TextStyle(
-                                              fontWeight: FontWeight.w500,
-                                              fontSize: isPhone ? 12 : 14,
-                                              color: Colors.grey.shade700,
+                                              fontWeight:
+                                                  FontWeight.w500,
+                                              fontSize:
+                                                  isPhone ? 12 : 14,
+                                              color:
+                                                  Colors.grey.shade700,
                                             ),
                                             overflow:
                                                 TextOverflow.ellipsis,
@@ -1557,12 +1664,10 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                         ),
                                       ],
                                     ),
-                                    // PDF/JPG + JobCard badge — on phone: new row below
                                     if (jobCardExists) ...[
                                       const SizedBox(height: 8),
                                       Row(
                                         children: [
-                                          // PDF + JPG buttons
                                           Container(
                                             decoration: BoxDecoration(
                                               gradient: LinearGradient(
@@ -1574,14 +1679,6 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                               borderRadius:
                                                   BorderRadius.circular(
                                                       10),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                    color: Colors
-                                                        .red.shade200,
-                                                    blurRadius: 6,
-                                                    offset: const Offset(
-                                                        0, 3))
-                                              ],
                                             ),
                                             child: Row(
                                               mainAxisSize:
@@ -1591,16 +1688,21 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                                   icon: const Icon(
                                                       Icons
                                                           .picture_as_pdf_rounded,
-                                                      color: Colors.white),
-                                                  iconSize:
-                                                      isPhone ? 18 : 22,
+                                                      color:
+                                                          Colors.white),
+                                                  iconSize: isPhone
+                                                      ? 18
+                                                      : 22,
                                                   onPressed: () =>
                                                       _generateAllProductsPDF(
                                                           doc.id, data),
-                                                  tooltip: 'Generate PDF',
+                                                  tooltip:
+                                                      'Generate PDF',
                                                   padding:
                                                       EdgeInsets.all(
-                                                          isPhone ? 6 : 10),
+                                                          isPhone
+                                                              ? 6
+                                                              : 10),
                                                   constraints:
                                                       const BoxConstraints(),
                                                 ),
@@ -1609,15 +1711,19 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                                       Icons.image_rounded,
                                                       color: Colors
                                                           .blueAccent),
-                                                  iconSize:
-                                                      isPhone ? 18 : 22,
-                                                  tooltip: 'Download JPG',
+                                                  iconSize: isPhone
+                                                      ? 18
+                                                      : 22,
+                                                  tooltip:
+                                                      'Download JPG',
                                                   onPressed: () =>
                                                       _generateAllProductsJPG(
                                                           doc.id, data),
                                                   padding:
                                                       EdgeInsets.all(
-                                                          isPhone ? 6 : 10),
+                                                          isPhone
+                                                              ? 6
+                                                              : 10),
                                                   constraints:
                                                       const BoxConstraints(),
                                                 ),
@@ -1625,13 +1731,13 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          // Job Card badge
                                           Flexible(
                                             child: Container(
                                               padding: EdgeInsets.symmetric(
                                                 horizontal:
                                                     isPhone ? 10 : 14,
-                                                vertical: isPhone ? 6 : 8,
+                                                vertical:
+                                                    isPhone ? 6 : 8,
                                               ),
                                               decoration: BoxDecoration(
                                                 gradient: LinearGradient(
@@ -1643,14 +1749,6 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                                 borderRadius:
                                                     BorderRadius.circular(
                                                         20),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                      color: Colors
-                                                          .green.shade200,
-                                                      blurRadius: 6,
-                                                      offset: const Offset(
-                                                          0, 3))
-                                                ],
                                               ),
                                               child: Row(
                                                 mainAxisSize:
@@ -1661,13 +1759,15 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                                           .check_circle_rounded,
                                                       color: Colors.white,
                                                       size: 14),
-                                                  const SizedBox(width: 4),
+                                                  const SizedBox(
+                                                      width: 4),
                                                   Text(
-                                                    'Job Card',
+                                                    'Job Card ✓',
                                                     style: TextStyle(
                                                       color: Colors.white,
-                                                      fontSize:
-                                                          isPhone ? 11 : 13,
+                                                      fontSize: isPhone
+                                                          ? 11
+                                                          : 13,
                                                       fontWeight:
                                                           FontWeight.bold,
                                                     ),
@@ -1682,86 +1782,144 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                   ],
                                 ),
                                 subtitle: Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Row(
+                                  padding:
+                                      const EdgeInsets.only(top: 8),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      // Status Badge
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: isPhone ? 10 : 12,
-                                          vertical: isPhone ? 4 : 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: _getStatusColor(status),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: _getStatusColor(status)
-                                                  .withOpacity(0.4),
-                                              blurRadius: 6,
-                                              offset: const Offset(0, 2),
+                                      Row(
+                                        children: [
+                                          // Priority Badge
+                                          Container(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal:
+                                                  isPhone ? 10 : 12,
+                                              vertical: isPhone ? 4 : 6,
                                             ),
-                                          ],
-                                        ),
-                                        child: Text(
-                                          status,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: isPhone ? 11 : 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      // Priority Badge
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: isPhone ? 10 : 12,
-                                          vertical: isPhone ? 4 : 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              _getPriorityColor(priority),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color:
-                                                _getPriorityBorderColor(
-                                                    priority),
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.flag_rounded,
-                                                size: isPhone ? 12 : 14,
-                                                color:
-                                                    _getPriorityBorderColor(
-                                                        priority)),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              priority,
-                                              style: TextStyle(
-                                                fontSize: isPhone ? 11 : 12,
-                                                fontWeight: FontWeight.bold,
+                                            decoration: BoxDecoration(
+                                              color: _getPriorityColor(
+                                                  priority),
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      12),
+                                              border: Border.all(
                                                 color:
                                                     _getPriorityBorderColor(
                                                         priority),
+                                                width: 1.5,
                                               ),
                                             ),
+                                            child: Row(
+                                              mainAxisSize:
+                                                  MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.flag_rounded,
+                                                    size:
+                                                        isPhone ? 12 : 14,
+                                                    color:
+                                                        _getPriorityBorderColor(
+                                                            priority)),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  priority,
+                                                  style: TextStyle(
+                                                    fontSize:
+                                                        isPhone ? 11 : 12,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color:
+                                                        _getPriorityBorderColor(
+                                                            priority),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          // Unit badge
+                                          if ((data['unit'] ?? '')
+                                              .toString()
+                                              .isNotEmpty)
+                                            Container(
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal:
+                                                    isPhone ? 8 : 10,
+                                                vertical:
+                                                    isPhone ? 4 : 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors
+                                                    .deepOrange.shade50,
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        12),
+                                                border: Border.all(
+                                                    color: Colors.deepOrange
+                                                        .shade200),
+                                              ),
+                                              child: Text(
+                                                data['unit'],
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      isPhone ? 11 : 12,
+                                                  fontWeight:
+                                                      FontWeight.w600,
+                                                  color: Colors.deepOrange
+                                                      .shade700,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      if (orderDate != null) ...[
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            Icon(Icons.calendar_today,
+                                                size: 12,
+                                                color:
+                                                    Colors.grey.shade500),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Order: ${DateFormat('dd MMM yyyy').format(orderDate)}',
+                                              style: TextStyle(
+                                                  fontSize: isPhone
+                                                      ? 11
+                                                      : 12,
+                                                  color:
+                                                      Colors.grey.shade600),
+                                            ),
+                                            if (deliveryDate != null) ...[
+                                              const SizedBox(width: 10),
+                                              Icon(
+                                                  Icons
+                                                      .local_shipping_outlined,
+                                                  size: 12,
+                                                  color: Colors
+                                                      .grey.shade500),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Delivery: ${DateFormat('dd MMM yyyy').format(deliveryDate)}',
+                                                style: TextStyle(
+                                                    fontSize: isPhone
+                                                        ? 11
+                                                        : 12,
+                                                    color: Colors
+                                                        .grey.shade600),
+                                              ),
+                                            ],
                                           ],
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
                                 ),
                                 children: [
-                                  // ── Product List ──────────────────────
+                                  // ── Products List ─────────────────
                                   Container(
-                                    padding:
-                                        EdgeInsets.all(isPhone ? 14 : 18),
+                                    padding: EdgeInsets.all(
+                                        isPhone ? 14 : 18),
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(colors: [
                                         Colors.grey.shade50,
@@ -1778,11 +1936,11 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                       children: [
                                         Row(children: [
                                           Container(
-                                            padding:
-                                                EdgeInsets.all(
-                                                    isPhone ? 6 : 8),
+                                            padding: EdgeInsets.all(
+                                                isPhone ? 6 : 8),
                                             decoration: BoxDecoration(
-                                              color: Colors.blue.shade100,
+                                              color: Colors
+                                                  .deepOrange.shade100,
                                               borderRadius:
                                                   BorderRadius.circular(
                                                       10),
@@ -1790,16 +1948,18 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                             child: Icon(
                                                 Icons.inventory_2_rounded,
                                                 size: isPhone ? 16 : 20,
-                                                color:
-                                                    Colors.blue.shade700),
+                                                color: Colors.deepOrange
+                                                    .shade700),
                                           ),
                                           const SizedBox(width: 10),
                                           Text(
-                                            'Products',
+                                            'Products (${products.length})',
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              fontSize: isPhone ? 14 : 16,
-                                              color: Colors.grey.shade800,
+                                              fontSize:
+                                                  isPhone ? 14 : 16,
+                                              color:
+                                                  Colors.grey.shade800,
                                             ),
                                           ),
                                         ]),
@@ -1807,10 +1967,10 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                         ...products.map(
                                           (p) => Container(
                                             margin: EdgeInsets.only(
-                                                bottom: isPhone ? 8 : 10),
-                                            padding:
-                                                EdgeInsets.all(
-                                                    isPhone ? 10 : 12),
+                                                bottom:
+                                                    isPhone ? 8 : 10),
+                                            padding: EdgeInsets.all(
+                                                isPhone ? 10 : 12),
                                             decoration: BoxDecoration(
                                               color: Colors.white,
                                               borderRadius:
@@ -1818,18 +1978,20 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                                       12),
                                               border: Border.all(
                                                   color: Colors
-                                                      .blue.shade100),
+                                                      .orange.shade100),
                                             ),
                                             child: Row(children: [
                                               Container(
                                                 width: 7,
                                                 height: 7,
                                                 decoration: BoxDecoration(
-                                                  gradient:
-                                                      LinearGradient(colors: [
-                                                    Colors.blue.shade400,
-                                                    Colors.blue.shade600,
-                                                  ]),
+                                                  gradient: LinearGradient(
+                                                      colors: [
+                                                        Colors.deepOrange
+                                                            .shade400,
+                                                        Colors.deepOrange
+                                                            .shade600,
+                                                      ]),
                                                   shape: BoxShape.circle,
                                                 ),
                                               ),
@@ -1841,44 +2003,123 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                                           .start,
                                                   children: [
                                                     Text(
-                                                      '${p['productName'] ?? 'Product'} ${p['productCategory'] ?? ''}',
+                                                      '${p['productName'] ?? 'Product'}  ${p['productCategory'] ?? ''}',
                                                       style: TextStyle(
                                                         fontSize: isPhone
                                                             ? 13
                                                             : 15,
                                                         fontWeight:
-                                                            FontWeight.bold,
+                                                            FontWeight
+                                                                .bold,
                                                         color: Colors
                                                             .grey.shade800,
                                                       ),
                                                     ),
                                                     const SizedBox(
                                                         height: 4),
-                                                    Container(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 4),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors
-                                                            .orange.shade100,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8),
-                                                      ),
-                                                      child: Text(
-                                                        'Qty: ${p['quantity'] ?? '-'}',
+                                                    Row(
+                                                      children: [
+                                                        Container(
+                                                          padding: const EdgeInsets
+                                                              .symmetric(
+                                                              horizontal:
+                                                                  8,
+                                                              vertical:
+                                                                  3),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: Colors
+                                                                .orange
+                                                                .shade100,
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        8),
+                                                          ),
+                                                          child: Text(
+                                                            'Qty: ${p['quantity'] ?? '-'}',
+                                                            style: TextStyle(
+                                                              fontSize:
+                                                                  isPhone
+                                                                      ? 11
+                                                                      : 13,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              color: Colors
+                                                                  .orange
+                                                                  .shade800,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        if ((p['price'] ??
+                                                                0) !=
+                                                            0) ...[
+                                                          const SizedBox(
+                                                              width: 6),
+                                                          Container(
+                                                            padding: const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal:
+                                                                    8,
+                                                                vertical:
+                                                                    3),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: Colors
+                                                                  .green
+                                                                  .shade50,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8),
+                                                              border: Border.all(
+                                                                  color: Colors
+                                                                      .green
+                                                                      .shade200),
+                                                            ),
+                                                            child: Text(
+                                                              '₹${p['price']}',
+                                                              style: TextStyle(
+                                                                fontSize:
+                                                                    isPhone
+                                                                        ? 11
+                                                                        : 13,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .green
+                                                                    .shade700,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ],
+                                                    ),
+                                                    // Dimensions
+                                                    if ((p['length'] ??
+                                                                '')
+                                                            .toString()
+                                                            .isNotEmpty ||
+                                                        (p['height'] ??
+                                                                '')
+                                                            .toString()
+                                                            .isNotEmpty) ...[
+                                                      const SizedBox(
+                                                          height: 2),
+                                                      Text(
+                                                        'L×H×W: ${p['length'] ?? '-'} × ${p['height'] ?? '-'} × ${p['width'] ?? '-'}',
                                                         style: TextStyle(
-                                                          fontSize: isPhone
-                                                              ? 11
-                                                              : 13,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: Colors.orange
-                                                              .shade800,
+                                                          fontSize:
+                                                              isPhone
+                                                                  ? 11
+                                                                  : 12,
+                                                          color: Colors
+                                                              .grey.shade600,
                                                         ),
                                                       ),
-                                                    ),
+                                                    ],
                                                   ],
                                                 ),
                                               ),
@@ -1888,61 +2129,191 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                       ],
                                     ),
                                   ),
-//                                   SizedBox(
-//   width: double.infinity,
-//   child: OutlinedButton.icon(
-//     onPressed: () {
-//       Navigator.push(
-//         context,
-//         MaterialPageRoute(
-//           builder: (_) => EstimateOrderScreen(orderId: doc.id),
-//         ),
-//       );
-//     },
-//     icon: Icon(
-//       Icons.receipt_long_rounded,
-//       size: isPhone ? 18 : 20,
-//       color: Colors.purple.shade700,
-//     ),
-//     label: Text(
-//       'View Estimate',
-//       style: TextStyle(
-//         fontSize: isPhone ? 13 : 15,
-//         fontWeight: FontWeight.bold,
-//         color: Colors.purple.shade700,
-//       ),
-//     ),
-//     style: OutlinedButton.styleFrom(
-//       side: BorderSide(color: Colors.purple.shade400, width: 1.5),
-//       backgroundColor: Colors.purple.shade50,
-//       padding: EdgeInsets.symmetric(
-//         horizontal: isPhone ? 20 : 28,
-//         vertical: isPhone ? 11 : 14,
-//       ),
-//       shape: RoundedRectangleBorder(
-//         borderRadius: BorderRadius.circular(isPhone ? 12 : 16),
-//       ),
-//     ),
-//   ),
-// ),
+
                                   SizedBox(height: isPhone ? 12 : 18),
 
-                                  // ── Action Button ─────────────────────
+                                  // ── Financial Summary ─────────────
+                                  if ((data['grandTotal'] ?? 0) != 0) ...[
+                                    Container(
+                                      padding: EdgeInsets.all(
+                                          isPhone ? 12 : 16),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(colors: [
+                                          Colors.green.shade50,
+                                          Colors.teal.shade50,
+                                        ]),
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color:
+                                                Colors.green.shade200),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment
+                                                .spaceBetween,
+                                        children: [
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Sub Total',
+                                                style: TextStyle(
+                                                    fontSize: isPhone
+                                                        ? 11
+                                                        : 12,
+                                                    color: Colors
+                                                        .grey.shade600),
+                                              ),
+                                              Text(
+                                                '₹${(data['subTotal'] ?? 0).toStringAsFixed(0)}',
+                                                style: TextStyle(
+                                                    fontSize: isPhone
+                                                        ? 13
+                                                        : 14,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color: Colors
+                                                        .grey.shade800),
+                                              ),
+                                            ],
+                                          ),
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                'GST',
+                                                style: TextStyle(
+                                                    fontSize: isPhone
+                                                        ? 11
+                                                        : 12,
+                                                    color: Colors
+                                                        .grey.shade600),
+                                              ),
+                                              Text(
+                                                '₹${(data['totalGstAmount'] ?? 0).toStringAsFixed(0)}',
+                                                style: TextStyle(
+                                                    fontSize: isPhone
+                                                        ? 13
+                                                        : 14,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color: Colors
+                                                        .orange.shade700),
+                                              ),
+                                            ],
+                                          ),
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                'Grand Total',
+                                                style: TextStyle(
+                                                    fontSize: isPhone
+                                                        ? 11
+                                                        : 12,
+                                                    color: Colors
+                                                        .grey.shade600),
+                                              ),
+                                              Text(
+                                                '₹${(data['grandTotal'] ?? 0).toStringAsFixed(0)}',
+                                                style: TextStyle(
+                                                    fontSize: isPhone
+                                                        ? 15
+                                                        : 18,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color: Colors
+                                                        .green.shade700),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(height: isPhone ? 12 : 18),
+                                  ],
+
+                                  // ── PDF / JPG buttons (no job card yet) ──
+                                  if (!jobCardExists) ...[
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () =>
+                                                _generateAllProductsPDF(
+                                                    doc.id, data),
+                                            icon: const Icon(Icons
+                                                .picture_as_pdf_rounded),
+                                            label:
+                                                const Text('PDF'),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor:
+                                                  Colors.red.shade700,
+                                              side: BorderSide(
+                                                  color:
+                                                      Colors.red.shade300),
+                                              shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          12)),
+                                              padding: EdgeInsets.symmetric(
+                                                  vertical:
+                                                      isPhone ? 10 : 12),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () =>
+                                                _generateAllProductsJPG(
+                                                    doc.id, data),
+                                            icon: const Icon(
+                                                Icons.image_rounded),
+                                            label: const Text('JPG'),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor:
+                                                  Colors.blue.shade700,
+                                              side: BorderSide(
+                                                  color: Colors
+                                                      .blue.shade300),
+                                              shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          12)),
+                                              padding: EdgeInsets.symmetric(
+                                                  vertical:
+                                                      isPhone ? 10 : 12),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                  ],
+
+                                  // ── Create Job Card Button ─────────
                                   SizedBox(
                                     width: double.infinity,
                                     child: ElevatedButton(
                                       onPressed: _isLoading
                                           ? null
                                           : () =>
-                                              _openEditAndCreateJobCard(
+                                              _showCreateJobCardDialog(
                                                   doc.id, data),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            Colors.blue.shade600,
+                                        backgroundColor: jobCardExists
+                                            ? Colors.green.shade600
+                                            : Colors.deepOrange.shade600,
                                         foregroundColor: Colors.white,
                                         elevation: 6,
-                                        shadowColor:
-                                            Colors.blue.shade300,
+                                        shadowColor: jobCardExists
+                                            ? Colors.green.shade300
+                                            : Colors.deepOrange.shade300,
                                         shape: RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(
@@ -1969,16 +2340,18 @@ class _SelectSalesOrderTabState extends State<SelectSalesOrderTab> {
                                               children: [
                                                 Icon(
                                                   jobCardExists
-                                                      ? Icons.edit_rounded
+                                                      ? Icons
+                                                          .check_circle_rounded
                                                       : Icons
-                                                            .assignment_turned_in_rounded,
-                                                  size: isPhone ? 18 : 22,
+                                                          .assignment_turned_in_rounded,
+                                                  size:
+                                                      isPhone ? 18 : 22,
                                                 ),
                                                 const SizedBox(width: 8),
                                                 Text(
                                                   jobCardExists
-                                                      ? 'Edit Order'
-                                                      : 'Edit & Create Job Card',
+                                                      ? 'Job Card Created ✓'
+                                                      : 'Create Job Card from Backup',
                                                   style: TextStyle(
                                                     fontSize:
                                                         isPhone ? 14 : 16,

@@ -58,7 +58,6 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
     _products[index]['quantity']!.addListener(() {
       if (mounted) setState(() {});
     });
-
     _products[index]['price']!.addListener(() {
       if (mounted) setState(() {});
     });
@@ -69,35 +68,29 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
       _showError('Please enter customer name');
       return false;
     }
-
     if (_locationController.text.trim().isEmpty) {
       _showError('Please enter location');
       return false;
     }
-
     if (_selectedUnit == null || _selectedUnit!.isEmpty) {
       _showError('Please select unit');
       return false;
     }
-
     if (_selectedSalesPerson == null || _selectedSalesPerson!.isEmpty) {
       _showError('Please select sales person');
       return false;
     }
-
     if (_selectedSalesPerson == 'Others' &&
         (_customSalesPerson == null || _customSalesPerson!.trim().isEmpty)) {
       _showError('Please enter sales person name');
       return false;
     }
-
     return true;
   }
 
   bool _validateProducts() {
     for (int i = 0; i < _products.length; i++) {
       final item = _products[i];
-
       final category = item['category'];
       final name = item['name']?.text.trim() ?? '';
       final qty = int.tryParse(item['quantity']?.text ?? '') ?? 0;
@@ -107,17 +100,14 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
         _showError('Select category for Product ${i + 1}');
         return false;
       }
-
       if (name.isEmpty) {
         _showError('Enter product name for Product ${i + 1}');
         return false;
       }
-
       if (qty <= 0) {
         _showError('Enter valid quantity for Product ${i + 1}');
         return false;
       }
-
       if (price <= 0) {
         _showError('Enter valid price for Product ${i + 1}');
         return false;
@@ -135,7 +125,6 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
 
   Future<List<Map<String, dynamic>>> _fetchCustomers(String query) async {
     if (query.length < 2) return [];
-
     final snap = await FirebaseFirestore.instance
         .collection('orders')
         .orderBy('createdAt', descending: true)
@@ -143,11 +132,9 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
         .get();
 
     final Map<String, Map<String, dynamic>> uniqueCustomers = {};
-
     for (final doc in snap.docs) {
       final data = doc.data();
       final name = (data['customerName'] ?? '').toString();
-
       if (name.toLowerCase().contains(query.toLowerCase())) {
         uniqueCustomers[name] = {
           'customerName': data['customerName'],
@@ -159,9 +146,39 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
         };
       }
     }
-
     return uniqueCustomers.values.toList();
   }
+
+
+Future<List<Map<String, dynamic>>> _fetchProductSuggestions(String query) async {
+  if (query.trim().length < 2) return [];
+  final snap = await FirebaseFirestore.instance
+      .collection('masterProducts')
+      .orderBy('createdAt', descending: true)
+      .limit(1500)
+      .get();
+
+  final Map<String, Map<String, dynamic>> unique = {};
+  final q = query.toLowerCase();
+
+  for (final doc in snap.docs) {
+    final data = doc.data();
+    final products = (data['products'] as List?) ?? [];
+    for (final raw in products) {
+      final p = Map<String, dynamic>.from(raw as Map);
+      final name = (p['productName'] ?? '').toString();
+      if (name.isNotEmpty && name.toLowerCase().contains(q)) {
+        unique[name] = {
+          'productName': p['productName'],
+          'quantity': p['quantity'],
+          'price': p['price'],
+          'images': (p['images'] as List?) ?? [],
+        };
+      }
+    }
+  }
+  return unique.values.toList();
+}
 
   final _formKey = GlobalKey<FormState>();
   final _customerNameController = TextEditingController();
@@ -172,21 +189,21 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
   final _notesController = TextEditingController();
   final TextEditingController _gstNumberController = TextEditingController();
 
-  double _gstPercent = 5.0;
-  final List<double> _gstOptions = [5.0, 12.0, 18.0];
   DateTime _selectedDate = DateTime.now();
   String _selectedPriority = 'Medium';
   String? _selectedSalesPerson;
   String? _customSalesPerson;
-  final String _selectedProductCategory = 'MDF';
+
   final List<String> _productCategories = [
     'MDF',
     'Kappa Box (Gora)',
     'Packaging',
     'Shagun Envelopes',
     'Rigid Box (unit 2 Hussainpura)',
+    'Laddu Paper',
     'Others',
   ];
+
   String? _selectedUnit;
   String? _dispatchType;
 
@@ -197,12 +214,48 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
     'Meena Bazar',
     'College Road',
   ];
-  double get _subTotal => _calculateTotalAmount();
 
-  double get _taxableAmount => _subTotal;
+  double _gstForCategory(String? category) {
+    if (category == 'MDF') return 18.0;
+    if (category == 'Laddu Paper') return 18.0;
+    return 5.0;
+  }
 
-  double get _gstAmount => _taxableAmount * _gstPercent / 100;
-  double get _grossTotal => _subTotal + _gstAmount + _deliveryCharges;
+  String _hsnForCategory(String? category) {
+    if (category == 'Laddu Paper') return '48062000';
+    return '';
+  }
+
+  double _productSubTotal(Map<String, dynamic> item) {
+    final qty = double.tryParse(item['quantity']?.text ?? '') ?? 0;
+    final price = double.tryParse(item['price']?.text ?? '') ?? 0;
+    return qty * price;
+  }
+
+  double _productGstAmount(Map<String, dynamic> item) {
+    final gstPct =
+        item['gstPercent'] as double? ?? _gstForCategory(item['category']);
+    return _productSubTotal(item) * gstPct / 100;
+  }
+
+  double _productTotal(Map<String, dynamic> item) {
+    return _productSubTotal(item) + _productGstAmount(item);
+  }
+
+  double get _subTotal {
+    double t = 0;
+    for (var item in _products) t += _productSubTotal(item);
+    return t;
+  }
+
+  double get _totalGstAmount {
+    double t = 0;
+    for (var item in _products) t += _productGstAmount(item);
+    return t;
+  }
+
+  double get _grossTotal => _subTotal + _totalGstAmount + _deliveryCharges;
+
   double get _finalTotal =>
       (_grossTotal - _advanceAmount).clamp(0, double.infinity);
 
@@ -210,7 +263,6 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     String code = '';
     int i = index;
-
     while (i >= 0) {
       code = letters[i % 26] + code;
       i = (i ~/ 26) - 1;
@@ -247,10 +299,17 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
     "Others",
   ];
 
-  final List<Map<String, dynamic>> _products = [
-    {
-      'code': 'A',
+  // ─── FIX: Unique ID add kiya har product mein (mixing fix ke liye) ───
+  int _productIdCounter = 0;
+
+  Map<String, dynamic> _createProduct() {
+    _productIdCounter++;
+    return {
+      'id': _productIdCounter, // <-- UNIQUE ID - yahi key banega
+      'code': generateProductCode(_products.length),
       'category': 'MDF',
+      'gstPercent': 18.0,
+      'hsnCode': '',
       'name': TextEditingController(),
       'quantity': TextEditingController(),
       'price': TextEditingController(),
@@ -259,8 +318,32 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
       'fetchedImages': <String>[],
       'autoFilled': false,
       'userEdited': false,
-    },
-  ];
+    };
+  }
+
+  List<Map<String, dynamic>> _products = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Pehla product add karo
+    _products.add({
+      'id': ++_productIdCounter,
+      'code': 'A',
+      'category': 'MDF',
+      'gstPercent': 18.0,
+      'hsnCode': '',
+      'name': TextEditingController(),
+      'quantity': TextEditingController(),
+      'price': TextEditingController(),
+      'remarks': TextEditingController(),
+      'images': <XFile>[],
+      'fetchedImages': <String>[],
+      'autoFilled': false,
+      'userEdited': false,
+    });
+    _attachProductListeners(0);
+  }
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
@@ -280,18 +363,9 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
         );
       },
     );
-
     if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-      });
+      setState(() => _selectedDate = picked);
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _attachProductListeners(0);
   }
 
   Future<void> _pickProductImages(int index) async {
@@ -371,9 +445,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                 Navigator.pop(ctx);
                 final files = await _picker.pickMultiImage(imageQuality: 85);
                 if (files.isNotEmpty) {
-                  setState(() {
-                    _products[index]['images'].addAll(files);
-                  });
+                  setState(() => _products[index]['images'].addAll(files));
                 }
               },
             ),
@@ -412,9 +484,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                   imageQuality: 85,
                 );
                 if (file != null) {
-                  setState(() {
-                    _products[index]['images'].add(file);
-                  });
+                  setState(() => _products[index]['images'].add(file));
                 }
               },
             ),
@@ -425,130 +495,6 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
     );
   }
 
-  void _showAdvanceDialog() {
-    _advanceController.text = _advanceAmount > 0
-        ? _advanceAmount.toString()
-        : '';
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: Colors.white,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.green.shade400, Colors.green.shade600],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.green.shade200,
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.payment_rounded,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 14),
-            const Text(
-              'Enter Advance Amount',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: TextField(
-          controller: _advanceController,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            prefixText: '₹ ',
-            hintText: 'Enter advance amount',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.green.shade600, width: 2),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            child: Text(
-              'Cancel',
-              style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _advanceAmount = double.tryParse(_advanceController.text) ?? 0;
-              });
-              Navigator.pop(ctx);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green.shade600,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              'Apply',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> migrateOldOrdersToDPL() async {
-    final firestore = FirebaseFirestore.instance;
-
-    final snapshot = await firestore
-        .collection('orders')
-        .orderBy('createdAt')
-        .get();
-
-    int counter = 1;
-    final batch = firestore.batch();
-
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
-
-      if (data['salesOrderNo'] != null &&
-          data['salesOrderNo'].toString().startsWith('DPL')) {
-        continue;
-      }
-
-      final dplNo = 'DPL$counter';
-
-      batch.update(doc.reference, {'salesOrderNo': dplNo, 'orderId': dplNo});
-
-      counter++;
-    }
-
-    await batch.commit();
-
-    await firestore.collection('meta').doc('salesOrderCounter').set({
-      'last': counter - 1,
-    }, SetOptions(merge: true));
-
-    debugPrint('✅ Old orders migrated successfully');
-  }
-
   Future<String?> _uploadImageToStorage(
     XFile imageFile,
     String productName,
@@ -557,29 +503,17 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
       final ref = FirebaseStorage.instance.ref().child(
         'order_products/$productName/${DateTime.now().millisecondsSinceEpoch}.jpg',
       );
-
       if (kIsWeb) {
         final bytes = await imageFile.readAsBytes();
         await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
       } else {
         await ref.putFile(File(imageFile.path));
       }
-
       return await ref.getDownloadURL();
     } catch (e) {
       debugPrint("❌ Image upload failed: $e");
       return null;
     }
-  }
-
-  double _calculateTotalAmount() {
-    double total = 0;
-    for (var item in _products) {
-      final qty = double.tryParse(item['quantity']!.text) ?? 0;
-      final price = double.tryParse(item['price']!.text) ?? 0;
-      total += qty * price;
-    }
-    return total;
   }
 
   Future<void> _submitOrder() async {
@@ -589,27 +523,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
       return;
     }
     if (!_validateProducts()) return;
-
     if (!_formKey.currentState!.validate()) return;
-    final subTotal = _subTotal;
-    final gstAmount = _gstAmount;
-    final grandTotal = _finalTotal;
-
-    if (_customerNameController.text.trim().isEmpty) {
-      _showError('Customer name is required');
-      return;
-    }
-
-    if (_selectedSalesPerson == null || _selectedSalesPerson!.trim().isEmpty) {
-      _showError('Please select a sales person');
-      return;
-    }
-
-    if (_selectedSalesPerson == 'Others' &&
-        (_customSalesPerson == null || _customSalesPerson!.trim().isEmpty)) {
-      _showError('Please enter sales person name');
-      return;
-    }
 
     setState(() => _isLoading = true);
 
@@ -617,22 +531,29 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
       List<Map<String, dynamic>> productList = [];
 
       for (var item in _products) {
-        List<String> imageUrls = [];
+  List<String> imageUrls = List<String>.from(item['fetchedImages'] ?? []);  // ✅ FIX
         for (var img in item['images']) {
           final url = await _uploadImageToStorage(img, item['name']!.text);
           if (url != null) imageUrls.add(url);
         }
         final qty = int.tryParse(item['quantity']!.text) ?? 0;
         final price = double.tryParse(item['price']!.text) ?? 0;
-        final amount = qty * price;
+        final gstPct = item['gstPercent'] as double;
+        final subAmount = qty * price;
+        final gstAmt = subAmount * gstPct / 100;
+        final totalAmt = subAmount + gstAmt;
 
         productList.add({
           'productCode': item['code'],
           'productCategory': item['category'],
           'productName': item['name']!.text,
+          'hsnCode': item['hsnCode'] ?? '',
           'quantity': qty,
           'price': price,
-          'amount': amount,
+          'subAmount': subAmount,
+          'gstPercent': gstPct,
+          'gstAmount': gstAmt,
+          'amount': totalAmt,
           'remarks': item['remarks']!.text,
           'images': imageUrls,
         });
@@ -641,14 +562,12 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
       final counterRef = FirebaseFirestore.instance
           .collection('meta')
           .doc('salesOrderCounter');
-
       String salesOrderNo = '';
 
       await FirebaseFirestore.instance.runTransaction((tx) async {
         final snap = await tx.get(counterRef);
         final last = (snap.data()?['last'] ?? 0) as int;
         final next = last + 1;
-
         tx.set(counterRef, {'last': next}, SetOptions(merge: true));
         salesOrderNo = 'DPL$next';
       });
@@ -667,9 +586,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
         'email': _emailController.text,
         'customerGstNumber': _gstNumberController.text,
         'location': _locationController.text,
-        //  'productCategory': _selectedProductCategory,
-        'dispatchType': _dispatchType, // ✅ yaha add karo
-
+        'dispatchType': _dispatchType,
         'unit': _selectedUnit,
         'salesPerson': _selectedSalesPerson == 'Others'
             ? _customSalesPerson
@@ -677,11 +594,10 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
         'products': productList,
         'advanceAmount': _advanceAmount,
         'deliveryCharges': _deliveryCharges,
-        'taxableAmount': _taxableAmount,
-        'totalAmount': subTotal,
-        'gstAmount': gstAmount,
-        'grandTotal': grandTotal,
-        'gstPercent': _gstPercent,
+        'subTotal': _subTotal,
+        'totalGstAmount': _totalGstAmount,
+        'grossTotal': _grossTotal,
+        'grandTotal': _finalTotal,
         'deliveryDate': _selectedDate,
         'priority': _selectedPriority,
         'notes': _notesController.text,
@@ -734,27 +650,19 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
     }
   }
 
+  // ─── FIX: _createProduct() use karo ───
   void _addProduct() {
     setState(() {
-      _products.add({
-        'code': generateProductCode(_products.length), // ✅ UNLIMITED
-        'category': 'MDF',
-        'name': TextEditingController(),
-        'quantity': TextEditingController(),
-        'price': TextEditingController(),
-        'remarks': TextEditingController(),
-        'images': <XFile>[],
-        'fetchedImages': <String>[],
-        'autoFilled': false,
-        'userEdited': false,
-      });
-
+      final newProduct = _createProduct();
+      newProduct['code'] = generateProductCode(_products.length);
+      _products.add(newProduct);
       _attachProductListeners(_products.length - 1);
     });
   }
 
+  // ─── FIX: Delete ke baad sab codes reassign ───
   void _removeProduct(int index) {
-    if (index == 0) {
+    if (_products.length == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -791,15 +699,14 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
       );
       return;
     }
-
     setState(() {
+      // Controllers dispose karo
       _products[index]['name']!.dispose();
       _products[index]['quantity']!.dispose();
       _products[index]['price']!.dispose();
       _products[index]['remarks']!.dispose();
-
       _products.removeAt(index);
-
+      // Codes reassign karo sab ke liye
       for (int i = 0; i < _products.length; i++) {
         _products[i]['code'] = generateProductCode(i);
       }
@@ -807,9 +714,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
   }
 
   void _removeProductImage(int productIndex, int imageIndex) {
-    setState(() {
-      _products[productIndex]['images'].removeAt(imageIndex);
-    });
+    setState(() => _products[productIndex]['images'].removeAt(imageIndex));
   }
 
   @override
@@ -875,9 +780,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 10),
-
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -886,9 +789,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                   ),
                   child: Image.asset('assets/dpl.png', height: 36),
                 ),
-
                 const SizedBox(width: 8),
-
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -913,8 +814,6 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
               ],
             ),
           ),
-
-          // 🔥 RIGHT SIDE HISTORY ICON
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 12),
@@ -947,28 +846,26 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(10),
           children: [
-            // Customer Information Section
+            // ── Customer Information ──────────────────────────────────────
             _buildSection(
               title: 'Customer Information',
               icon: Icons.person_outline_rounded,
               gradientColors: [Colors.purple.shade400, Colors.purple.shade600],
               children: [
                 Autocomplete<Map<String, dynamic>>(
-                  optionsBuilder: (TextEditingValue value) async {
-                    return await _fetchCustomers(value.text);
-                  },
+                  optionsBuilder: (TextEditingValue value) async =>
+                      await _fetchCustomers(value.text),
                   displayStringForOption: (option) =>
                       option['customerName'] ?? '',
                   fieldViewBuilder: (context, controller, focusNode, onSubmit) {
                     controller.text = _customerNameController.text;
-                    controller.addListener(() {
-                      _customerNameController.text = controller.text;
-                    });
-
+                    controller.addListener(
+                      () => _customerNameController.text = controller.text,
+                    );
                     return TextFormField(
-                      controller: controller, // ✅ सही
+                      controller: controller,
                       focusNode: focusNode,
                       decoration: InputDecoration(
                         labelText: 'Customer Name',
@@ -992,12 +889,10 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                         filled: true,
                         fillColor: Colors.white,
                       ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Customer name is required';
-                        }
-                        return null;
-                      },
+                      validator: (value) =>
+                          (value == null || value.trim().isEmpty)
+                          ? 'Customer name is required'
+                          : null,
                     );
                   },
                   onSelected: (customer) {
@@ -1013,14 +908,14 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                     });
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 5),
                 _buildTextField(
                   controller: _companyNameController,
                   label: 'Company Name (Optional)',
                   icon: Icons.business_rounded,
                   iconColor: Colors.purple.shade600,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 5),
                 _buildTextField(
                   controller: _phoneController,
                   label: 'Phone Number (Optional)',
@@ -1028,7 +923,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                   iconColor: Colors.purple.shade600,
                   keyboardType: TextInputType.phone,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 5),
                 _buildTextField(
                   controller: _emailController,
                   label: 'Email (Optional)',
@@ -1036,7 +931,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                   iconColor: Colors.purple.shade600,
                   keyboardType: TextInputType.emailAddress,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 5),
                 _buildTextField(
                   controller: _locationController,
                   label: 'Location',
@@ -1045,7 +940,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                   validator: (value) =>
                       value!.isEmpty ? 'Location is required' : null,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 5),
                 _buildTextField(
                   controller: _gstNumberController,
                   label: 'Customer GST Number (Optional)',
@@ -1064,7 +959,9 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
               ],
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
+
+            // ── Dispatch Type ────────────────────────────────────────────
             _buildSection(
               title: 'Dispatch Type',
               icon: Icons.local_shipping_rounded,
@@ -1076,7 +973,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                       : null,
                   decoration: InputDecoration(
                     labelText: 'Select Dispatch Type',
-                    prefixIcon: Icon(Icons.local_shipping),
+                    prefixIcon: const Icon(Icons.local_shipping),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -1084,23 +981,17 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                   items: _dispatchOptions
                       .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                       .toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      _dispatchType = val;
-                    });
-                  },
-                  validator: (val) {
-                    if (val == null || val.isEmpty) {
-                      return 'Please select dispatch type';
-                    }
-                    return null;
-                  },
+                  onChanged: (val) => setState(() => _dispatchType = val),
+                  validator: (val) => (val == null || val.isEmpty)
+                      ? 'Please select dispatch type'
+                      : null,
                 ),
               ],
             ),
-            const SizedBox(height: 20),
 
-            // Order Location Section
+            const SizedBox(height: 10),
+
+            // ── Order Location ───────────────────────────────────────────
             _buildSection(
               title: 'Order Location',
               icon: Icons.location_city_rounded,
@@ -1138,24 +1029,17 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                         ),
                       )
                       .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedUnit = value!;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null || value == 'Select') {
-                      return 'Please select a unit';
-                    }
-                    return null;
-                  },
+                  onChanged: (value) => setState(() => _selectedUnit = value!),
+                  validator: (value) => (value == null || value == 'Select')
+                      ? 'Please select a unit'
+                      : null,
                 ),
               ],
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
-            // Sales Person Section
+            // ── Sales Person ─────────────────────────────────────────────
             _buildSection(
               title: 'Sales Person',
               icon: Icons.badge_rounded,
@@ -1187,12 +1071,14 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                     filled: true,
                     fillColor: Colors.white,
                   ),
-                  items: _salesPersons.map((person) {
-                    return DropdownMenuItem<String>(
-                      value: person,
-                      child: Text(person),
-                    );
-                  }).toList(),
+                  items: _salesPersons
+                      .map(
+                        (person) => DropdownMenuItem<String>(
+                          value: person,
+                          child: Text(person),
+                        ),
+                      )
+                      .toList(),
                   onChanged: (value) {
                     setState(() {
                       _selectedSalesPerson = value;
@@ -1200,12 +1086,9 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                       _otherSalesPersonController.clear();
                     });
                   },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please select a sales person';
-                    }
-                    return null;
-                  },
+                  validator: (value) => (value == null || value.isEmpty)
+                      ? 'Please select a sales person'
+                      : null,
                 ),
                 if (_selectedSalesPerson == 'Others') ...[
                   const SizedBox(height: 16),
@@ -1233,9 +1116,7 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                       filled: true,
                       fillColor: Colors.white,
                     ),
-                    onChanged: (val) {
-                      _customSalesPerson = val.trim();
-                    },
+                    onChanged: (val) => _customSalesPerson = val.trim(),
                     validator: (val) {
                       if (_selectedSalesPerson == 'Others' &&
                           (val == null || val.trim().isEmpty)) {
@@ -1248,618 +1129,22 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
               ],
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
-            // Products Section
+            // ── Products ─────────────────────────────────────────────────
             _buildSection(
               title: 'Products',
               icon: Icons.inventory_2_rounded,
               gradientColors: [Colors.blue.shade400, Colors.blue.shade600],
               children: [
-                ...List.generate(_products.length, (index) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 20),
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.white,
-                          Colors.blue.shade50.withOpacity(0.3),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.blue.shade100, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.shade100.withOpacity(0.5),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Colors.blue.shade400,
-                                        Colors.blue.shade700,
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.blue.shade200,
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Text(
-                                    _products[index]['code'],
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Product ${index + 1}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 18,
-                                    color: Colors.blue.shade700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_products.length > 1)
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade50,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: IconButton(
-                                  icon: Icon(
-                                    Icons.delete_rounded,
-                                    color: Colors.red.shade600,
-                                    size: 24,
-                                  ),
-                                  onPressed: () => _removeProduct(index),
-                                  padding: const EdgeInsets.all(8),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        DropdownButtonFormField<String>(
-                          value: _products[index]['category'],
-                          decoration: InputDecoration(
-                            labelText: 'Product Category',
-                            prefixIcon: Container(
-                              padding: const EdgeInsets.all(10),
-                              child: Icon(
-                                Icons.category_rounded,
-                                color: Colors.blue.shade600,
-                              ),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Colors.blue.shade600,
-                                width: 2,
-                              ),
-                            ),
-                            filled: true,
-                            fillColor: Colors.white,
-                          ),
-                          items: _productCategories
-                              .map(
-                                (cat) => DropdownMenuItem(
-                                  value: cat,
-                                  child: Text(cat),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _products[index]['category'] = value;
-                            });
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        Autocomplete<Map<String, dynamic>>(
-                          optionsBuilder: (TextEditingValue value) async {
-                            if (value.text.length < 2) return const [];
-
-                            final snap = await FirebaseFirestore.instance
-                                .collection('orders')
-                                .orderBy('createdAt', descending: true)
-                                .limit(500)
-                                .get();
-
-                            final List<Map<String, dynamic>> results = [];
-
-                            for (final doc in snap.docs) {
-                              final products = doc['products'];
-                              if (products is List) {
-                                for (final p in products) {
-                                  if (p['productName']
-                                      .toString()
-                                      .toLowerCase()
-                                      .contains(value.text.toLowerCase())) {
-                                    results.add(Map<String, dynamic>.from(p));
-                                  }
-                                }
-                              }
-                            }
-                            return results;
-                          },
-                          displayStringForOption: (option) =>
-                              option['productName'],
-                          fieldViewBuilder:
-                              (context, controller, focusNode, onSubmit) {
-                                if (controller.text.isEmpty) {
-                                  controller.text =
-                                      _products[index]['name'].text;
-                                }
-
-                                return TextFormField(
-                                  controller: controller, // ✅ IMPORTANT
-
-                                  focusNode: focusNode,
-                                  decoration: InputDecoration(
-                                    labelText: 'Product Name',
-                                    prefixIcon: Container(
-                                      padding: const EdgeInsets.all(10),
-                                      child: Icon(
-                                        Icons.shopping_bag_rounded,
-                                        color: Colors.blue.shade600,
-                                      ),
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                      borderSide: BorderSide(
-                                        color: Colors.blue.shade600,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    filled: true,
-                                    fillColor: Colors.white,
-                                  ),
-                                  onChanged: (value) {
-                                    _products[index]['name'].text = value;
-                                  },
-                                  validator: (value) =>
-                                      value == null || value.isEmpty
-                                      ? 'Product name required'
-                                      : null,
-                                );
-                              },
-                          onSelected: (data) {
-                            setState(() {
-                              _products[index]['name'].text =
-                                  data['productName']; // ✅ ADD THIS
-
-                              _products[index]['price']!.text =
-                                  (data['price'] ?? 0).toString();
-                              _products[index]['quantity']!.text =
-                                  (data['quantity'] ?? 0).toString();
-                              _products[index]['remarks']!.text =
-                                  data['remarks'] ?? '';
-                              _products[index]['fetchedImages'] =
-                                  List<String>.from(data['images'] ?? []);
-                              _products[index]['autoFilled'] = true;
-                              _products[index]['userEdited'] = false;
-                            });
-                          },
-                        ),
-
-                        if (((_products[index]['fetchedImages'] ?? []) as List)
-                            .isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.green.shade50,
-                                  Colors.green.shade100,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.image_rounded,
-                                  color: Colors.green.shade700,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Saved Images',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                    color: Colors.green.shade700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: List.generate(
-                              ((_products[index]['fetchedImages'] ?? [])
-                                      as List)
-                                  .length,
-                              (imgIndex) {
-                                final imageUrl =
-                                    ((_products[index]['fetchedImages'] ?? [])
-                                            as List)[imgIndex]
-                                        as String;
-
-                                return GestureDetector(
-                                  onTap: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (_) => Dialog(
-                                        backgroundColor: Colors.transparent,
-                                        child: InteractiveViewer(
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            child: Image.network(imageUrl),
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  child: Stack(
-                                    children: [
-                                      Container(
-                                        width: 90,
-                                        height: 90,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.green.shade200,
-                                            width: 2,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.green.shade100,
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                          image: DecorationImage(
-                                            image: NetworkImage(imageUrl),
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        right: -2,
-                                        top: -2,
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Colors.red.shade400,
-                                                Colors.red.shade700,
-                                              ],
-                                            ),
-                                            shape: BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.red.shade200,
-                                                blurRadius: 6,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: IconButton(
-                                            icon: const Icon(
-                                              Icons.close_rounded,
-                                              color: Colors.white,
-                                              size: 18,
-                                            ),
-                                            onPressed: () {
-                                              setState(() {
-                                                (_products[index]['fetchedImages']
-                                                        as List)
-                                                    .removeAt(imgIndex);
-                                              });
-                                            },
-                                            padding: const EdgeInsets.all(4),
-                                            constraints: const BoxConstraints(),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-
-                        const SizedBox(height: 16),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildTextField(
-                                controller: _products[index]['quantity']!,
-                                label: 'Quantity',
-                                icon: Icons.numbers_rounded,
-                                iconColor: Colors.blue.shade600,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Required';
-                                  }
-                                  return null;
-                                },
-                                onChanged: (_) {
-                                  setState(() {
-                                    _products[index]['userEdited'] = true;
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _buildTextField(
-                                controller: _products[index]['price']!,
-                                label: 'Price/Unit',
-                                icon: Icons.currency_rupee_rounded,
-                                iconColor: Colors.blue.shade600,
-                                keyboardType: TextInputType.number,
-                                validator: (value) =>
-                                    value!.isEmpty ? 'Required' : null,
-                                onChanged: (_) {
-                                  setState(() {
-                                    _products[index]['userEdited'] = true;
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        _buildTextField(
-                          controller: _products[index]['remarks']!,
-                          label: 'Remarks (Optional)',
-                          icon: Icons.comment_rounded,
-                          iconColor: Colors.blue.shade600,
-                          maxLines: 2,
-                        ),
-                        const SizedBox(height: 16),
-
-                        OutlinedButton.icon(
-                          onPressed: () => _pickProductImages(index),
-                          icon: const Icon(
-                            Icons.add_photo_alternate_rounded,
-                            size: 22,
-                          ),
-                          label: Text(
-                            _products[index]['images'].isEmpty
-                                ? 'Add Product Images'
-                                : 'Add More Images',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.blue.shade600,
-                            side: BorderSide(
-                              color: Colors.blue.shade600,
-                              width: 2,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 14,
-                            ),
-                          ),
-                        ),
-
-                        if (_products[index]['images'].isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: List.generate(
-                              _products[index]['images'].length,
-                              (imgIndex) {
-                                final image =
-                                    _products[index]['images'][imgIndex];
-                                return Stack(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () {
-                                        showDialog(
-                                          context: context,
-                                          builder: (_) => Dialog(
-                                            backgroundColor: Colors.transparent,
-                                            child: InteractiveViewer(
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                                child: kIsWeb
-                                                    ? Image.network(image.path)
-                                                    : Image.file(
-                                                        File(image.path),
-                                                      ),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      child: Container(
-                                        width: 90,
-                                        height: 90,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.blue.shade200,
-                                            width: 2,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.blue.shade100,
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                          image: DecorationImage(
-                                            image: kIsWeb
-                                                ? NetworkImage(image.path)
-                                                : FileImage(File(image.path))
-                                                      as ImageProvider,
-                                            fit: BoxFit.cover,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      right: -2,
-                                      top: -2,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              Colors.red.shade400,
-                                              Colors.red.shade700,
-                                            ],
-                                          ),
-                                          shape: BoxShape.circle,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.red.shade200,
-                                              blurRadius: 6,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                        child: IconButton(
-                                          icon: const Icon(
-                                            Icons.close_rounded,
-                                            color: Colors.white,
-                                            size: 18,
-                                          ),
-                                          onPressed: () => _removeProductImage(
-                                            index,
-                                            imgIndex,
-                                          ),
-                                          padding: const EdgeInsets.all(4),
-                                          constraints: const BoxConstraints(),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Builder(
-                            builder: (context) {
-                              final qty =
-                                  double.tryParse(
-                                    _products[index]['quantity']!.text,
-                                  ) ??
-                                  0;
-                              final price =
-                                  double.tryParse(
-                                    _products[index]['price']!.text,
-                                  ) ??
-                                  0;
-                              final total = qty * price;
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.green.shade400,
-                                      Colors.green.shade600,
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.green.shade200,
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: Text(
-                                  'Total: ₹${total.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+                // ─── FIX: ObjectKey use karo unique id se ───
+                ...List.generate(
+                  _products.length,
+                  (index) => KeyedSubtree(
+                    key: ValueKey(_products[index]['id']),
+                    child: _buildProductCard(index),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: _addProduct,
@@ -1882,423 +1167,101 @@ class _OrderBookingScreenState extends State<OrderBookingScreen> {
                 ),
               ],
             ),
+
             const SizedBox(height: 10),
-Container(
-  margin: const EdgeInsets.symmetric(vertical: 10),
-  padding: const EdgeInsets.all(14),
-  decoration: BoxDecoration(
-    borderRadius: BorderRadius.circular(16),
-    gradient: _isDesignerRequired
-        ? LinearGradient(
-            colors: [Colors.purple.shade400, Colors.blue.shade500],
-          )
-        : LinearGradient(
-            colors: [const Color.fromARGB(255, 239, 216, 216), const Color.fromARGB(255, 237, 188, 188)],
-          ),
-    boxShadow: [
-      BoxShadow(
-        color: _isDesignerRequired
-            ? Colors.purple.withOpacity(0.3)
-            : Colors.grey.withOpacity(0.2),
-        blurRadius: 8,
-        offset: const Offset(0, 4),
-      )
-    ],
-  ),
-  child: InkWell(
-    borderRadius: BorderRadius.circular(16),
-    onTap: () {
-      setState(() {
-        _isDesignerRequired = !_isDesignerRequired;
-      });
-    },
-    child: Row(
-      children: [
 
-        // 🔥 ICON
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            Icons.design_services_rounded,
-            color: _isDesignerRequired ? Colors.white : const Color.fromARGB(255, 250, 1, 1),
-            size: 26,
-          ),
-        ),
-
-        const SizedBox(width: 14),
-
-        // 🔥 TEXT
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Designer Required",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color:
-                      _isDesignerRequired ? Colors.white : const Color.fromARGB(221, 243, 2, 2),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _isDesignerRequired
-                    ? "Design team will handle this order"
-                    : "No design work needed",
-                style: TextStyle(
-                  fontSize: 12,
-                  color:
-                      _isDesignerRequired ? Colors.white70 : const Color.fromARGB(255, 244, 3, 3),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // 🔥 SWITCH
-        Switch(
-          value: _isDesignerRequired,
-          activeColor: Colors.white,
-          onChanged: (val) {
-            setState(() {
-              _isDesignerRequired = val;
-            });
-          },
-        ),
-      ],
-    ),
-  ),
-),
-const SizedBox(height: 10),
-            // Total Amount Section
+            // ── Designer Required ────────────────────────────────────────
             Container(
-              padding: const EdgeInsets.all(24),
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.green.shade400, Colors.green.shade700],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
+                gradient: _isDesignerRequired
+                    ? LinearGradient(
+                        colors: [Colors.purple.shade400, Colors.blue.shade500],
+                      )
+                    : const LinearGradient(
+                        colors: [Color(0xFFEFD8D8), Color(0xFFEDBCBC)],
+                      ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.green.shade300.withOpacity(0.6),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
+                    color: _isDesignerRequired
+                        ? Colors.purple.withOpacity(0.3)
+                        : Colors.grey.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // SUBTOTAL
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Subtotal',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () =>
+                    setState(() => _isDesignerRequired = !_isDesignerRequired),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      Text(
-                        '₹${_subTotal.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                      child: Icon(
+                        Icons.design_services_rounded,
+                        color: _isDesignerRequired
+                            ? Colors.white
+                            : const Color(0xFFFA0101),
+                        size: 26,
                       ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // GST
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'GST',
+                          Text(
+                            "Designer Required",
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              color: _isDesignerRequired
+                                  ? Colors.white
+                                  : const Color(0xFFF30202),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: DropdownButton<double>(
-                              value: _gstPercent,
-                              underline: const SizedBox(),
-                              isDense: true,
-                              items: _gstOptions
-                                  .map(
-                                    (gst) => DropdownMenuItem(
-                                      value: gst,
-                                      child: Text('${gst.toInt()}%'),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (v) =>
-                                  setState(() => _gstPercent = v!),
+                          const SizedBox(height: 4),
+                          Text(
+                            _isDesignerRequired
+                                ? "Design team will handle this order"
+                                : "No design work needed",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _isDesignerRequired
+                                  ? Colors.white70
+                                  : const Color(0xFFF40303),
                             ),
                           ),
                         ],
                       ),
-                      Text(
-                        '₹${_gstAmount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // DELIVERY CHARGES
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            'Delivery Charges',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          InkWell(
-                            onTap: () {
-                              setState(() {
-                                _showDeliveryCharges = !_showDeliveryCharges;
-                                if (!_showDeliveryCharges) {
-                                  _deliveryCharges = 0;
-                                  _deliveryController.clear();
-                                }
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _showDeliveryCharges
-                                        ? Icons.remove_circle_rounded
-                                        : Icons.add_circle_rounded,
-                                    color: Colors.green.shade600,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    _showDeliveryCharges ? 'Remove' : 'Add',
-                                    style: TextStyle(
-                                      color: Colors.green.shade600,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_showDeliveryCharges)
-                        SizedBox(
-                          width: 130,
-                          child: TextField(
-                            controller: _deliveryController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            decoration: InputDecoration(
-                              prefixText: '₹ ',
-                              filled: true,
-                              fillColor: Colors.white.withOpacity(0.2),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none,
-                              ),
-                            ),
-                            onChanged: (v) {
-                              setState(() {
-                                _deliveryCharges = double.tryParse(v) ?? 0;
-                              });
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // ADVANCE (DELIVERY KE NICHE)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            'Advance Paid',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          InkWell(
-                            onTap: () {
-                              setState(() {
-                                if (_advanceAmount > 0) {
-                                  _advanceAmount = 0;
-                                  _advanceController.clear();
-                                }
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _advanceAmount > 0
-                                        ? Icons.remove_circle_rounded
-                                        : Icons.add_circle_rounded,
-                                    color: Colors.green.shade600,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    _advanceAmount > 0 ? 'Remove' : 'Add',
-                                    style: TextStyle(
-                                      color: Colors.green.shade600,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(
-                        width: 130,
-                        child: TextField(
-                          controller: _advanceController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          decoration: InputDecoration(
-                            prefixText: '₹ ',
-                            filled: true,
-                            fillColor: Colors.white.withOpacity(0.2),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                          onChanged: (v) {
-                            setState(() {
-                              _advanceAmount = double.tryParse(v) ?? 0;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-                  const Divider(color: Colors.white, thickness: 2),
-                  const SizedBox(height: 16),
-
-                  // FINAL TOTAL
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Total Amount',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '₹${_finalTotal.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: Colors.green.shade700,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                    Switch(
+                      value: _isDesignerRequired,
+                      activeColor: Colors.white,
+                      onChanged: (val) =>
+                          setState(() => _isDesignerRequired = val),
+                    ),
+                  ],
+                ),
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
-            // Order Details Section
+            // ── Grand Total Summary ──────────────────────────────────────
+            _buildGrandTotalCard(),
+
+            const SizedBox(height: 10),
+
+            // ── Order Details ────────────────────────────────────────────
             _buildSection(
               title: 'Order Details',
               icon: Icons.receipt_long_rounded,
@@ -2393,7 +1356,7 @@ const SizedBox(height: 10),
                         color: Colors.indigo.shade700,
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 12,
                       runSpacing: 12,
@@ -2401,8 +1364,8 @@ const SizedBox(height: 10),
                         priority,
                       ) {
                         final isSelected = _selectedPriority == priority;
-                        Color priorityColor;
-                        List<Color> gradientColors;
+                        late Color priorityColor;
+                        late List<Color> gradientColors;
                         switch (priority) {
                           case 'Low':
                             priorityColor = Colors.green.shade600;
@@ -2440,11 +1403,8 @@ const SizedBox(height: 10),
                             ];
                         }
                         return InkWell(
-                          onTap: () {
-                            setState(() {
-                              _selectedPriority = priority;
-                            });
-                          },
+                          onTap: () =>
+                              setState(() => _selectedPriority = priority),
                           borderRadius: BorderRadius.circular(14),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -2502,7 +1462,7 @@ const SizedBox(height: 10),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
                 _buildTextField(
                   controller: _notesController,
                   label: 'Additional Notes (Optional)',
@@ -2513,9 +1473,9 @@ const SizedBox(height: 10),
               ],
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 15),
 
-            // Submit Button
+            // ── Submit Button ────────────────────────────────────────────
             Container(
               height: 60,
               decoration: BoxDecoration(
@@ -2573,6 +1533,983 @@ const SizedBox(height: 10),
           ],
         ),
       ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PRODUCT CARD
+  // ─────────────────────────────────────────────────────────────────────────
+  Widget _buildProductCard(int index) {
+    final item = _products[index];
+    final gstPct = item['gstPercent'] as double;
+    final subAmt = _productSubTotal(item);
+    final gstAmt = _productGstAmount(item);
+    final totalAmt = _productTotal(item);
+    final category = item['category'] as String? ?? '';
+    final isMdf = category == 'MDF';
+    final isLadduPaper = category == 'Laddu Paper';
+    final isOthers = category == 'Others';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.white, Colors.blue.shade50.withOpacity(0.3)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.blue.shade100, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.shade100.withOpacity(0.5),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header row ───────────────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.blue.shade400, Colors.blue.shade700],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blue.shade200,
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      item['code'],
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Product ${index + 1}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                ],
+              ),
+              if (_products.length > 1)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.delete_rounded,
+                      color: Colors.red.shade600,
+                      size: 24,
+                    ),
+                    onPressed: () => _removeProduct(index),
+                    padding: const EdgeInsets.all(8),
+                  ),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Category Dropdown ────────────────────────────────────────
+          DropdownButtonFormField<String>(
+            value: item['category'],
+            decoration: InputDecoration(
+              labelText: 'Product Category',
+              prefixIcon: Container(
+                padding: const EdgeInsets.all(10),
+                child: Icon(
+                  Icons.category_rounded,
+                  color: Colors.blue.shade600,
+                ),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            items: _productCategories
+                .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                .toList(),
+            onChanged: (value) {
+              setState(() {
+                _products[index]['category'] = value;
+                _products[index]['gstPercent'] = _gstForCategory(value);
+                _products[index]['hsnCode'] = _hsnForCategory(value);
+              });
+            },
+          ),
+
+          // ── Others: custom HSN Code field + GST selector ─────────────
+          if (isOthers) ...[
+            const SizedBox(height: 10),
+            TextFormField(
+              initialValue: item['hsnCode'] ?? '',
+              decoration: InputDecoration(
+                labelText: 'HSN Code (Optional)',
+                hintText: 'e.g. 48062000',
+                prefixIcon: Container(
+                  padding: const EdgeInsets.all(10),
+                  child: Icon(Icons.tag_rounded, color: Colors.blue.shade600),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+              keyboardType: TextInputType.text,
+              onChanged: (val) =>
+                  setState(() => _products[index]['hsnCode'] = val.trim()),
+            ),
+
+            const SizedBox(height: 8),
+
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade200, width: 1.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.percent_rounded,
+                        color: Colors.blue.shade700,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Select GST Rate',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [5.0, 18.0].map((pct) {
+                      final isActive = gstPct == pct;
+                      final btnColor = pct == 18.0
+                          ? Colors.orange.shade600
+                          : Colors.blue.shade600;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(
+                            () => _products[index]['gstPercent'] = pct,
+                          ),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              gradient: isActive
+                                  ? LinearGradient(
+                                      colors: [
+                                        btnColor.withOpacity(0.85),
+                                        btnColor,
+                                      ],
+                                    )
+                                  : null,
+                              color: isActive ? null : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isActive ? Colors.transparent : btnColor,
+                                width: 1.5,
+                              ),
+                              boxShadow: isActive
+                                  ? [
+                                      BoxShadow(
+                                        color: btnColor.withOpacity(0.35),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${pct.toInt()}%',
+                                style: TextStyle(
+                                  color: isActive ? Colors.white : btnColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 10),
+
+          // ─── FIX: Autocomplete hatao, direct TextFormField use karo ───
+          // Yahi tha asli bug - Autocomplete ka internal controller
+          // index shift pe sync nahi hota tha
+        Autocomplete<Map<String, dynamic>>(
+  optionsBuilder: (TextEditingValue value) async =>
+      await _fetchProductSuggestions(value.text),
+  displayStringForOption: (option) => option['productName'] ?? '',
+  fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+    if (controller.text != _products[index]['name']!.text) {
+      controller.text = _products[index]['name']!.text;
+      controller.selection =
+          TextSelection.collapsed(offset: controller.text.length);
+    }
+    return TextFormField(
+      controller: controller,
+      focusNode: focusNode,
+      decoration: InputDecoration(
+        labelText: 'Product Name',
+        prefixIcon: Container(
+          padding: const EdgeInsets.all(10),
+          child: Icon(
+            Icons.shopping_bag_rounded,
+            color: Colors.blue.shade600,
+          ),
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+      ),
+      onChanged: (val) {
+        _products[index]['name']!.text = val;
+        _products[index]['userEdited'] = true;
+      },
+      validator: (value) => (value == null || value.isEmpty)
+          ? 'Product name required'
+          : null,
+    );
+  },
+  onSelected: (selected) {
+    setState(() {
+      _products[index]['name']!.text = selected['productName'] ?? '';
+
+      if (selected['quantity'] != null) {
+        _products[index]['quantity']!.text = selected['quantity'].toString();
+      }
+      if (selected['price'] != null) {
+        _products[index]['price']!.text = selected['price'].toString();
+      }
+      _products[index]['fetchedImages'] =
+          List<String>.from(selected['images'] ?? []);
+      _products[index]['autoFilled'] = true;
+    });
+  },
+),
+          // ── Fetched Images ─────────────────────────────────────────────
+          if (((_products[index]['fetchedImages'] ?? []) as List)
+              .isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.green.shade50, Colors.green.shade100],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.image_rounded,
+                    color: Colors.green.shade700,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Saved Images',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Colors.green.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 5),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: List.generate(
+                ((_products[index]['fetchedImages'] ?? []) as List).length,
+                (imgIndex) {
+                  final imageUrl =
+                      ((_products[index]['fetchedImages'] ?? [])
+                              as List)[imgIndex]
+                          as String;
+                  return GestureDetector(
+                    onTap: () => showDialog(
+                      context: context,
+                      builder: (_) => Dialog(
+                        backgroundColor: Colors.transparent,
+                        child: InteractiveViewer(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.network(imageUrl),
+                          ),
+                        ),
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.green.shade200,
+                              width: 2,
+                            ),
+                            image: DecorationImage(
+                              image: NetworkImage(imageUrl),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.red.shade400,
+                                  Colors.red.shade700,
+                                ],
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              onPressed: () => setState(
+                                () =>
+                                    (_products[index]['fetchedImages'] as List)
+                                        .removeAt(imgIndex),
+                              ),
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 8),
+
+          // ── Qty & Price ───────────────────────────────────────────────
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  controller: _products[index]['quantity']!,
+                  label: 'Quantity',
+                  icon: Icons.numbers_rounded,
+                  iconColor: Colors.blue.shade600,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) =>
+                      (value == null || value.isEmpty) ? 'Required' : null,
+                  onChanged: (_) =>
+                      setState(() => _products[index]['userEdited'] = true),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _buildTextField(
+                  controller: _products[index]['price']!,
+                  label: 'Price/Unit',
+                  icon: Icons.currency_rupee_rounded,
+                  iconColor: Colors.blue.shade600,
+                  keyboardType: TextInputType.number,
+                  validator: (value) => value!.isEmpty ? 'Required' : null,
+                  onChanged: (_) =>
+                      setState(() => _products[index]['userEdited'] = true),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          _buildTextField(
+            controller: _products[index]['remarks']!,
+            label: 'Remarks (Optional)',
+            icon: Icons.comment_rounded,
+            iconColor: Colors.blue.shade600,
+            maxLines: 2,
+          ),
+
+          const SizedBox(height: 8),
+
+          // ── Add Images ────────────────────────────────────────────────
+          OutlinedButton.icon(
+            onPressed: () => _pickProductImages(index),
+            icon: const Icon(Icons.add_photo_alternate_rounded, size: 22),
+            label: Text(
+              _products[index]['images'].isEmpty
+                  ? 'Add Product Images'
+                  : 'Add More Images',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.blue.shade600,
+              side: BorderSide(color: Colors.blue.shade600, width: 2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            ),
+          ),
+
+          // ── Picked Images ─────────────────────────────────────────────
+          if (_products[index]['images'].isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: List.generate(_products[index]['images'].length, (
+                imgIndex,
+              ) {
+                final image = _products[index]['images'][imgIndex];
+                return Stack(
+                  children: [
+                    GestureDetector(
+                      onTap: () => showDialog(
+                        context: context,
+                        builder: (_) => Dialog(
+                          backgroundColor: Colors.transparent,
+                          child: InteractiveViewer(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: kIsWeb
+                                  ? Image.network(image.path)
+                                  : Image.file(File(image.path)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      child: Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.blue.shade200,
+                            width: 2,
+                          ),
+                          image: DecorationImage(
+                            image: kIsWeb
+                                ? NetworkImage(image.path)
+                                : FileImage(File(image.path)) as ImageProvider,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.red.shade400, Colors.red.shade700],
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                          onPressed: () => _removeProductImage(index, imgIndex),
+                          padding: const EdgeInsets.all(4),
+                          constraints: const BoxConstraints(),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ],
+
+          const SizedBox(height: 10),
+
+          // ── Per-product GST breakdown card ────────────────────────────
+          Align(
+            alignment: Alignment.centerLeft,
+            child: IntrinsicWidth(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: (isMdf || isLadduPaper)
+                        ? [Colors.orange.shade400, Colors.orange.shade600]
+                        : [Colors.green.shade400, Colors.green.shade600],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isMdf || isLadduPaper)
+                          ? Colors.orange.shade200
+                          : Colors.green.shade200,
+                      blurRadius: 6,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Subtotal : ',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '₹${subAmt.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 1),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'GST @ ${gstPct.toInt()}% : ',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '₹${gstAmt.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Colors.white38, height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Total : ',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '₹${totalAmt.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // GRAND TOTAL CARD
+  // ─────────────────────────────────────────────────────────────────────────
+  Widget _buildGrandTotalCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.green.shade400, Colors.green.shade700],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.shade300.withOpacity(0.6),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.receipt_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Order Summary',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Divider(color: Colors.white30),
+          const SizedBox(height: 5),
+          _summaryRow(
+            'Subtotal (before GST)',
+            '₹${_subTotal.toStringAsFixed(2)}',
+          ),
+          const SizedBox(height: 1),
+          _summaryRow('Total GST', '₹${_totalGstAmount.toStringAsFixed(2)}'),
+          const SizedBox(height: 2),
+
+          // Delivery Charges
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Delivery Charges',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _showDeliveryCharges = !_showDeliveryCharges;
+                        if (!_showDeliveryCharges) {
+                          _deliveryCharges = 0;
+                          _deliveryController.clear();
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _showDeliveryCharges
+                                ? Icons.remove_circle_rounded
+                                : Icons.add_circle_rounded,
+                            color: Colors.green.shade600,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _showDeliveryCharges ? 'Remove' : 'Add',
+                            style: TextStyle(
+                              color: Colors.green.shade600,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_showDeliveryCharges)
+                SizedBox(
+                  width: 120,
+                  child: TextField(
+                    controller: _deliveryController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      prefixText: '₹ ',
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.2),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onChanged: (v) => setState(
+                      () => _deliveryCharges = double.tryParse(v) ?? 0,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  '₹${_deliveryCharges.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 5),
+
+          // Advance Paid
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Advance Paid',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  InkWell(
+                    onTap: () {
+                      if (_advanceAmount > 0) {
+                        setState(() {
+                          _advanceAmount = 0;
+                          _advanceController.clear();
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _advanceAmount > 0
+                                ? Icons.remove_circle_rounded
+                                : Icons.add_circle_rounded,
+                            color: Colors.green.shade600,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _advanceAmount > 0 ? 'Remove' : 'Add',
+                            style: TextStyle(
+                              color: Colors.green.shade600,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(
+                width: 120,
+                child: TextField(
+                  controller: _advanceController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    prefixText: '₹ ',
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.2),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (v) =>
+                      setState(() => _advanceAmount = double.tryParse(v) ?? 0),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+          const Divider(color: Colors.white, thickness: 1.5),
+          const SizedBox(height: 5),
+
+          // Grand Total
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Grand Total',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '₹${_finalTotal.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    color: Colors.green.shade700,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value, {bool small = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: small ? Colors.white70 : Colors.white,
+              fontSize: small ? 13 : 15,
+              fontWeight: small ? FontWeight.w400 : FontWeight.w600,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: small ? Colors.white70 : Colors.white,
+            fontSize: small ? 13 : 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 

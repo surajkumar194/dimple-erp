@@ -14,12 +14,10 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   Future<int> _getCount(String collection) async {
     final snap = await _firestore.collection(collection).get();
     return snap.docs.length;
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -32,12 +30,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               _header(),
               const SizedBox(height: 32),
-
               LayoutBuilder(
                 builder: (context, constraints) {
                   int crossAxisCount;
                   double childAspectRatio;
-
                   if (constraints.maxWidth < 600) {
                     crossAxisCount = 2; // Mobile
                     childAspectRatio = 0.78;
@@ -48,7 +44,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     crossAxisCount = 4; // Web
                     childAspectRatio = 1.1;
                   }
-
                   return GridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -72,7 +67,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           );
                         },
                       ),
-
                       _firestoreCard(
                         title: "Mdf / Boxes Ready Stock",
                         subtitle: "Ready stock dashboard",
@@ -88,7 +82,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           );
                         },
                       ),
-
                       _firestoreCard(
                         title: "Dispatch Sweets Stock",
                         subtitle: "Sweets stock management",
@@ -104,7 +97,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           );
                         },
                       ),
-
                       _firestoreCard(
                         title: "Paper /kappa Stock",
                         subtitle: "Manage kappa Stock",
@@ -123,6 +115,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           );
                         },
                       ),
+                      //   _firestoreCard(
+                      //   title: "issue history",
+                      //   subtitle: "Manage issue history",
+                      //   icon: Icons.history,
+                      //   gradient: [
+                      //     const Color.fromARGB(255, 87, 147, 232)!,
+                      //     const Color.fromARGB(255, 94, 143, 211)!,
+                      //   ],
+                      //   collection: "stock_transactions",
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //         builder: (_) => const IssueFullHistoryScreen(),
+                      //       ),
+                      //     );
+                      //   },
+                      // ),
                     ],
                   );
                 },
@@ -134,7 +144,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ================= HEADER =================
+
   Widget _header() {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -172,8 +182,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
-  // ================= CARD WITH FIRESTORE COUNT =================
   Widget _firestoreCard({
     required String title,
     required String subtitle,

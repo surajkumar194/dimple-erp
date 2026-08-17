@@ -14,42 +14,52 @@ import 'package:excel/excel.dart' hide Border;
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
+import 'package:universal_html/html.dart' as html;
 
 class PaperStockScreen extends StatefulWidget {
   const PaperStockScreen({super.key});
   @override
   _PaperStockScreenState createState() => _PaperStockScreenState();
-
 }
+
 class _PaperStockScreenState extends State<PaperStockScreen>
-with SingleTickerProviderStateMixin {
-final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-final FirebaseStorage _storage = FirebaseStorage.instance;
-final ImagePicker _picker = ImagePicker();
-List<Map<String, dynamic>> stockData = [];
-List<Map<String, dynamic>> filteredData = [];
-final TextEditingController _searchController = TextEditingController();
-String? selectedPosition;
-bool _isLoading = false;
-String _selectedDateFilter = 'All';
-DateTimeRange? _customDateRange;
-String _selectedTypeFilter = "All";
-String _selectedRangeFilter = "All";
-final List<String> _typeFilters = [
-  "All",
-  "Regular",
-  "Dead Stock",
-  "Medium Moving",
-  "Slow Moving",
-  "Fast Moving",
-];
-final List<String> _rangeFilters = [
-  "1 Day",
-  "2 Day",
-  "1 Week",
-  "1 Month",
-  "All",
-];
+    with SingleTickerProviderStateMixin {
+  static const Color primaryGreen = Color(0xFF2E7D32);
+  static const Color lightGreen = Color(0xFF66BB6A);
+  static const Color darkGreen = Color(0xFF1B5E20);
+  static const Color accentGreen = Color(0xFF4CAF50);
+  static const Color bgGreen = Color(0xFFE8F5E9);
+  static const Color cardGreen = Color(0xFFF1F8F4);
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final ImagePicker _picker = ImagePicker();
+  List<Map<String, dynamic>> stockData = [];
+  List<Map<String, dynamic>> filteredData = [];
+  final TextEditingController _searchController = TextEditingController();
+  bool _isLoading = false;
+
+  String _selectedDateFilter = 'All';
+  DateTimeRange? _customDateRange;
+  String _selectedTypeFilter = "All";
+  String _selectedRangeFilter = "All";
+
+  final List<String> _typeFilters = [
+    "All",
+    "Regular",
+    "Dead Stock",
+    "Medium Moving",
+    "Slow Moving",
+    "Fast Moving",
+  ];
+
+  final List<String> _rangeFilters = [
+    "1 Day",
+    "2 Day",
+    "1 Week",
+    "1 Month",
+    "All",
+  ];
+
   final List<String> _dateFilters = [
     'All',
     'Today',
@@ -57,8 +67,7 @@ final List<String> _rangeFilters = [
     'Last 30 Days',
     'Custom',
   ];
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
+
   final List<String> _stockTypes = [
     'Regular',
     'Dead Stock',
@@ -66,8 +75,10 @@ final List<String> _rangeFilters = [
     'Slow Moving',
     'Fast Moving',
   ];
+
   String? _selectedGroup;
   List<String> _groupList = [];
+
   final List<String> _departments = [
     'Production',
     'Maintenance',
@@ -76,6 +87,7 @@ final List<String> _rangeFilters = [
     'Store',
     'Admin',
   ];
+
   final List<String> _secondParties = [
     'Vendor A',
     'Vendor B',
@@ -83,141 +95,12 @@ final List<String> _rangeFilters = [
     'Client Y',
     'Other',
   ];
-  Future<void> _reorderPaperSrNumbers() async {
-    final snapshot = await _firestore
-        .collection('paper_stock_items')
-        .orderBy('createdAt', descending: false)
-        .get();
-    WriteBatch batch = _firestore.batch();
-    int sr = 1;
-    for (var doc in snapshot.docs) {
-      batch.update(doc.reference, {'sr': sr});
-      sr++;
-    }
-    await batch.commit();
-  }
-  Widget _buildStockSummary() {
-    final totals = _calculateStockTotals();
-    return Container(
-     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
-      // padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: accentGreen.withOpacity(0.15),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _summaryCard("Top Stock", totals["top"].toString(), Colors.blue),
-          _summaryCard(
-            "Bottom Stock",
-            totals["bottom"].toString(),
-            Colors.orange,
-          ),
-          _summaryCard("Overall", totals["overall"].toString(), primaryGreen),
-        ],
-      ),
-    );
-  }
-List<Map<String, dynamic>> _filterForPdf() {
-  final now = DateTime.now();
 
-  return stockData.where((item) {
-    bool typeMatch =
-        _selectedTypeFilter == "All" || item["stock_type"] == _selectedTypeFilter;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
-    bool dateMatch = true;
+  // ==================== INIT & DISPOSE ====================
 
-    if (_selectedRangeFilter != "All") {
-      try {
-        DateTime itemDate =
-            DateFormat('dd-MM-yyyy').parse(item['dateEdit']);
-
-        if (_selectedRangeFilter == "1 Day") {
-          dateMatch = itemDate.isAfter(now.subtract(Duration(days: 1)));
-        } else if (_selectedRangeFilter == "2 Day") {
-          dateMatch = itemDate.isAfter(now.subtract(Duration(days: 2)));
-        } else if (_selectedRangeFilter == "1 Week") {
-          dateMatch = itemDate.isAfter(now.subtract(Duration(days: 7)));
-        } else if (_selectedRangeFilter == "1 Month") {
-          dateMatch = itemDate.isAfter(now.subtract(Duration(days: 30)));
-        }
-      } catch (e) {}
-    }
-    return typeMatch && dateMatch;
-  }).toList();
-}Future<Uint8List?> _networkImageToBytes(String url) async {
-  try {
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode == 200) {
-      return response.bodyBytes;
-    }
-  } catch (e) {}
-  return null;
-}
-  Widget _summaryCard(String title, String value, Color color) {
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.4)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: color,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 0.1),
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 17,
-                color: Colors.black87,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  static const Color primaryGreen = Color(0xFF2E7D32);
-  static const Color lightGreen = Color(0xFF66BB6A);
-  static const Color darkGreen = Color(0xFF1B5E20);
-  static const Color accentGreen = Color(0xFF4CAF50);
-  static const Color bgGreen = Color(0xFFE8F5E9);
-  static const Color cardGreen = Color(0xFFF1F8F4);
-  Future<void> _fixPaperCodesSequentially() async {
-    final snapshot = await _firestore
-        .collection('paper_stock_items')
-        .orderBy('sr') 
-        .get();
-    WriteBatch batch = _firestore.batch();
-    int counter = 1;
-    for (var doc in snapshot.docs) {
-      final newCode = "HSP-LB-${counter.toString().padLeft(2, '0')}";
-      batch.update(doc.reference, {
-        "code": newCode,
-        "updatedAt": FieldValue.serverTimestamp(),
-      });
-      counter++;
-    }
-    await batch.commit();
-    await _loadDataFromFirebase();
-    _showSnackBar("✓ Codes fixed sequentially");
-  }
   @override
   void initState() {
     super.initState();
@@ -235,33 +118,34 @@ List<Map<String, dynamic>> _filterForPdf() {
     _loadDataFromFirebase();
     _searchController.addListener(_filterData);
   }
+
   @override
   void dispose() {
     _searchController.dispose();
     _animationController.dispose();
     super.dispose();
   }
+
+  // ==================== FIREBASE OPERATIONS ====================
+
   Future<int> _getNextSrNumber() async {
     try {
       final snapshot = await _firestore.collection('paper_stock_items').get();
       int maxSr = 0;
       for (var doc in snapshot.docs) {
         final sr = doc.data()['sr'];
-        if (sr != null && sr is int && sr > maxSr) {
-          maxSr = sr;
-        }
+        if (sr != null && sr is int && sr > maxSr) maxSr = sr;
       }
       return maxSr + 1;
     } catch (e) {
       return 1;
     }
   }
+
   Future<String> _getNextPaperCode() async {
     try {
       final snapshot = await _firestore.collection('paper_stock_items').get();
-      if (snapshot.docs.isEmpty) {
-        return "HSP-LB-01";
-      }
+      if (snapshot.docs.isEmpty) return "HSP-LB-01";
       final List<int> numbers = [];
       for (var doc in snapshot.docs) {
         final code = doc.data()['code']?.toString();
@@ -287,12 +171,13 @@ List<Map<String, dynamic>> _filterForPdf() {
       return "HSP-LB-01";
     }
   }
+
   Future<void> _loadDataFromFirebase() async {
     setState(() => _isLoading = true);
     try {
       final snapshot = await _firestore
           .collection('paper_stock_items')
-          .orderBy('sr') 
+          .orderBy('sr')
           .get();
       stockData = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
@@ -300,6 +185,7 @@ List<Map<String, dynamic>> _filterForPdf() {
         data['sr'] = data['sr'] ?? '-';
         return data;
       }).toList();
+
       final groups =
           stockData
               .map((e) => e['piller_no']?.toString() ?? '')
@@ -318,30 +204,130 @@ List<Map<String, dynamic>> _filterForPdf() {
     }
     setState(() => _isLoading = false);
   }
+
+  Future<void> _reorderPaperSrNumbers() async {
+    final snapshot = await _firestore
+        .collection('paper_stock_items')
+        .orderBy('createdAt', descending: false)
+        .get();
+    WriteBatch batch = _firestore.batch();
+    int sr = 1;
+    for (var doc in snapshot.docs) {
+      batch.update(doc.reference, {'sr': sr});
+      sr++;
+    }
+    await batch.commit();
+  }
+
+  Future<void> _fixPaperCodesSequentially() async {
+    final snapshot = await _firestore
+        .collection('paper_stock_items')
+        .orderBy('sr')
+        .get();
+    WriteBatch batch = _firestore.batch();
+    int counter = 1;
+    for (var doc in snapshot.docs) {
+      final newCode = "HSP-LB-${counter.toString().padLeft(2, '0')}";
+      batch.update(doc.reference, {
+        "code": newCode,
+        "updatedAt": FieldValue.serverTimestamp(),
+      });
+      counter++;
+    }
+    await batch.commit();
+    await _loadDataFromFirebase();
+    _showSnackBar("✓ Codes fixed sequentially");
+  }
+
+  Future<String?> _uploadImage(XFile imageFile) async {
+    try {
+      final Uint8List imageBytes = await imageFile.readAsBytes();
+      final String fileName = 'paper_${DateTime.now().millisecondsSinceEpoch}';
+      final Reference ref = _storage.ref().child(
+        'paper_stock_images/$fileName.png',
+      );
+      final uploadTask = await ref.putData(
+        imageBytes,
+        SettableMetadata(contentType: 'image/png'),
+      );
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      _showSnackBar("Image upload failed: $e", isError: true);
+      return null;
+    }
+  }
+
+  // ==================== FILTER & SEARCH ====================
+
   void _filterData() => _applyFilters();
+
   void _applyFilters() {
     final query = _searchController.text.toLowerCase();
     final now = DateTime.now();
     setState(() {
       filteredData = stockData.where((item) {
+        // Search
         final matchesSearch =
             item["code"].toString().toLowerCase().contains(query) ||
             item["detail"].toString().toLowerCase().contains(query) ||
             item["piller_no"].toString().toLowerCase().contains(query) ||
             item["location"].toString().toLowerCase().contains(query) ||
             item["design_no"].toString().toLowerCase().contains(query);
+
+        // Group
         final matchesGroup =
             _selectedGroup == 'All' || item['piller_no'] == _selectedGroup;
+
+        // ✅ Type filter (Slow Moving, Fast Moving etc.)
+        final matchesType =
+            _selectedTypeFilter == "All" ||
+            item["stock_type"] == _selectedTypeFilter;
+
+        // ✅ Range filter (1 Day, 1 Week etc.)
+        bool matchesRange = true;
+        if (_selectedRangeFilter != "All") {
+          try {
+            DateTime itemDate = DateFormat(
+              'dd-MM-yyyy',
+            ).parse(item['dateEdit']);
+            if (_selectedRangeFilter == "1 Day") {
+              matchesRange = itemDate.isAfter(
+                now.subtract(const Duration(days: 1)),
+              );
+            } else if (_selectedRangeFilter == "2 Day") {
+              matchesRange = itemDate.isAfter(
+                now.subtract(const Duration(days: 2)),
+              );
+            } else if (_selectedRangeFilter == "1 Week") {
+              matchesRange = itemDate.isAfter(
+                now.subtract(const Duration(days: 7)),
+              );
+            } else if (_selectedRangeFilter == "1 Month") {
+              matchesRange = itemDate.isAfter(
+                now.subtract(const Duration(days: 30)),
+              );
+            }
+          } catch (_) {
+            matchesRange = true;
+          }
+        }
+
+        // Date filter (Today, Last 7 Days etc.)
         bool matchesDate = true;
         if (_selectedDateFilter != 'All') {
           try {
             DateTime? itemDate;
-
             if (item['dateEdit'] != null &&
                 item['dateEdit'].toString().isNotEmpty) {
               itemDate = DateFormat('dd-MM-yyyy').parse(item['dateEdit']);
             }
-            if (itemDate == null) return matchesSearch && matchesGroup;
+            if (itemDate == null) {
+              return matchesSearch &&
+                  matchesGroup &&
+                  matchesType &&
+                  matchesRange;
+            }
             if (_selectedDateFilter == 'Today') {
               matchesDate =
                   itemDate.year == now.year &&
@@ -369,10 +355,238 @@ List<Map<String, dynamic>> _filterForPdf() {
             matchesDate = true;
           }
         }
-        return matchesSearch && matchesGroup && matchesDate;
+
+        return matchesSearch &&
+            matchesGroup &&
+            matchesType &&
+            matchesRange &&
+            matchesDate;
       }).toList();
     });
   }
+
+  // ==================== IMAGE BYTES FROM URL ====================
+
+  Future<Uint8List?> _networkImageToBytes(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) return response.bodyBytes;
+    } catch (e) {}
+    return null;
+  }
+
+  // ==================== PDF DOWNLOAD ====================
+  // Uses filteredData directly — jo screen pe dikha raha hai wahi PDF mein jayega
+
+  Future<void> _downloadPdf() async {
+    try {
+      final pdf = pw.Document();
+
+      // ✅ DIRECT filteredData use karo — screen pe jo dikh raha hai wahi PDF mein
+      final data = List<Map<String, dynamic>>.from(filteredData);
+
+      if (data.isEmpty) {
+        _showSnackBar("No data to export in PDF", isError: true);
+        return;
+      }
+
+      _showSnackBar("Generating PDF, please wait...");
+
+      // Pre-load all images first
+      List<Uint8List?> topImages = [];
+      for (var item in data) {
+        final topUrl = item['top_image']?.toString() ?? '';
+        if (topUrl.isNotEmpty) {
+          final bytes = await _networkImageToBytes(topUrl);
+          topImages.add(bytes);
+        } else {
+          topImages.add(null);
+        }
+      }
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.all(16),
+          build: (context) {
+            // Header Row
+            final headerRow = pw.TableRow(
+              decoration: const pw.BoxDecoration(color: PdfColors.green700),
+              children: [
+                _pdfHeader("Sr"),
+                _pdfHeader("Code"),
+                _pdfHeader("Location"),
+                _pdfHeader("Design No"),
+                _pdfHeader("Item Name"),
+                _pdfHeader("Size"),
+                _pdfHeader("Type"),
+                _pdfHeader("Image"),
+                _pdfHeader("Top Total"),
+                _pdfHeader("Top Issue"),
+                _pdfHeader("Top Bal"),
+                _pdfHeader("Bot Total"),
+                _pdfHeader("Bot Issue"),
+                _pdfHeader("Bot Bal"),
+                _pdfHeader("Date"),
+                _pdfHeader("Remark"),
+              ],
+            );
+
+            // Data Rows
+            List<pw.TableRow> dataRows = [];
+            for (int i = 0; i < data.length; i++) {
+              final item = data[i];
+              final imgBytes = topImages[i];
+
+              dataRows.add(
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(
+                    color: i % 2 == 0 ? PdfColors.white : PdfColors.green50,
+                  ),
+                  children: [
+                    _pdfCell((i + 1).toString()),
+                    _pdfCell(item["code"] ?? ""),
+                    _pdfCell(item["location"] ?? ""),
+                    _pdfCell(item["design_no"] ?? ""),
+                    _pdfCell(item["detail"] ?? ""),
+                    _pdfCell(item["piller_no"] ?? ""),
+                    _pdfCell(item["stock_type"] ?? ""),
+                    // Image cell
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(3),
+                      child: imgBytes != null
+                          ? pw.Image(
+                              pw.MemoryImage(imgBytes),
+                              width: 36,
+                              height: 36,
+                              fit: pw.BoxFit.cover,
+                            )
+                          : pw.Text(
+                              "No Img",
+                              style: const pw.TextStyle(fontSize: 7),
+                            ),
+                    ),
+                    _pdfCell(item["top_in"]?.toString() ?? "0"),
+                    _pdfCell(item["top_out"]?.toString() ?? "0"),
+                    _pdfCell(item["top_bal"]?.toString() ?? "0"),
+                    _pdfCell(item["bottom_in"]?.toString() ?? "0"),
+                    _pdfCell(item["bottom_out"]?.toString() ?? "0"),
+                    _pdfCell(item["bottom_bal"]?.toString() ?? "0"),
+                    _pdfCell(item["dateEdit"] ?? ""),
+                    _pdfCell(item["remark1"] ?? ""),
+                  ],
+                ),
+              );
+            }
+
+            return [
+              pw.Text(
+                "Paper Stock Report",
+                style: pw.TextStyle(
+                  fontSize: 20,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.green900,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                "Generated: ${DateFormat('dd-MM-yyyy hh:mm a').format(DateTime.now())}   |   Total Items: ${data.length}",
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey700,
+                ),
+              ),
+              pw.SizedBox(height: 12),
+              pw.Table(
+                border: pw.TableBorder.all(
+                  color: PdfColors.grey400,
+                  width: 0.5,
+                ),
+                columnWidths: {
+                  0: const pw.FixedColumnWidth(22),
+                  1: const pw.FixedColumnWidth(52),
+                  2: const pw.FixedColumnWidth(50),
+                  3: const pw.FixedColumnWidth(50),
+                  4: const pw.FixedColumnWidth(70),
+                  5: const pw.FixedColumnWidth(40),
+                  6: const pw.FixedColumnWidth(48),
+                  7: const pw.FixedColumnWidth(40),
+                  8: const pw.FixedColumnWidth(32),
+                  9: const pw.FixedColumnWidth(32),
+                  10: const pw.FixedColumnWidth(32),
+                  11: const pw.FixedColumnWidth(32),
+                  12: const pw.FixedColumnWidth(32),
+                  13: const pw.FixedColumnWidth(32),
+                  14: const pw.FixedColumnWidth(48),
+                  15: const pw.FixedColumnWidth(55),
+                },
+                children: [headerRow, ...dataRows],
+              ),
+            ];
+          },
+        ),
+      );
+
+      final bytes = await pdf.save();
+      final fileName =
+          "paper_stock_${DateFormat('ddMMyyyy_HHmm').format(DateTime.now())}.pdf";
+
+      if (kIsWeb) {
+        // Web: proper hidden anchor download — no override popup
+        final blob = html.Blob([bytes], 'application/pdf');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement()
+          ..href = url
+          ..setAttribute("download", fileName)
+          ..style.display = 'none';
+        html.document.body!.append(anchor);
+        anchor.click();
+        anchor.remove();
+        html.Url.revokeObjectUrl(url);
+      } else {
+        // Mobile / Desktop
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File("${dir.path}/$fileName");
+        await file.writeAsBytes(bytes);
+        await OpenFile.open(file.path);
+      }
+
+      _showSnackBar("✓ PDF Downloaded: $fileName");
+    } catch (e) {
+      _showSnackBar("PDF Error: $e", isError: true);
+    }
+  }
+
+  // ==================== PDF HELPER WIDGETS ====================
+
+  pw.Widget _pdfHeader(String text) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontWeight: pw.FontWeight.bold,
+          fontSize: 8,
+          color: PdfColors.white,
+        ),
+        textAlign: pw.TextAlign.center,
+      ),
+    );
+  }
+
+  pw.Widget _pdfCell(String text) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+      child: pw.Text(
+        text,
+        style: const pw.TextStyle(fontSize: 7.5),
+        textAlign: pw.TextAlign.center,
+        overflow: pw.TextOverflow.clip,
+      ),
+    );
+  }
+
+  // ==================== STOCK CALCULATIONS ====================
 
   Map<String, dynamic> _calculateStockTotals() {
     int totalTop = 0;
@@ -397,24 +611,73 @@ List<Map<String, dynamic>> _filterForPdf() {
       "sizeTotals": sizeTotals,
     };
   }
-  Future<String?> _uploadImage(XFile imageFile) async {
-    try {
-      final Uint8List imageBytes = await imageFile.readAsBytes();
-      final String fileName = 'paper_${DateTime.now().millisecondsSinceEpoch}';
-      final Reference ref = _storage.ref().child(
-        'paper_stock_images/$fileName.png',
-      );
-      final uploadTask = await ref.putData(
-        imageBytes,
-        SettableMetadata(contentType: 'image/png'),
-      );
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-      return downloadUrl;
-    } catch (e) {
-      _showSnackBar("Image upload failed: $e", isError: true);
-      return null;
-    }
+
+  // ==================== STOCK SUMMARY WIDGET ====================
+
+  Widget _buildStockSummary() {
+    final totals = _calculateStockTotals();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 1),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: accentGreen.withOpacity(0.15),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _summaryCard("Top Stock", totals["top"].toString(), Colors.blue),
+          _summaryCard(
+            "Bottom Stock",
+            totals["bottom"].toString(),
+            Colors.orange,
+          ),
+          _summaryCard("Overall", totals["overall"].toString(), primaryGreen),
+        ],
+      ),
+    );
   }
+
+  Widget _summaryCard(String title, String value, Color color) {
+    return Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.4)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: color,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 0.1),
+            Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 17,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================== IMAGE WIDGETS ====================
+
   void _showImageZoom(String imageUrl) {
     showDialog(
       context: context,
@@ -505,6 +768,7 @@ List<Map<String, dynamic>> _filterForPdf() {
       ),
     );
   }
+
   Widget _imageCellFlex(Map<String, dynamic> item, int flex) {
     final topUrl = item['top_image'];
     final bottomUrl = item['bottom_image'];
@@ -542,7 +806,7 @@ List<Map<String, dynamic>> _filterForPdf() {
       children: [
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 9,
             fontWeight: FontWeight.w600,
             color: primaryGreen,
@@ -576,82 +840,78 @@ List<Map<String, dynamic>> _filterForPdf() {
     String? imageUrl,
     required VoidCallback onPick,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GestureDetector(
-          onTap: onPick,
-          child: Container(
-            width: 150,
-            height: 150,
-            decoration: BoxDecoration(
-              color: bgGreen,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: accentGreen, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: accentGreen.withOpacity(0.2),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+    return GestureDetector(
+      onTap: onPick,
+      child: Container(
+        width: 150,
+        height: 150,
+        decoration: BoxDecoration(
+          color: bgGreen,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: accentGreen, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: accentGreen.withOpacity(0.2),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: imageFile != null
-                  ? (kIsWeb
-                        ? FutureBuilder<Uint8List>(
-                            future: imageFile.readAsBytes(),
-                            builder: (context, snapshot) {
-                              if (!snapshot.hasData) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
-                              return Image.memory(
-                                snapshot.data!,
-                                fit: BoxFit.cover,
-                              );
-                            },
-                          )
-                        : Image.file(File(imageFile.path), fit: BoxFit.cover))
-                  : imageUrl != null && imageUrl.isNotEmpty
-                  ? Image.network(imageUrl, fit: BoxFit.cover)
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.cloud_upload_outlined,
-                          size: 50,
-                          color: accentGreen,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Upload Image",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: primaryGreen,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-          ),
+          ],
         ),
-      ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: imageFile != null
+              ? (kIsWeb
+                    ? FutureBuilder<Uint8List>(
+                        future: imageFile.readAsBytes(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          return Image.memory(
+                            snapshot.data!,
+                            fit: BoxFit.cover,
+                          );
+                        },
+                      )
+                    : Image.file(File(imageFile.path), fit: BoxFit.cover))
+              : imageUrl != null && imageUrl.isNotEmpty
+              ? Image.network(imageUrl, fit: BoxFit.cover)
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.cloud_upload_outlined,
+                      size: 50,
+                      color: accentGreen,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Upload Image",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryGreen,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
     );
   }
+
+  // ==================== ISSUE STOCK ====================
+
   void _issueStockWithDepartment(Map<String, dynamic> item) {
     String? selectedDept;
     String? selectedPos;
     final qtyCtrl = TextEditingController();
     final positionType = item['position_type'];
-    if (positionType == 'Top') {
-      selectedPos = 'Top';
-    } else if (positionType == 'Bottom') {
-      selectedPos = 'Bottom';
-    }
+    if (positionType == 'Top') selectedPos = 'Top';
+    if (positionType == 'Bottom') selectedPos = 'Bottom';
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -759,7 +1019,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                       ),
                     ),
                   ),
-
                 if (positionType == 'Both') const SizedBox(height: 16),
                 Container(
                   decoration: BoxDecoration(
@@ -816,18 +1075,14 @@ List<Map<String, dynamic>> _filterForPdf() {
                         _showSnackBar("Enter valid quantity", isError: true);
                         return;
                       }
-
-                      // ✅ FIXED: Properly determine which position to update
                       final isTop = selectedPos == 'Top';
                       final balKey = isTop ? 'top_bal' : 'bottom_bal';
                       final outKey = isTop ? 'top_out' : 'bottom_out';
-
                       final currentBal = item[balKey] ?? 0;
                       if (currentBal < qty) {
                         _showSnackBar("Not enough stock!", isError: true);
                         return;
                       }
-
                       await _firestore
                           .collection('paper_stock_items')
                           .doc(item['docId'])
@@ -839,7 +1094,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                             ).format(DateTime.now()),
                             'updatedAt': FieldValue.serverTimestamp(),
                           });
-
                       await _loadDataFromFirebase();
                       _showSnackBar("✓ Issued $qty to $selectedDept");
                       Navigator.pop(ctx);
@@ -855,19 +1109,15 @@ List<Map<String, dynamic>> _filterForPdf() {
     );
   }
 
-  // ✅ FIXED ADD STOCK - Now properly handles position selection
+  // ==================== ADD STOCK ====================
+
   void _addAdditionalWithParty(Map<String, dynamic> item) {
     String? selectedParty;
     String? selectedPos;
     final qtyCtrl = TextEditingController();
     final positionType = item['position_type'];
-
-    // Auto-select position if only one option available
-    if (positionType == 'Top') {
-      selectedPos = 'Top';
-    } else if (positionType == 'Bottom') {
-      selectedPos = 'Bottom';
-    }
+    if (positionType == 'Top') selectedPos = 'Top';
+    if (positionType == 'Bottom') selectedPos = 'Bottom';
 
     showDialog(
       context: context,
@@ -948,8 +1198,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Position Dropdown (if Both)
                 if (positionType == 'Both')
                   Container(
                     decoration: BoxDecoration(
@@ -978,9 +1226,7 @@ List<Map<String, dynamic>> _filterForPdf() {
                       ),
                     ),
                   ),
-
                 if (positionType == 'Both') const SizedBox(height: 16),
-
                 Container(
                   decoration: BoxDecoration(
                     color: bgGreen,
@@ -1036,15 +1282,11 @@ List<Map<String, dynamic>> _filterForPdf() {
                         _showSnackBar("Enter valid quantity", isError: true);
                         return;
                       }
-
-                      // ✅ FIXED: Properly determine which position to update
                       final isTop = selectedPos == 'Top';
                       final balKey = isTop ? 'top_bal' : 'bottom_bal';
                       final inKey = isTop ? 'top_in' : 'bottom_in';
-
                       final currentBal = item[balKey] ?? 0;
                       final currentIn = item[inKey] ?? 0;
-
                       await _firestore
                           .collection('paper_stock_items')
                           .doc(item['docId'])
@@ -1056,7 +1298,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                             ).format(DateTime.now()),
                             'updatedAt': FieldValue.serverTimestamp(),
                           });
-
                       await _firestore
                           .collection('paper_stock_transactions')
                           .add({
@@ -1067,7 +1308,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                             'position': selectedPos,
                             'timestamp': FieldValue.serverTimestamp(),
                           });
-
                       await _loadDataFromFirebase();
                       _showSnackBar("✓ Received $qty from $selectedParty");
                       Navigator.pop(ctx);
@@ -1082,6 +1322,8 @@ List<Map<String, dynamic>> _filterForPdf() {
       ),
     );
   }
+
+  // ==================== UPDATE OPTIONS BOTTOM SHEET ====================
 
   void _showUpdateOptions(Map<String, dynamic> item) {
     showModalBottomSheet(
@@ -1198,20 +1440,16 @@ List<Map<String, dynamic>> _filterForPdf() {
     );
   }
 
-  // ==================== ADD/EDIT ITEM ====================
+  // ==================== ADD / EDIT ITEM DIALOG ====================
 
   void _addOrUpdateItem({Map<String, dynamic>? existingItem}) async {
     final isEdit = existingItem != null;
     String? selectedStockType;
-
-    if (isEdit) {
-      selectedStockType = existingItem['stock_type']?.toString();
-    }
+    if (isEdit) selectedStockType = existingItem['stock_type']?.toString();
 
     final codeCtrl = TextEditingController(
       text: isEdit ? existingItem["code"] : await _getNextPaperCode(),
     );
-
     final detailCtrl = TextEditingController(
       text: isEdit ? existingItem["detail"] : '',
     );
@@ -1225,23 +1463,19 @@ List<Map<String, dynamic>> _filterForPdf() {
       text: isEdit ? (existingItem["top_out"] ?? 0).toString() : '0',
     );
     final topBalCtrl = TextEditingController();
-
     final bottomInCtrl = TextEditingController(
       text: isEdit ? (existingItem["bottom_in"] ?? 0).toString() : '0',
     );
     final bottomOutCtrl = TextEditingController(
       text: isEdit ? (existingItem["bottom_out"] ?? 0).toString() : '0',
     );
+    final bottomBalCtrl = TextEditingController();
     final locationCtrl = TextEditingController(
       text: isEdit ? (existingItem["location"] ?? "") : "",
     );
-
     final designNoCtrl = TextEditingController(
       text: isEdit ? (existingItem["design_no"] ?? "") : "",
     );
-
-    final bottomBalCtrl = TextEditingController();
-
     final remarkCtrl = TextEditingController(
       text: isEdit ? (existingItem["remark1"] ?? '') : '',
     );
@@ -1271,7 +1505,6 @@ List<Map<String, dynamic>> _filterForPdf() {
     topOutCtrl.addListener(calcTopBal);
     bottomInCtrl.addListener(calcBottomBal);
     bottomOutCtrl.addListener(calcBottomBal);
-
     calcTopBal();
     calcBottomBal();
 
@@ -1383,25 +1616,20 @@ List<Map<String, dynamic>> _filterForPdf() {
                           readOnly: !isEdit,
                         ),
                         const SizedBox(height: 8),
-
                         _buildModernField(
                           locationCtrl,
                           "Location",
                           Icons.location_on_outlined,
                           required: true,
                         ),
-
                         const SizedBox(height: 8),
-
                         _buildModernField(
                           designNoCtrl,
                           "Design Number",
                           Icons.design_services_outlined,
                           required: true,
                         ),
-
                         const SizedBox(height: 8),
-
                         _buildModernField(
                           detailCtrl,
                           "Paper Detail",
@@ -1452,7 +1680,7 @@ List<Map<String, dynamic>> _filterForPdf() {
                           ),
                         ),
 
-                        // Image Pickers
+                        // Top Image
                         if (positionType == 'Top' ||
                             positionType == 'Both') ...[
                           const SizedBox(height: 18),
@@ -1479,6 +1707,7 @@ List<Map<String, dynamic>> _filterForPdf() {
                           ),
                         ],
 
+                        // Bottom Image
                         if (positionType == 'Bottom' ||
                             positionType == 'Both') ...[
                           const SizedBox(height: 18),
@@ -1506,7 +1735,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                         ],
 
                         const SizedBox(height: 18),
-
                         _buildModernField(
                           pillerCtrl,
                           "Size of Sheet",
@@ -1557,7 +1785,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                         Divider(color: Colors.grey[300], thickness: 1),
                         const SizedBox(height: 10),
 
-                        // Stock Information Header
                         Row(
                           children: [
                             Container(
@@ -1700,7 +1927,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                         ),
                         const SizedBox(height: 20),
 
-                        // Date Display
                         Container(
                           padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
@@ -1776,9 +2002,7 @@ List<Map<String, dynamic>> _filterForPdf() {
                             ? null
                             : () async {
                                 setDialogState(() => isUploading = true);
-
                                 try {
-                                  // Upload images
                                   if (topImageFile != null) {
                                     topImageUrl = await _uploadImage(
                                       topImageFile!,
@@ -1790,7 +2014,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                                     );
                                   }
 
-                                  // Validation
                                   final code = codeCtrl.text.trim();
                                   final detail = detailCtrl.text.trim();
                                   final piller = pillerCtrl.text.trim();
@@ -1804,7 +2027,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                                     );
                                     return;
                                   }
-
                                   if (selectedStockType == null) {
                                     _showSnackBar(
                                       "Please select Stock Type",
@@ -1812,7 +2034,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                                     );
                                     return;
                                   }
-
                                   if (positionType == 'Both' &&
                                       (topImageUrl == null ||
                                           bottomImageUrl == null)) {
@@ -1846,7 +2067,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                                       "top_bal": int.parse(topBalCtrl.text),
                                     });
                                   }
-
                                   if (positionType == 'Bottom' ||
                                       positionType == 'Both') {
                                     newItem.addAll({
@@ -1861,7 +2081,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                                   }
 
                                   if (isEdit) {
-                                    // ✅ EDIT: Don't change 'sr' or 'createdAt'
                                     await _firestore
                                         .collection('paper_stock_items')
                                         .doc(existingItem["docId"])
@@ -1870,7 +2089,6 @@ List<Map<String, dynamic>> _filterForPdf() {
                                       "✓ Item updated successfully",
                                     );
                                   } else {
-                                    // ✅ NEW: Add 'sr' and 'createdAt'
                                     newItem["sr"] = nextSr;
                                     newItem["createdAt"] =
                                         FieldValue.serverTimestamp();
@@ -1903,7 +2121,7 @@ List<Map<String, dynamic>> _filterForPdf() {
                             : Icon(isEdit ? Icons.check : Icons.add),
                         label: Text(
                           isEdit ? "Update Item" : "Add Item",
-                          style:  TextStyle(
+                          style: TextStyle(
                             fontSize: 14.sp,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1984,14 +2202,12 @@ List<Map<String, dynamic>> _filterForPdf() {
       for (int i = 1; i < rows.length; i++) {
         var row = rows[i];
         if (row.length < 3) continue;
-
         Map<String, dynamic> item = {};
         for (int j = 0; j < headerRow.length && j < row.length; j++) {
           var header = headerRow[j];
           var cell = row[j];
           var value = cell?.value;
           if (value == null) continue;
-
           switch (header) {
             case 'sr':
             case 'in':
@@ -2014,9 +2230,8 @@ List<Map<String, dynamic>> _filterForPdf() {
 
         if (item['code'] == null ||
             item['detail'] == null ||
-            item['piller_no'] == null) {
+            item['piller_no'] == null)
           continue;
-        }
 
         item['in'] = item['in'] ?? 0;
         item['incoming'] = item['incoming'] ?? 0;
@@ -2083,7 +2298,6 @@ List<Map<String, dynamic>> _filterForPdf() {
 
   // ==================== DELETE ITEM ====================
 
-  // ✅ FIXED DELETE - Now properly validates docId
   void _deleteItem(String docId) {
     if (docId.isEmpty) {
       _showSnackBar("Invalid document reference", isError: true);
@@ -2114,15 +2328,12 @@ List<Map<String, dynamic>> _filterForPdf() {
                     .collection('paper_stock_items')
                     .doc(docId)
                     .delete();
-
                 await _reorderPaperSrNumbers();
                 await _loadDataFromFirebase();
-
                 _showSnackBar("✓ Item deleted");
               } catch (e) {
                 _showSnackBar("Error: $e", isError: true);
               }
-
               Navigator.pop(ctx);
             },
             child: const Text("Delete"),
@@ -2131,86 +2342,6 @@ List<Map<String, dynamic>> _filterForPdf() {
       ),
     );
   }
-
-Future<void> _downloadPdf() async {
-
-  final pdf = pw.Document();
-  final data = _filterForPdf();
-
-  List<List<dynamic>> tableData = [];
-
-  for (var item in data) {
-
-    Uint8List? imageBytes;
-
-    if (item['top_image'] != null &&
-        item['top_image'].toString().isNotEmpty) {
-      imageBytes = await _networkImageToBytes(item['top_image']);
-    }
-
-    tableData.add([
-      item["code"] ?? "",
-      item["location"] ?? "",
-      item["design_no"] ?? "",
-      item["detail"] ?? "",
-      item["piller_no"] ?? "",
-      item["stock_type"] ?? "",
-      imageBytes != null
-          ? pw.Image(pw.MemoryImage(imageBytes), width: 40, height: 40)
-          : pw.Text("No Image"),
-      item["top_bal"]?.toString() ?? "0",
-      item["bottom_bal"]?.toString() ?? "0",
-      item["dateEdit"] ?? "",
-    ]);
-  }
-
-  pdf.addPage(
-    pw.MultiPage(
-      pageFormat: PdfPageFormat.a4.landscape,
-      build: (context) => [
-        pw.Text(
-          "Paper Stock Report",
-          style: pw.TextStyle(
-            fontSize: 22,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 20),
-        pw.Table.fromTextArray(
-          headers: [
-            "Code",
-            "Location",
-            "Design",
-            "Item",
-            "Size",
-            "Type",
-            "Image",
-            "Top",
-            "Bottom",
-            "Date"
-          ],
-          data: tableData,
-        ),
-      ],
-    ),
-  );
-
-  final bytes = await pdf.save();
-
-if (kIsWeb) {
-    _showSnackBar("PDF download works only on Web");
-  } else {
-
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File("${dir.path}/paper_stock_report.pdf");
-
-    await file.writeAsBytes(bytes);
-
-    await OpenFile.open(file.path);
-  }
-
-  _showSnackBar("PDF Generated");
-}
 
   // ==================== UI HELPERS ====================
 
@@ -2280,7 +2411,6 @@ if (kIsWeb) {
     );
   }
 
-  // Table Header
   Widget _headerFlex(String text, int flex) {
     return Expanded(
       flex: flex,
@@ -2347,8 +2477,8 @@ if (kIsWeb) {
                 icon: Icon(Icons.edit_outlined, color: primaryGreen, size: 20),
                 onPressed: () => _addOrUpdateItem(existingItem: item),
                 tooltip: "Edit",
-                padding: EdgeInsets.all(8),
-                constraints: BoxConstraints(),
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(),
               ),
             ),
             const SizedBox(width: 8),
@@ -2365,8 +2495,8 @@ if (kIsWeb) {
                 ),
                 onPressed: () => _deleteItem(item["docId"] ?? ''),
                 tooltip: "Delete",
-                padding: EdgeInsets.all(8),
-                constraints: BoxConstraints(),
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(),
               ),
             ),
           ],
@@ -2401,102 +2531,96 @@ if (kIsWeb) {
     );
   }
 
-  // ==================== BUILD UI ====================
+  // ==================== BUILD ====================
 
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
-double tableWidth = screenWidth < 1200 ? 1500 : screenWidth;
+    double tableWidth = screenWidth < 1200 ? 1500 : screenWidth;
+
     return Scaffold(
       appBar: PreferredSize(
-  preferredSize: const Size.fromHeight(60),
-  child: AppBar(
-    automaticallyImplyLeading: false,
-    elevation: 0,
-    backgroundColor: Colors.transparent,
-    flexibleSpace: Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.purple.shade600,
-            Colors.blue.shade600,
-            Colors.teal.shade600,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-    ),
-    titleSpacing: 0,
-    title: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          Container(
-            padding: const EdgeInsets.all(8),
+        preferredSize: const Size.fromHeight(60),
+        child: AppBar(
+          automaticallyImplyLeading: false,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          flexibleSpace: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.purple.shade600,
+                  Colors.blue.shade600,
+                  Colors.teal.shade600,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
-            child: Image.asset('assets/dpl.png', height: 36),
           ),
-
-          const SizedBox(width: 8),
-
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
+          titleSpacing: 0,
+          title: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Row(
               children: [
-                Text(
-                  'Paper Stock',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: Colors.white,
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Manage paper stock items',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Image.asset('assets/dpl.png', height: 36),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Paper Stock',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Manage paper stock items',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
-    ),
-  ),
-),
       body: _isLoading
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   CircularProgressIndicator(color: accentGreen, strokeWidth: 3),
-                  const SizedBox(height: 0.1),
+                  const SizedBox(height: 16),
                   Text(
                     "Loading paper stock...",
                     style: TextStyle(
@@ -2529,6 +2653,7 @@ double tableWidth = screenWidth < 1200 ? 1500 : screenWidth;
                     ),
                     child: Row(
                       children: [
+                        // Search
                         Expanded(
                           flex: 3,
                           child: Container(
@@ -2557,61 +2682,78 @@ double tableWidth = screenWidth < 1200 ? 1500 : screenWidth;
                           ),
                         ),
                         const SizedBox(width: 10),
-Container(
-  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-  decoration: BoxDecoration(
-    color: Colors.red.shade50,
-    borderRadius: BorderRadius.circular(12),
-    border: Border.all(color: Colors.red, width: 1.5),
-  ),
-  child: Row(
-    children: [
 
-      DropdownButton<String>(
-        value: _selectedTypeFilter,
-        underline: SizedBox(),
-        icon: Icon(Icons.filter_list, color: Colors.red),
-        items: _typeFilters
-            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-            .toList(),
-        onChanged: (v) {
-          setState(() {
-            _selectedTypeFilter = v!;
-          });
-        },
-      ),
+                        // Type + Range + PDF
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red, width: 1.5),
+                          ),
+                          child: Row(
+                            children: [
+                              DropdownButton<String>(
+                                value: _selectedTypeFilter,
+                                underline: const SizedBox(),
+                                icon: const Icon(
+                                  Icons.filter_list,
+                                  color: Colors.red,
+                                ),
+                                items: _typeFilters
+                                    .map(
+                                      (e) => DropdownMenuItem(
+                                        value: e,
+                                        child: Text(e),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) {
+                                  setState(() => _selectedTypeFilter = v!);
+                                  _applyFilters();
+                                },
+                              ),
+                              const SizedBox(width: 10),
+                              DropdownButton<String>(
+                                value: _selectedRangeFilter,
+                                underline: const SizedBox(),
+                                icon: const Icon(
+                                  Icons.date_range,
+                                  color: Colors.red,
+                                ),
+                                items: _rangeFilters
+                                    .map(
+                                      (e) => DropdownMenuItem(
+                                        value: e,
+                                        child: Text(e),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) {
+                                  setState(() => _selectedRangeFilter = v!);
+                                  _applyFilters();
+                                },
+                              ),
+                              const SizedBox(width: 10),
+                              ElevatedButton.icon(
+                                onPressed: _downloadPdf,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: const Icon(Icons.picture_as_pdf),
+                                label: const Text("PDF"),
+                              ),
+                            ],
+                          ),
+                        ),
 
-      SizedBox(width: 10),
+                        const SizedBox(width: 8),
 
-      DropdownButton<String>(
-        value: _selectedRangeFilter,
-        underline: SizedBox(),
-        icon: Icon(Icons.date_range, color: Colors.red),
-        items: _rangeFilters
-            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-            .toList(),
-        onChanged: (v) {
-          setState(() {
-            _selectedRangeFilter = v!;
-          });
-        },
-      ),
-
-      SizedBox(width: 10),
-
-      ElevatedButton.icon(
-        onPressed: _downloadPdf,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
-        ),
-        icon: Icon(Icons.picture_as_pdf),
-        label: Text("PDF"),
-      ),
-
-    ],
-  ),
-),
+                        // Date Filter
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 14,
@@ -2659,130 +2801,141 @@ Container(
                       ],
                     ),
                   ),
+
                   _buildStockSummary(),
 
-                  // TABLE HEADER
-Expanded(
-  child: SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: SizedBox(
-      width: tableWidth,
-      child: Column(
-        children: [
+                  // TABLE
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: tableWidth,
+                        child: Column(
+                          children: [
+                            // TABLE HEADER
+                            Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [primaryGreen, accentGreen],
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                children: [
+                                  _headerFlex("Sr", 1),
+                                  _headerFlex("Code", 2),
+                                  _headerFlex("Location", 2),
+                                  _headerFlex("Design No", 2),
+                                  _headerFlex("Image", 3),
+                                  _headerFlex("Item Name", 4),
+                                  _headerFlex("Size", 2),
+                                  _headerFlex("Type", 2),
+                                  _headerFlex("Total", 2),
+                                  _headerFlex("Issue", 2),
+                                  _headerFlex("In Hand", 2),
+                                  _headerFlex("Date", 2),
+                                  _headerFlex("Remarks", 3),
+                                  _headerFlex("Actions", 3),
+                                  _headerFlex("Update", 2),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 5),
 
-          /// 🔹 HEADER
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [primaryGreen, accentGreen],
-              ),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                _headerFlex("Sr", 1),
-                _headerFlex("Code", 2),
-                _headerFlex("Location", 2),
-                _headerFlex("Design No", 2),
-                _headerFlex("Image", 3),
-                _headerFlex("Item Name", 4),
-                _headerFlex("Size", 2),
-                _headerFlex("Type", 2),
-                _headerFlex("Total", 2),
-                _headerFlex("Issue", 2),
-                _headerFlex("In Hand", 2),
-                _headerFlex("Date", 2),
-                _headerFlex("Remarks", 3),
-                _headerFlex("Actions", 3),
-                _headerFlex("Update", 2),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 5),
-
-          /// 🔹 BODY
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.7,
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 110),
-              itemCount: filteredData.length,
-              itemBuilder: (ctx, i) {
-                final item = filteredData[i];
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border(
-                      left: BorderSide(color: accentGreen, width: 4),
+                            // TABLE BODY
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.7,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                  8,
+                                  0,
+                                  8,
+                                  110,
+                                ),
+                                itemCount: filteredData.length,
+                                itemBuilder: (ctx, i) {
+                                  final item = filteredData[i];
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: const Border(
+                                        left: BorderSide(
+                                          color: accentGreen,
+                                          width: 4,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        _cellFlex((i + 1).toString(), 1),
+                                        _cellFlex(item["code"], 2, bold: true),
+                                        _cellFlex(item["location"] ?? "-", 2),
+                                        _cellFlex(item["design_no"] ?? "-", 2),
+                                        _imageCellFlex(item, 3),
+                                        _cellFlex(
+                                          item["detail"],
+                                          4,
+                                          bold: true,
+                                        ),
+                                        _cellFlex(item["piller_no"], 2),
+                                        _cellFlex(item["stock_type"] ?? "-", 2),
+                                        _cellFlex(
+                                          item['position_type'] == 'Top'
+                                              ? "T:${item['top_in'] ?? 0}"
+                                              : item['position_type'] ==
+                                                    'Bottom'
+                                              ? "B:${item['bottom_in'] ?? 0}"
+                                              : "T:${item['top_in'] ?? 0} | B:${item['bottom_in'] ?? 0}",
+                                          2,
+                                        ),
+                                        _cellFlex(
+                                          item['position_type'] == 'Top'
+                                              ? "T:${item['top_out'] ?? 0}"
+                                              : item['position_type'] ==
+                                                    'Bottom'
+                                              ? "B:${item['bottom_out'] ?? 0}"
+                                              : "T:${item['top_out'] ?? 0} | B:${item['bottom_out'] ?? 0}",
+                                          2,
+                                        ),
+                                        _cellFlex(
+                                          item['position_type'] == 'Top'
+                                              ? "T:${item['top_bal'] ?? 0}"
+                                              : item['position_type'] ==
+                                                    'Bottom'
+                                              ? "B:${item['bottom_bal'] ?? 0}"
+                                              : "T:${item['top_bal'] ?? 0} | B:${item['bottom_bal'] ?? 0}",
+                                          2,
+                                          bold: true,
+                                        ),
+                                        _cellFlex(item["dateEdit"] ?? "", 2),
+                                        _cellFlex(item["remark1"] ?? "-", 3),
+                                        _actionFlex(item, 3),
+                                        _updateFlex(item, 2),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  child: Row(
-                    children: [
-
-                      _cellFlex((i + 1).toString(), 1),
-
-                      _cellFlex(item["code"], 2, bold: true),
-                      _cellFlex(item["location"] ?? "-", 2),
-                      _cellFlex(item["design_no"] ?? "-", 2),
-                      _imageCellFlex(item, 3),
-                      _cellFlex(item["detail"], 4, bold: true),
-                      _cellFlex(item["piller_no"], 2),
-                      _cellFlex(item["stock_type"] ?? "-", 2),
-
-                      _cellFlex(
-                        item['position_type'] == 'Top'
-                            ? "T:${item['top_in'] ?? 0}"
-                            : item['position_type'] == 'Bottom'
-                                ? "B:${item['bottom_in'] ?? 0}"
-                                : "T:${item['top_in'] ?? 0} | B:${item['bottom_in'] ?? 0}",
-                        2,
-                      ),
-
-                      _cellFlex(
-                        item['position_type'] == 'Top'
-                            ? "T:${item['top_out'] ?? 0}"
-                            : item['position_type'] == 'Bottom'
-                                ? "B:${item['bottom_out'] ?? 0}"
-                                : "T:${item['top_out'] ?? 0} | B:${item['bottom_out'] ?? 0}",
-                        2,
-                      ),
-
-                      _cellFlex(
-                        item['position_type'] == 'Top'
-                            ? "T:${item['top_bal'] ?? 0}"
-                            : item['position_type'] == 'Bottom'
-                                ? "B:${item['bottom_bal'] ?? 0}"
-                                : "T:${item['top_bal'] ?? 0} | B:${item['bottom_bal'] ?? 0}",
-                        2,
-                        bold: true,
-                      ),
-
-                      _cellFlex(item["dateEdit"] ?? "", 2),
-                      _cellFlex(item["remark1"] ?? "-", 3),
-
-                      _actionFlex(item, 3),
-                      _updateFlex(item, 2),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    ),
-  ),
-)
                 ],
               ),
             ),
+
+      // FABs
       floatingActionButton: Padding(
-        padding: EdgeInsets.only(bottom: 1, left: 20),
+        padding: const EdgeInsets.only(bottom: 1, left: 20),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
@@ -2805,16 +2958,7 @@ Expanded(
                 ),
               ),
             ),
-  //           SizedBox(width: 10),
-  //             FloatingActionButton.extended(
-  //   heroTag: "pdf_download",
-  //   backgroundColor: Colors.red,
-  //   icon: Icon(Icons.picture_as_pdf, color: Colors.white),
-  //   label: Text("PDF", style: TextStyle(color: Colors.white)),
-  //   onPressed: _downloadPdf,
-  // ),
-
-  SizedBox(width: 5),
+            const SizedBox(width: 5),
             FloatingActionButton.extended(
               heroTag: "fix_paper_codes",
               backgroundColor: Colors.orange,
@@ -2825,7 +2969,7 @@ Expanded(
               ),
               onPressed: _fixPaperCodesSequentially,
             ),
-            SizedBox(width: 5),
+            const SizedBox(width: 5),
             FloatingActionButton.extended(
               onPressed: _uploadExcelFile,
               heroTag: "upload_excel",
@@ -2851,4 +2995,3 @@ Expanded(
     );
   }
 }
-

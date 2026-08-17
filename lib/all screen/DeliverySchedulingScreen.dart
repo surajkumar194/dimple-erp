@@ -11,10 +11,12 @@ class DeliveryManagementScreen extends StatefulWidget {
   const DeliveryManagementScreen({super.key});
 
   @override
-  State<DeliveryManagementScreen> createState() => _DeliveryManagementScreenState();
+  State<DeliveryManagementScreen> createState() =>
+      _DeliveryManagementScreenState();
 }
 
-class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> with SingleTickerProviderStateMixin {
+class _DeliveryManagementScreenState extends State<DeliveryManagementScreen>
+    with SingleTickerProviderStateMixin {
   DateTime selectedDate = DateTime.now();
   late AnimationController _animationController;
 
@@ -44,7 +46,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
             expandedHeight: 150,
             floating: false,
             pinned: true,
-          //  backgroundColor: const Color(0xFF00ACC1),
+            //  backgroundColor: const Color(0xFF00ACC1),
             flexibleSpace: FlexibleSpaceBar(
               // title: Text(
               //   '🚚 Delivery Management',
@@ -95,7 +97,10 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                       child: Column(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
                             margin: const EdgeInsets.symmetric(horizontal: 20),
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.2),
@@ -104,10 +109,16 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.calendar_today, color: Colors.white, size: 20),
+                                const Icon(
+                                  Icons.calendar_today,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 12),
                                 Text(
-                                  DateFormat('EEEE, d MMMM yyyy').format(selectedDate),
+                                  DateFormat(
+                                    'EEEE, d MMMM yyyy',
+                                  ).format(selectedDate),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
@@ -151,7 +162,9 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                 ],
               ),
               child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('dispatchedOrders').snapshots(),
+                stream: FirebaseFirestore.instance
+                    .collection('dispatchedOrders')
+                    .snapshots(),
                 builder: (context, snapshot) {
                   int totalDispatchedJobs = 0;
                   int totalDispatchedQty = 0;
@@ -162,19 +175,36 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                       final data = doc.data() as Map<String, dynamic>;
                       totalDispatchedJobs++;
                       final jobData = data['data'] ?? {};
-                      totalDispatchedQty += int.tryParse(jobData['quantity']?.toString() ?? '0') ?? 0;
-                      if (data['deliveryStatus'] == 'Delivered') completedDeliveries++;
+                      totalDispatchedQty +=
+                          int.tryParse(
+                            jobData['quantity']?.toString() ?? '0',
+                          ) ??
+                          0;
+                      if (data['deliveryStatus'] == 'Delivered')
+                        completedDeliveries++;
                     }
                   }
 
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStatCard('Total Dispatch', totalDispatchedJobs.toString(), Icons.local_shipping),
+                      _buildStatCard(
+                        'Total Dispatch',
+                        totalDispatchedJobs.toString(),
+                        Icons.local_shipping,
+                      ),
                       Container(width: 1, height: 40, color: Colors.white30),
-                      _buildStatCard('Total Qty', totalDispatchedQty.toString(), Icons.inventory),
+                      _buildStatCard(
+                        'Total Qty',
+                        totalDispatchedQty.toString(),
+                        Icons.inventory,
+                      ),
                       Container(width: 1, height: 40, color: Colors.white30),
-                      _buildStatCard('Delivered', completedDeliveries.toString(), Icons.check_circle),
+                      _buildStatCard(
+                        'Delivered',
+                        completedDeliveries.toString(),
+                        Icons.check_circle,
+                      ),
                     ],
                   );
                 },
@@ -196,7 +226,11 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.error_outline, size: 80, color: Colors.red),
+                          const Icon(
+                            Icons.error_outline,
+                            size: 80,
+                            color: Colors.red,
+                          ),
                           const SizedBox(height: 16),
                           Text('Error: ${snapshot.error}'),
                         ],
@@ -210,7 +244,9 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                     child: Center(
                       child: Padding(
                         padding: EdgeInsets.all(32.0),
-                        child: CircularProgressIndicator(color: Color(0xFF00ACC1)),
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF00ACC1),
+                        ),
                       ),
                     ),
                   );
@@ -228,17 +264,28 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                               color: Colors.grey[100],
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(Icons.local_shipping_outlined, size: 80, color: Colors.grey[400]),
+                            child: Icon(
+                              Icons.local_shipping_outlined,
+                              size: 80,
+                              color: Colors.grey[400],
+                            ),
                           ),
                           const SizedBox(height: 24),
                           Text(
                             'No Dispatched Orders Found',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.grey[600]),
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'Orders will appear here once dispatched',
-                            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[500],
+                            ),
                           ),
                         ],
                       ),
@@ -247,17 +294,14 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                 }
 
                 return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) {
-                      final doc = snapshot.data!.docs[i];
-                      final dispatchedOrder = doc.data() as Map<String, dynamic>;
-                      return FadeTransition(
-                        opacity: _animationController,
-                        child: _buildDispatchedJobCard(doc.id, dispatchedOrder),
-                      );
-                    },
-                    childCount: snapshot.data!.docs.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, i) {
+                    final doc = snapshot.data!.docs[i];
+                    final dispatchedOrder = doc.data() as Map<String, dynamic>;
+                    return FadeTransition(
+                      opacity: _animationController,
+                      child: _buildDispatchedJobCard(doc.id, dispatchedOrder),
+                    );
+                  }, childCount: snapshot.data!.docs.length),
                 );
               },
             ),
@@ -274,25 +318,38 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
       children: [
         Icon(icon, color: Colors.white, size: 28),
         const SizedBox(height: 8),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
       ],
     );
   }
 
-  Widget _buildDispatchedJobCard(String docId, Map<String, dynamic> dispatchedOrder) {
+  Widget _buildDispatchedJobCard(
+    String docId,
+    Map<String, dynamic> dispatchedOrder,
+  ) {
     final jobData = dispatchedOrder['data'] ?? {};
     final jobNo = jobData['jobNo'] ?? 'N/A';
     final customer = jobData['customer'] ?? 'N/A';
     final salesPerson = jobData['salesPerson'] ?? 'N/A';
     final size = jobData['size'] ?? 'N/A';
     final totalQty = int.tryParse(jobData['quantity']?.toString() ?? '0') ?? 0;
-    
+
     final dispatchedAt = dispatchedOrder['dispatchedAt'] is Timestamp
         ? (dispatchedOrder['dispatchedAt'] as Timestamp).toDate()
         : DateTime.now();
-    
+
     final deliveryStatus = dispatchedOrder['deliveryStatus'] ?? 'In Transit';
     final departmentTracking = jobData['departmentTracking'] ?? {};
     final products = jobData['products'] as List<dynamic>? ?? [];
@@ -338,10 +395,16 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
           leading: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF00ACC1), Color(0xFF0097A7)]),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF00ACC1), Color(0xFF0097A7)],
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.local_shipping, color: Colors.white, size: 24),
+            child: const Icon(
+              Icons.local_shipping,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
           title: Row(
             children: [
@@ -349,14 +412,27 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('JOb No $jobNo', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF212121))),
+                    Text(
+                      'JOb No $jobNo',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                        color: Color(0xFF212121),
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text('Customer Name $customer', style: TextStyle(fontSize: 15, color: Colors.grey[600])),
+                    Text(
+                      'Customer Name $customer',
+                      style: TextStyle(fontSize: 15, color: Colors.grey[600]),
+                    ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -367,7 +443,14 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                   children: [
                     Icon(statusIcon, size: 14, color: statusColor),
                     const SizedBox(width: 4),
-                    Text(deliveryStatus, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                    Text(
+                      deliveryStatus,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -377,9 +460,17 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
             padding: const EdgeInsets.only(top: 8),
             child: Row(
               children: [
-                _buildSmallBadge(Icons.inventory, 'Qty: $totalQty', Colors.blue),
+                _buildSmallBadge(
+                  Icons.inventory,
+                  'Qty: $totalQty',
+                  Colors.blue,
+                ),
                 const SizedBox(width: 8),
-                _buildSmallBadge(Icons.calendar_today, DateFormat('dd MMM').format(dispatchedAt), Colors.purple),
+                _buildSmallBadge(
+                  Icons.calendar_today,
+                  DateFormat('dd MMM').format(dispatchedAt),
+                  Colors.purple,
+                ),
               ],
             ),
           ),
@@ -389,7 +480,9 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [Colors.indigo.shade50, Colors.blue.shade50]),
+                gradient: LinearGradient(
+                  colors: [Colors.indigo.shade50, Colors.blue.shade50],
+                ),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.indigo.shade200, width: 1.5),
               ),
@@ -398,9 +491,20 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.info_outline, color: Colors.indigo.shade600, size: 20),
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.indigo.shade600,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
-                      Text('Job Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.indigo.shade700)),
+                      Text(
+                        'Job Details',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.indigo.shade700,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -408,7 +512,11 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                   _detailRow('Customer', customer, Colors.indigo),
                   _detailRow('Sales Person', salesPerson, Colors.indigo),
                   _detailRow('Size', size, Colors.indigo),
-                  _detailRow('Dispatched At', DateFormat('dd MMM yyyy, hh:mm a').format(dispatchedAt), Colors.indigo),
+                  _detailRow(
+                    'Dispatched At',
+                    DateFormat('dd MMM yyyy, hh:mm a').format(dispatchedAt),
+                    Colors.indigo,
+                  ),
                 ],
               ),
             ),
@@ -419,7 +527,9 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [Colors.green.shade50, Colors.teal.shade50]),
+                  gradient: LinearGradient(
+                    colors: [Colors.green.shade50, Colors.teal.shade50],
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.green.shade200, width: 1.5),
                 ),
@@ -428,9 +538,20 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.shopping_bag, color: Colors.green.shade600, size: 20),
+                        Icon(
+                          Icons.shopping_bag,
+                          color: Colors.green.shade600,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
-                        Text('Products (${products.length})', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade700)),
+                        Text(
+                          'Products (${products.length})',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -454,11 +575,22 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                gradient: LinearGradient(colors: [Colors.green.shade600, Colors.teal.shade600]),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.green.shade600,
+                                    Colors.teal.shade600,
+                                  ],
+                                ),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Center(
-                                child: Text('${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                child: Text(
+                                  '${index + 1}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -466,18 +598,40 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(prodName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                  Text('Quantity: $prodQty', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                                  Text(
+                                    prodName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Quantity: $prodQty',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.green.shade100,
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              child: Text('$prodQty pcs', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade700, fontSize: 12)),
+                              child: Text(
+                                '$prodQty pcs',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green.shade700,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -496,155 +650,196 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> wit
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [Colors.blue.shade600, Colors.cyan.shade600]),
+                        gradient: LinearGradient(
+                          colors: [Colors.blue.shade600, Colors.cyan.shade600],
+                        ),
                         borderRadius: BorderRadius.circular(10),
-                        boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blue.withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: ElevatedButton.icon(
-                        onPressed: () => _openDeliveryDialog(context, docId, dispatchedOrder),
-                        icon: const Icon(Icons.local_shipping, color: Colors.white),
-                        label: const Text('Process Delivery', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
+                        onPressed: () => _openDeliveryDialog(
+                          context,
+                          docId,
+                          dispatchedOrder,
+                        ),
+                        icon: const Icon(
+                          Icons.local_shipping,
+                          color: Colors.white,
+                        ),
+                        label: const Text(
+                          'Process Delivery',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ],
               )
-         else
-// Edit Delivery Option for Delivered Orders
-Row(
-  children: [
-    // Edit Delivery
-    Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.orange.shade600, Colors.deepOrange.shade600],
-          ),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.orange.withOpacity(0.4),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: () =>
-              _openEditDeliveryDialog(context, docId, dispatchedOrder),
-          icon: const Icon(Icons.edit, color: Colors.white),
-          label: const Text(
-            'Edit Delivery',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontSize: 12,
-            ),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        ),
-      ),
-    ),
+            else
+              // Edit Delivery Option for Delivered Orders
+              Row(
+                children: [
+                  // Edit Delivery
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.orange.shade600,
+                            Colors.deepOrange.shade600,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.orange.withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openEditDeliveryDialog(
+                          context,
+                          docId,
+                          dispatchedOrder,
+                        ),
+                        icon: const Icon(Icons.edit, color: Colors.white),
+                        label: const Text(
+                          'Edit Delivery',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
 
-    const SizedBox(width: 10),
+                  const SizedBox(width: 10),
 
-    // ✏️ Edit PDF (NEW)
-    Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blueGrey.shade600, Colors.blueGrey.shade800],
-          ),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blueGrey.withOpacity(0.4),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: () =>
-              _openEditPDF(context, docId, dispatchedOrder),
-          icon: const Icon(Icons.edit_document, color: Colors.white),
-          label: const Text(
-            'Edit PDF',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontSize: 12,
-            ),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        ),
-      ),
-    ),
+                  // ✏️ Edit PDF (NEW)
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.blueGrey.shade600,
+                            Colors.blueGrey.shade800,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blueGrey.withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            _openEditPDF(context, docId, dispatchedOrder),
+                        icon: const Icon(
+                          Icons.edit_document,
+                          color: Colors.white,
+                        ),
+                        label: const Text(
+                          'Edit PDF',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
 
-    const SizedBox(width: 10),
+                  const SizedBox(width: 10),
 
-    // View PDF
-    Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.purple.shade600, Colors.deepPurple.shade600],
-          ),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.purple.withOpacity(0.4),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: () =>
-              _generatePDF(context, docId, dispatchedOrder),
-          icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-          label: const Text(
-            'View PDF',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontSize: 12,
-            ),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        ),
-      ),
-    ),
-  ],
-),
-
+                  // View PDF
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.purple.shade600,
+                            Colors.deepPurple.shade600,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.purple.withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            _generatePDF(context, docId, dispatchedOrder),
+                        icon: const Icon(
+                          Icons.picture_as_pdf,
+                          color: Colors.white,
+                        ),
+                        label: const Text(
+                          'View PDF',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -656,9 +851,25 @@ Row(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Text('$label:', style: TextStyle(fontWeight: FontWeight.w600, color: color.shade700, fontSize: 13)),
+          Text(
+            '$label:',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: color.shade700,
+              fontSize: 13,
+            ),
+          ),
           const SizedBox(width: 8),
-          Expanded(child: Text(value, style: const TextStyle(color: Color(0xFF212121), fontWeight: FontWeight.bold, fontSize: 13))),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF212121),
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -667,19 +878,33 @@ Row(
   Widget _buildSmallBadge(IconData icon, String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(text, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  void _openDeliveryDialog(BuildContext context, String orderId, Map<String, dynamic> orderData) {
+  void _openDeliveryDialog(
+    BuildContext context,
+    String orderId,
+    Map<String, dynamic> orderData,
+  ) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -691,24 +916,29 @@ Row(
       ),
     );
   }
-void _openEditPDF(
-  BuildContext context,
-  String docId,
-  Map<String, dynamic> dispatchedOrder,
-) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => DeliveryProcessScreen(
-        orderId: docId,
-        orderData: dispatchedOrder,
-        isEdit: true, // 👈 Edit mode
-      ),
-    ),
-  );
-}
 
-  void _openEditDeliveryDialog(BuildContext context, String orderId, Map<String, dynamic> orderData) {
+  void _openEditPDF(
+    BuildContext context,
+    String docId,
+    Map<String, dynamic> dispatchedOrder,
+  ) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DeliveryProcessScreen(
+          orderId: docId,
+          orderData: dispatchedOrder,
+          isEdit: true, // 👈 Edit mode
+        ),
+      ),
+    );
+  }
+
+  void _openEditDeliveryDialog(
+    BuildContext context,
+    String orderId,
+    Map<String, dynamic> orderData,
+  ) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -721,7 +951,11 @@ void _openEditPDF(
     );
   }
 
-  Future<void> _generatePDF(BuildContext context, String orderId, Map<String, dynamic> orderData) async {
+  Future<void> _generatePDF(
+    BuildContext context,
+    String orderId,
+    Map<String, dynamic> orderData,
+  ) async {
     try {
       final pdf = pw.Document();
       final jobData = orderData['data'] ?? {};
@@ -740,8 +974,9 @@ void _openEditPDF(
       final customer = jobData['customer'] ?? 'N/A';
       final salesPerson = jobData['salesPerson'] ?? 'N/A';
       final size = jobData['size'] ?? 'N/A';
-      
-      final deliveredProducts = orderData['deliveredProducts'] as List<dynamic>? ?? [];
+
+      final deliveredProducts =
+          orderData['deliveredProducts'] as List<dynamic>? ?? [];
 
       int totalOriginalQty = 0;
       int totalDeliveryQty = 0;
@@ -762,31 +997,34 @@ void _openEditPDF(
                 pw.Container(
                   width: 80,
                   height: 80,
-                  child: logoImage != null ? pw.Image(logoImage, fit: pw.BoxFit.contain) : null,
+                  child: logoImage != null
+                      ? pw.Image(logoImage, fit: pw.BoxFit.contain)
+                      : null,
                 ),
                 pw.SizedBox(width: 16),
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                  pw.Text(
-                    'DIMPLE PACKAGING PVT. LTD.',
-                    style: pw.TextStyle(
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.teal900,
+                    pw.Text(
+                      'DIMPLE PACKAGING PVT. LTD.',
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.teal900,
+                      ),
                     ),
-                  ),
-                  pw.SizedBox(height: 5),
-                  pw.Text(
-                    'Grand Trunk Rd, near Navdeep Resorts, adjoining Sidak Resorts,\n'
-                    'West, Bhattian Ludhiana, Punjab - 141008\nContact No.: 9872518000, 7888696774',
-                    style: const pw.TextStyle(fontSize: 10),
-                  ),
-                  pw.SizedBox(height: 3),
-                  pw.Text(
-                    'GST No.: 03AADCD5371K1ZP     PAN No.: AADCD5371K',
-                    style: const pw.TextStyle(fontSize: 10),
-                  ),    ],
+                    pw.SizedBox(height: 5),
+                    pw.Text(
+                      'Grand Trunk Rd, near Navdeep Resorts, adjoining Sidak Resorts,\n'
+                      'West, Bhattian Ludhiana, Punjab - 141008\nContact No.: 9872518000, 7888696774',
+                      style: const pw.TextStyle(fontSize: 10),
+                    ),
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'GST No.: 03AADCD5371K1ZP     PAN No.: AADCD5371K',
+                      style: const pw.TextStyle(fontSize: 10),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -796,28 +1034,48 @@ void _openEditPDF(
             pw.SizedBox(height: 12),
 
             pw.Center(
-              child: pw.Text('DELIVERY CHALLAN', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+              child: pw.Text(
+                'DELIVERY CHALLAN',
+                style: pw.TextStyle(
+                  fontSize: 22,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.teal900,
+                ),
+              ),
             ),
 
             pw.SizedBox(height: 16),
 
             pw.Container(
               padding: const pw.EdgeInsets.all(12),
-              decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.teal), borderRadius: pw.BorderRadius.circular(6)),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.teal),
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
               child: pw.Column(
                 children: [
                   _pdfDetailRow('Job No', jobNo),
                   _pdfDetailRow('Customer', customer),
                   _pdfDetailRow('Sales Person', salesPerson),
                   _pdfDetailRow('Size', size),
-                  _pdfDetailRow('Delivery Date', DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())),
+                  _pdfDetailRow(
+                    'Delivery Date',
+                    DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()),
+                  ),
                 ],
               ),
             ),
 
             pw.SizedBox(height: 16),
 
-            pw.Text('DELIVERY DETAILS', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+            pw.Text(
+              'DELIVERY DETAILS',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.teal900,
+              ),
+            ),
             pw.SizedBox(height: 8),
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey400),
@@ -872,7 +1130,10 @@ void _openEditPDF(
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Prepared By', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      'Prepared By',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
                     pw.SizedBox(height: 30),
                     pw.Text('_________________'),
                   ],
@@ -880,7 +1141,10 @@ void _openEditPDF(
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text('Authorized By', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      'Authorized By',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
                     pw.SizedBox(height: 30),
                     pw.Text('_________________'),
                   ],
@@ -888,7 +1152,10 @@ void _openEditPDF(
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text('Received By', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      'Received By',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
                     pw.SizedBox(height: 30),
                     pw.Text('_________________'),
                   ],
@@ -899,11 +1166,17 @@ void _openEditPDF(
         ),
       );
 
-      await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'DeliveryChallan_$jobNo.pdf');
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdf.save(),
+        name: 'DeliveryChallan_$jobNo.pdf',
+      );
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('✅ Delivery Challan PDF Generated'), backgroundColor: Colors.green.shade600),
+          SnackBar(
+            content: const Text('✅ Delivery Challan PDF Generated'),
+            backgroundColor: Colors.green.shade600,
+          ),
         );
       }
     } catch (e) {
@@ -920,7 +1193,13 @@ void _openEditPDF(
       padding: const pw.EdgeInsets.symmetric(vertical: 4),
       child: pw.Row(
         children: [
-          pw.SizedBox(width: 100, child: pw.Text('$label:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+          pw.SizedBox(
+            width: 100,
+            child: pw.Text(
+              '$label:',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+          ),
           pw.Expanded(child: pw.Text(value)),
         ],
       ),
@@ -933,7 +1212,10 @@ void _openEditPDF(
       child: pw.Text(
         text,
         textAlign: pw.TextAlign.center,
-        style: pw.TextStyle(fontSize: header ? 11 : 10, fontWeight: header ? pw.FontWeight.bold : pw.FontWeight.normal),
+        style: pw.TextStyle(
+          fontSize: header ? 11 : 10,
+          fontWeight: header ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
       ),
     );
   }
@@ -946,7 +1228,12 @@ void _openEditPDF(
       lastDate: DateTime(2026),
       builder: (context, child) {
         return Theme(
-          data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFF00ACC1), onPrimary: Colors.white)),
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF00ACC1),
+              onPrimary: Colors.white,
+            ),
+          ),
           child: child!,
         );
       },
@@ -987,7 +1274,8 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
   void _initializeProducts() {
     if (widget.isEdit) {
       // Load existing delivered products for editing
-      final deliveredProducts = widget.orderData['deliveredProducts'] as List<dynamic>? ?? [];
+      final deliveredProducts =
+          widget.orderData['deliveredProducts'] as List<dynamic>? ?? [];
       productsWithControllers = deliveredProducts.map((p) {
         return {
           'name': p['name'] ?? 'N/A',
@@ -1000,13 +1288,15 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
       }).toList();
     } else {
       // Load products from order data for new delivery
-      final products = widget.orderData['data']?['products'] as List<dynamic>? ?? [];
+      final products =
+          widget.orderData['data']?['products'] as List<dynamic>? ?? [];
       productsWithControllers = products.map((p) {
         return {
           'name': p['name'] ?? 'N/A',
           'originalQty': int.tryParse(p['quantity']?.toString() ?? '0') ?? 0,
           'deliveryQty': TextEditingController(
-            text: (int.tryParse(p['quantity']?.toString() ?? '0') ?? 0).toString(),
+            text: (int.tryParse(p['quantity']?.toString() ?? '0') ?? 0)
+                .toString(),
           ),
           'images': p['images'] as List<dynamic>? ?? [],
         };
@@ -1034,12 +1324,17 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
         elevation: 8,
-        backgroundColor: widget.isEdit ? Colors.orange : const Color(0xFF00ACC1),
+        backgroundColor: widget.isEdit
+            ? Colors.orange
+            : const Color(0xFF00ACC1),
         title: Text(
           widget.isEdit ? '✏️ Edit Delivery' : '🚚 Process Delivery',
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
         ),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -1057,10 +1352,11 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: (widget.isEdit ? Colors.orange : Colors.indigo).withOpacity(0.3),
+                      color: (widget.isEdit ? Colors.orange : Colors.indigo)
+                          .withOpacity(0.3),
                       blurRadius: 10,
                       spreadRadius: 2,
-                    )
+                    ),
                   ],
                 ),
                 child: Column(
@@ -1074,15 +1370,32 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                             color: Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Icon(widget.isEdit ? Icons.edit : Icons.assignment, color: Colors.white, size: 28),
+                          child: Icon(
+                            widget.isEdit ? Icons.edit : Icons.assignment,
+                            color: Colors.white,
+                            size: 28,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Job Card: $jobNo', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                              Text(customer, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                              Text(
+                                'Job Card: $jobNo',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              Text(
+                                customer,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1091,9 +1404,21 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        Expanded(child: _infoChip(Icons.person, 'Sales: $salesPerson', Colors.white)),
+                        Expanded(
+                          child: _infoChip(
+                            Icons.person,
+                            'Sales: $salesPerson',
+                            Colors.white,
+                          ),
+                        ),
                         const SizedBox(width: 8),
-                        Expanded(child: _infoChip(Icons.crop, 'Size: $size', Colors.white)),
+                        Expanded(
+                          child: _infoChip(
+                            Icons.crop,
+                            'Size: $size',
+                            Colors.white,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -1103,8 +1428,14 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
               const SizedBox(height: 20),
 
               Text(
-                widget.isEdit ? 'Edit Delivery Quantities' : 'Set Delivery Quantities',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                widget.isEdit
+                    ? 'Edit Delivery Quantities'
+                    : 'Set Delivery Quantities',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade800,
+                ),
               ),
 
               const SizedBox(height: 12),
@@ -1112,7 +1443,8 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
               ...productsWithControllers.asMap().entries.map((entry) {
                 final index = entry.key;
                 final product = entry.value;
-                final controller = product['deliveryQty'] as TextEditingController;
+                final controller =
+                    product['deliveryQty'] as TextEditingController;
 
                 return _buildProductDeliveryTile(
                   index: index + 1,
@@ -1128,7 +1460,9 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [Colors.orange.shade50, Colors.amber.shade50]),
+                  gradient: LinearGradient(
+                    colors: [Colors.orange.shade50, Colors.amber.shade50],
+                  ),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: Colors.orange.shade300, width: 2),
                 ),
@@ -1137,22 +1471,46 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.summarize, color: Colors.orange.shade600, size: 24),
+                        Icon(
+                          Icons.summarize,
+                          color: Colors.orange.shade600,
+                          size: 24,
+                        ),
                         const SizedBox(width: 8),
-                        Text('Delivery Summary', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange.shade700)),
+                        Text(
+                          'Delivery Summary',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _summaryRow('Total Products', productsWithControllers.length.toString(), Colors.blue),
+                    _summaryRow(
+                      'Total Products',
+                      productsWithControllers.length.toString(),
+                      Colors.blue,
+                    ),
                     _summaryRow(
                       'Total Qty (Original)',
-                      productsWithControllers.fold<int>(0, (sum, p) => sum + (p['originalQty'] as int)).toString(),
+                      productsWithControllers
+                          .fold<int>(
+                            0,
+                            (sum, p) => sum + (p['originalQty'] as int),
+                          )
+                          .toString(),
                       Colors.green,
                     ),
                     _summaryRow(
                       'Total Qty (Delivery)',
                       productsWithControllers.fold<int>(0, (sum, p) {
-                        final val = int.tryParse((p['deliveryQty'] as TextEditingController).text) ?? 0;
+                        final val =
+                            int.tryParse(
+                              (p['deliveryQty'] as TextEditingController).text,
+                            ) ??
+                            0;
                         return sum + val;
                       }).toString(),
                       Colors.red,
@@ -1168,19 +1526,36 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [Colors.red.shade600, Colors.pink.shade600]),
+                        gradient: LinearGradient(
+                          colors: [Colors.red.shade600, Colors.pink.shade600],
+                        ),
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.red.withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: ElevatedButton.icon(
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close, color: Colors.white),
-                        label: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                        label: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Colors.white,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -1189,25 +1564,53 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [Colors.purple.shade600, Colors.deepPurple.shade600]),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.purple.shade600,
+                            Colors.deepPurple.shade600,
+                          ],
+                        ),
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: Colors.deepPurple.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.deepPurple.withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: ElevatedButton.icon(
                         onPressed: _isLoading ? null : () => _generatePDF(),
-                        icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+                        icon: const Icon(
+                          Icons.picture_as_pdf,
+                          color: Colors.white,
+                        ),
                         label: _isLoading
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
                               )
-                            : const Text('Generate PDF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                            : const Text(
+                                'Generate PDF',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -1221,28 +1624,53 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                 width: double.infinity,
                 child: Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [Colors.green.shade600, Colors.teal.shade600]),
+                    gradient: LinearGradient(
+                      colors: [Colors.green.shade600, Colors.teal.shade600],
+                    ),
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 5))],
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withOpacity(0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
                   ),
                   child: ElevatedButton.icon(
                     onPressed: _isLoading ? null : () => _submitDelivery(),
-                    icon: const Icon(Icons.check_circle, size: 24, color: Colors.white),
+                    icon: const Icon(
+                      Icons.check_circle,
+                      size: 24,
+                      color: Colors.white,
+                    ),
                     label: _isLoading
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
                           )
                         : Text(
-                            widget.isEdit ? 'Update Delivery' : 'Confirm Delivery',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+                            widget.isEdit
+                                ? 'Update Delivery'
+                                : 'Confirm Delivery',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
                           ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -1259,13 +1687,23 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
   Widget _infoChip(IconData icon, String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 6),
-          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );
@@ -1285,7 +1723,13 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.shade300, width: 2),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1296,18 +1740,42 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [Colors.green.shade500, Colors.teal.shade500]),
+                  gradient: LinearGradient(
+                    colors: [Colors.green.shade500, Colors.teal.shade500],
+                  ),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Center(child: Text(index.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))),
+                child: Center(
+                  child: Text(
+                    index.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF212121))),
-                    Text('Original: $originalQty pcs', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    Text(
+                      productName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: Color(0xFF212121),
+                      ),
+                    ),
+                    Text(
+                      'Original: $originalQty pcs',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1326,7 +1794,14 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Enter Delivery Quantity', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue.shade700)),
+                Text(
+                  'Enter Delivery Quantity',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: controller,
@@ -1334,12 +1809,24 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
                     hintText: 'Enter quantity',
-                    prefixIcon: Icon(Icons.inventory, color: Colors.blue.shade600),
+                    prefixIcon: Icon(
+                      Icons.inventory,
+                      color: Colors.blue.shade600,
+                    ),
                     filled: true,
                     fillColor: Colors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.blue)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.blue.shade300)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Colors.blue),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.blue.shade300),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
                   ),
                   onChanged: (value) => setState(() {}),
                 ),
@@ -1351,7 +1838,10 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1359,7 +1849,14 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                     children: [
                       Icon(Icons.image, size: 16, color: Colors.green.shade600),
                       const SizedBox(width: 6),
-                      Text('Images (${images.length})', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.green.shade700)),
+                      Text(
+                        'Images (${images.length})',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -1372,7 +1869,12 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                         padding: const EdgeInsets.only(right: 8),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(images[i], width: 60, height: 60, fit: BoxFit.cover),
+                          child: Image.network(
+                            images[i],
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                     ),
@@ -1392,7 +1894,14 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
+            ),
+          ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
@@ -1400,7 +1909,14 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: color.withOpacity(0.5)),
             ),
-            child: Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
           ),
         ],
       ),
@@ -1434,7 +1950,11 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
 
       for (var product in productsWithControllers) {
         totalOriginalQty += product['originalQty'] as int;
-        final deliveryQty = int.tryParse((product['deliveryQty'] as TextEditingController).text) ?? 0;
+        final deliveryQty =
+            int.tryParse(
+              (product['deliveryQty'] as TextEditingController).text,
+            ) ??
+            0;
         totalDeliveryQty += deliveryQty;
       }
 
@@ -1449,17 +1969,32 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                 pw.Container(
                   width: 80,
                   height: 80,
-                  child: logoImage != null ? pw.Image(logoImage, fit: pw.BoxFit.contain) : null,
+                  child: logoImage != null
+                      ? pw.Image(logoImage, fit: pw.BoxFit.contain)
+                      : null,
                 ),
                 pw.SizedBox(width: 16),
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('DIMPLE PACKAGING PVT. LTD.', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+                    pw.Text(
+                      'DIMPLE PACKAGING PVT. LTD.',
+                      style: pw.TextStyle(
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.teal900,
+                      ),
+                    ),
                     pw.SizedBox(height: 4),
-                    pw.Text('Ludhiana, Punjab - 141008', style: const pw.TextStyle(fontSize: 10)),
+                    pw.Text(
+                      'Ludhiana, Punjab - 141008',
+                      style: const pw.TextStyle(fontSize: 10),
+                    ),
                     pw.SizedBox(height: 2),
-                    pw.Text('Contact: 9872518000 | GST: 03AADCD5371K1ZP', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text(
+                      'Contact: 9872518000 | GST: 03AADCD5371K1ZP',
+                      style: const pw.TextStyle(fontSize: 9),
+                    ),
                   ],
                 ),
               ],
@@ -1470,28 +2005,48 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
             pw.SizedBox(height: 12),
 
             pw.Center(
-              child: pw.Text('DELIVERY CHALLAN', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+              child: pw.Text(
+                'DELIVERY CHALLAN',
+                style: pw.TextStyle(
+                  fontSize: 22,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.teal900,
+                ),
+              ),
             ),
 
             pw.SizedBox(height: 16),
 
             pw.Container(
               padding: const pw.EdgeInsets.all(12),
-              decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.teal), borderRadius: pw.BorderRadius.circular(6)),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.teal),
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
               child: pw.Column(
                 children: [
                   _pdfDetailRow('Job No', jobNo),
                   _pdfDetailRow('Customer', customer),
                   _pdfDetailRow('Sales Person', salesPerson),
                   _pdfDetailRow('Size', size),
-                  _pdfDetailRow('Delivery Date', DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())),
+                  _pdfDetailRow(
+                    'Delivery Date',
+                    DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()),
+                  ),
                 ],
               ),
             ),
 
             pw.SizedBox(height: 16),
 
-            pw.Text('DELIVERY DETAILS', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.teal900)),
+            pw.Text(
+              'DELIVERY DETAILS',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.teal900,
+              ),
+            ),
             pw.SizedBox(height: 8),
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey400),
@@ -1514,7 +2069,11 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                 ...productsWithControllers.asMap().entries.map((e) {
                   final idx = e.key + 1;
                   final product = e.value;
-                  final deliveryQty = int.tryParse((product['deliveryQty'] as TextEditingController).text) ?? 0;
+                  final deliveryQty =
+                      int.tryParse(
+                        (product['deliveryQty'] as TextEditingController).text,
+                      ) ??
+                      0;
 
                   return pw.TableRow(
                     children: [
@@ -1547,7 +2106,10 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Prepared By', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      'Prepared By',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
                     pw.SizedBox(height: 30),
                     pw.Text('_________________'),
                   ],
@@ -1555,7 +2117,10 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text('Authorized By', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      'Authorized By',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
                     pw.SizedBox(height: 30),
                     pw.Text('_________________'),
                   ],
@@ -1563,7 +2128,10 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text('Received By', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text(
+                      'Received By',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    ),
                     pw.SizedBox(height: 30),
                     pw.Text('_________________'),
                   ],
@@ -1574,17 +2142,30 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
         ),
       );
 
-      await Printing.layoutPdf(onLayout: (format) async => pdf.save(), name: 'DeliveryChallan_$jobNo.pdf');
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdf.save(),
+        name: 'DeliveryChallan_$jobNo.pdf',
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('✅ Delivery Challan PDF Generated Successfully'), backgroundColor: Colors.green.shade600, duration: const Duration(seconds: 2)),
+          SnackBar(
+            content: const Text(
+              '✅ Delivery Challan PDF Generated Successfully',
+            ),
+            backgroundColor: Colors.green.shade600,
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 2)),
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     } finally {
@@ -1600,21 +2181,30 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
         return {
           'name': p['name'],
           'originalQty': p['originalQty'],
-          'deliveredQty': int.tryParse((p['deliveryQty'] as TextEditingController).text) ?? 0,
+          'deliveredQty':
+              int.tryParse((p['deliveryQty'] as TextEditingController).text) ??
+              0,
         };
       }).toList();
 
-      await FirebaseFirestore.instance.collection('dispatchedOrders').doc(widget.orderId).update({
-        'deliveryStatus': 'Delivered',
-        'deliveredAt': FieldValue.serverTimestamp(),
-        'deliveredProducts': deliveredProducts,
-        'lastUpdatedAt': FieldValue.serverTimestamp(),
-      });
+      await FirebaseFirestore.instance
+          .collection('dispatchedOrders')
+          .doc(widget.orderId)
+          .update({
+            'deliveryStatus': 'Delivered',
+            'deliveredAt': FieldValue.serverTimestamp(),
+            'deliveredProducts': deliveredProducts,
+            'lastUpdatedAt': FieldValue.serverTimestamp(),
+          });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.isEdit ? '✅ Delivery Updated Successfully' : '✅ Delivery Confirmed Successfully'),
+            content: Text(
+              widget.isEdit
+                  ? '✅ Delivery Updated Successfully'
+                  : '✅ Delivery Confirmed Successfully',
+            ),
             backgroundColor: Colors.green.shade600,
             duration: const Duration(seconds: 2),
           ),
@@ -1625,7 +2215,11 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 2)),
+          SnackBar(
+            content: Text('❌ Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     } finally {
@@ -1640,35 +2234,35 @@ class _DeliveryProcessScreenState extends State<DeliveryProcessScreen> {
   //       children: [
   //         pw.Size
 
- static pw.Widget _pdfDetailRow(String label, String value) {
-  return pw.Padding(
-    padding: const pw.EdgeInsets.symmetric(vertical: 4),
-    child: pw.Row(
-      children: [
-        pw.SizedBox(
-          width: 140,
-          child: pw.Text(
-            '$label:',
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+  static pw.Widget _pdfDetailRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.Row(
+        children: [
+          pw.SizedBox(
+            width: 140,
+            child: pw.Text(
+              '$label:',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
           ),
-        ),
-        pw.Expanded(child: pw.Text(value)),
-      ],
-    ),
-  );
-}
-
-pw.Widget _pdfTableCell(String text, {bool header = false}) {
-  return pw.Padding(
-    padding: const pw.EdgeInsets.all(8),
-    child: pw.Text(
-      text,
-      style: pw.TextStyle(
-        fontWeight: header ? pw.FontWeight.bold : pw.FontWeight.normal,
-        fontSize: header ? 12 : 10,
+          pw.Expanded(child: pw.Text(value)),
+        ],
       ),
-      textAlign: pw.TextAlign.center,
-    ),
-  );
-}
+    );
+  }
+
+  pw.Widget _pdfTableCell(String text, {bool header = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(8),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontWeight: header ? pw.FontWeight.bold : pw.FontWeight.normal,
+          fontSize: header ? 12 : 10,
+        ),
+        textAlign: pw.TextAlign.center,
+      ),
+    );
+  }
 }

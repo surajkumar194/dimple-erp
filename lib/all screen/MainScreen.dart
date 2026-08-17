@@ -5,6 +5,7 @@ import 'package:dimple_erp/AdminDashboard/clientdashbord.dart';
 import 'package:dimple_erp/AdminDashboard/constrcutiondashboard.dart';
 import 'package:dimple_erp/UNIT%202/unit2.dart';
 import 'package:dimple_erp/UNIT%202/unit2_sales.dart';
+import 'package:dimple_erp/challan/DispatchFullPage.dart';
 import 'package:dimple_erp/extra.dart/PaymentApprovalScreen.dart';
 import 'package:dimple_erp/main.dart';
 import 'package:flutter/material.dart';
@@ -14,8 +15,6 @@ import 'package:sizer/sizer.dart';
 import 'package:dimple_erp/ready stock/DashboardScreen.dart';
 import 'package:dimple_erp/all screen/SalesDashboard.dart';
 import 'package:dimple_erp/PRODUCTION/DashboardScreen.dart';
-import 'package:dimple_erp/all screen/PurchaseOrderScreen.dart';
-import 'package:dimple_erp/all screen/QualityCheckScreen.dart';
 import 'package:dimple_erp/all screen/MOMScreen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -58,15 +57,16 @@ class _MainScreenState extends State<MainScreen>
               'stock': true,
               'sales': true,
               'production': true,
-              'purchase': true,
-              'quality': true,
+              // 'purchase': true,
+              // 'quality': true,
               'mom': true,
               'master': true,
               'unit2 stock': true,
               'unit2 sales': true,
               'contractor': true,
-              'customer':true,
-              'paymentapproval':true,
+              'customer': true,
+              'paymentapproval': true,
+              'challan': true,
             }
           : Map<String, dynamic>.from(permissions);
 
@@ -90,16 +90,17 @@ class _MainScreenState extends State<MainScreen>
       if (_permissions['stock'] == true) const Tab(text: 'Stock'),
       if (_permissions['sales'] == true) const Tab(text: 'Sales'),
       if (_permissions['production'] == true) const Tab(text: 'Production'),
-      if (_permissions['purchase'] == true) const Tab(text: 'Purchase Order'),
-      if (_permissions['quality'] == true) const Tab(text: 'Quality Check'),
+      // if (_permissions['purchase'] == true) const Tab(text: 'Purchase Order'),
+      // if (_permissions['quality'] == true) const Tab(text: 'Quality Check'),
       if (_permissions['mom'] == true) const Tab(text: 'MOM'),
       if (_permissions['master'] == true) const Tab(text: 'Master'),
       if (_permissions['unit2 stock'] == true) const Tab(text: 'Unit 2 Stock'),
       if (_permissions['unit2 sales'] == true) const Tab(text: 'Unit 2 Sales'),
       if (_permissions['contractor'] == true) const Tab(text: 'Contractor'),
       if (_permissions['customer'] == true) const Tab(text: 'Customer'),
-      if (_permissions['paymentapproval'] == true) const Tab(text: 'PaymentApproval'),
-
+      if (_permissions['paymentapproval'] == true)
+        const Tab(text: 'PaymentApproval'),
+      if (_permissions['challan'] == true) const Tab(text: 'Challan'),
     ];
   }
 
@@ -109,16 +110,17 @@ class _MainScreenState extends State<MainScreen>
       if (_permissions['stock'] == true) DashboardScreen(),
       if (_permissions['sales'] == true) const SalesDashboard(),
       if (_permissions['production'] == true) ProductionDashboard(),
-      if (_permissions['purchase'] == true) PurchaseOrderScreen(),
-      if (_permissions['quality'] == true) QualityCheckScreen(),
+      // if (_permissions['purchase'] == true) PurchaseOrderScreen(),
+      //if (_permissions['quality'] == true) QualityCheckScreen(),
       if (_permissions['mom'] == true) MinutesOfMeetingScreen(),
       if (_permissions['master'] == true) AdminDashboardScreen(),
       if (_permissions['unit2 stock'] == true) Unit2(),
       if (_permissions['unit2 sales'] == true) const Unit2Sales(),
       if (_permissions['contractor'] == true) const contractordashboard(),
       if (_permissions['customer'] == true) const Clientdashboard(),
-      if (_permissions['paymentapproval'] == true) const PaymentApprovalScreen(),
-
+      if (_permissions['paymentapproval'] == true)
+        const PaymentApprovalScreen(),
+      if (_permissions['challan'] == true) const DispatchScreen(),
     ];
   }
 

@@ -1,12 +1,11 @@
-import 'package:dimple_erp/all screen/DeliverySchedulingScreen.dart';
 import 'package:dimple_erp/all screen/OrderBookingScreen.dart';
-import 'package:dimple_erp/all screen/IssueInventoryScreen.dart';
-import 'package:dimple_erp/all screen/ProductionTrackingScreen.dart';
+import 'package:dimple_erp/all%20screen/BackupManagerScreen.dart';
 import 'package:dimple_erp/all%20screen/DesignerScreen.dart';
-import 'package:dimple_erp/all%20screen/JobCardHistoryTab.dart'
-    show JobCardHistoryTab;
+import 'package:dimple_erp/challan/DispatchFullPage.dart';
+import 'package:dimple_erp/all%20screen/JobCardHistoryTab.dart'show JobCardHistoryTab;
+import 'package:dimple_erp/all%20screen/MasterProductEntryScreen.dart';
 import 'package:dimple_erp/all%20screen/SelectSalesOrderTab.dart';
-import 'package:dimple_erp/extra.dart/PaymentApprovalScreen.dart';
+import 'package:dimple_erp/all%20screen/ViewSalesOrderPdfTab.dart';
 import 'package:dimple_erp/extra.dart/PaymentCollectionScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
@@ -50,23 +49,23 @@ class SalesDashboard extends StatelessWidget {
                   mainAxisSpacing: 28,
                   childAspectRatio: childAspectRatio,
                   children: [
-                    _dashboardCard(
-                      title: "Tracking",
-                      subtitle: "Monitor production & delivery status",
-                      icon: Icons.auto_graph,
-                      gradient: [
-                        const Color(0xFFFF6B9D),
-                        const Color(0xFFFFA07A),
-                      ],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ProductionTrackingScreen(),
-                          ),
-                        );
-                      },
-                    ),
+                    // _dashboardCard(
+                    //   title: "Tracking",
+                    //   subtitle: "Monitor production & delivery status",
+                    //   icon: Icons.auto_graph,
+                    //   gradient: [
+                    //     const Color(0xFFFF6B9D),
+                    //     const Color(0xFFFFA07A),
+                    //   ],
+                    //   onTap: () {
+                    //     Navigator.push(
+                    //       context,
+                    //       MaterialPageRoute(
+                    //         builder: (_) => ProductionTrackingScreen(),
+                    //       ),
+                    //     );
+                    //   },
+                    // ),
                     _dashboardCard(
                       title: "Order Booking",
                       subtitle: "Create and manage orders",
@@ -118,8 +117,9 @@ class SalesDashboard extends StatelessWidget {
                         );
                       },
                     ),
+
                     _dashboardCard(
-                      title: "Issue Inventory",
+                      title: "Product Master",
                       subtitle: "Issue raw material from stock",
                       icon: Icons.inventory_2_outlined,
                       gradient: [
@@ -130,32 +130,30 @@ class SalesDashboard extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const IssueInventoryScreen(),
+                            builder: (_) => const MasterProductEntryScreen(),
                           ),
                         );
                       },
                     ),
+                    // _dashboardCard(
+                    //   title: "Delivery Schedule",
+                    //   subtitle: "Plan & manage deliveries",
+                    //   icon: Icons.local_shipping,
+                    //   gradient: [
+                    //     const Color(0xFFF46B45),
+                    //     const Color(0xFFEEA849),
+                    //   ],
+                    //   onTap: () {
+                    //     Navigator.push(
+                    //       context,
+                    //       MaterialPageRoute(
+                    //         builder: (_) => const DeliveryManagementScreen(),
+                    //       ),
+                    //     );
+                    //   },
+                    // ),
                     _dashboardCard(
-                      title: "Delivery Schedule",
-                      subtitle: "Plan & manage deliveries",
-                      icon: Icons.local_shipping,
-                      gradient: [
-                        const Color(0xFFF46B45),
-                        const Color(0xFFEEA849),
-                      ],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const DeliveryManagementScreen(),
-                          ),
-                        );
-                      },
-                    ),
-
-                
-                    _dashboardCard(
-                      title: "payment Collection",
+                      title: "Payment Collection",
                       subtitle: "Record customer payments",
                       icon: Icons.local_shipping,
                       gradient: [
@@ -171,7 +169,7 @@ class SalesDashboard extends StatelessWidget {
                         );
                       },
                     ),
-                         _dashboardCard(
+                    _dashboardCard(
                       title: "Designer",
                       subtitle: "Approve or decline payment requests",
                       icon: Icons.local_shipping,
@@ -189,6 +187,25 @@ class SalesDashboard extends StatelessWidget {
                       },
                     ),
 
+                  
+
+                    _dashboardCard(
+                      title: "Backup Manager",
+                      subtitle: "Approve dispatches and manage deliveries",
+                      icon: Icons.local_shipping,
+                      gradient: [
+                        const Color.fromARGB(255, 226, 139, 114),
+                        const Color.fromARGB(255, 234, 143, 14),
+                      ],
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BackupOrdersTab(),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 );
               },
@@ -199,7 +216,6 @@ class SalesDashboard extends StatelessWidget {
     );
   }
 
-  // ================= HEADER =================
   Widget _header() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
@@ -245,7 +261,6 @@ class SalesDashboard extends StatelessWidget {
     );
   }
 
-  // ================= DASHBOARD CARD =================
   Widget _dashboardCard({
     required String title,
     required String subtitle,

@@ -1,13 +1,9 @@
 import 'package:dimple_erp/PRODUCTION/KappaProductionListScreen.dart';
 import 'package:dimple_erp/PRODUCTION/MDFStockScreen.dart';
 import 'package:dimple_erp/PRODUCTION/ReadyForDispatchScreen.dart';
-// import 'package:dimple_erp/PRODUCTION/MdfProductionScreen.dart';
-// import 'package:dimple_erp/PRODUCTION/ProductionDashobard.dart';
-// import 'package:dimple_erp/PRODUCTION/MachineFormScreen.dart';
-// import 'package:dimple_erp/PRODUCTION/allprodctiondata.dart';
 import 'package:dimple_erp/PRODUCTION/mdfproductionlist.dart';
+import 'package:dimple_erp/all%20screen/ViewSalesOrderPdfTab.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sizer/sizer.dart';
 
 class ProductionDashboard extends StatefulWidget {
@@ -115,8 +111,8 @@ class _ProductionDashboardState extends State<ProductionDashboard> {
                       subtitle: "View & manage production records",
                       icon: Icons.assignment_turned_in,
                       gradient: [
-                        Colors.deepOrange[600]!,
-                        Colors.deepOrange[400]!,
+                        const Color.fromARGB(255, 239, 59, 5)!,
+                        const Color.fromARGB(255, 68, 77, 80)!,
                       ],
                       onTap: () {
                         Navigator.push(
@@ -129,12 +125,12 @@ class _ProductionDashboardState extends State<ProductionDashboard> {
                     ),
 
                     _dashboardCard(
-                      title: "KAPPA Production",
+                      title: "Kappa Production",
                       subtitle: "View & manage production records",
                       icon: Icons.assignment_turned_in,
                       gradient: [
-                        const Color.fromARGB(255, 140, 242, 73)!,
-                        const Color.fromARGB(255, 140, 242, 73)!,
+                        const Color.fromARGB(255, 81, 119, 56)!,
+                        const Color.fromARGB(255, 181, 233, 146)!,
                       ],
                       onTap: () {
                         Navigator.push(
@@ -152,7 +148,7 @@ class _ProductionDashboardState extends State<ProductionDashboard> {
                       icon: Icons.assignment_turned_in,
                       gradient: [
                         const Color.fromARGB(255, 81, 84, 247)!,
-                        const Color.fromARGB(255, 81, 84, 247)!,
+                        const Color.fromARGB(255, 173, 243, 98)!,
                       ],
                       onTap: () {
                         Navigator.push(
@@ -166,16 +162,35 @@ class _ProductionDashboardState extends State<ProductionDashboard> {
 
                     _dashboardCard(
                       title: "Material for Ready MDF Stocking (Stock Area)",
-                      subtitle: "View & manage ready for dispatch common records",
+                      subtitle:
+                          "View & manage ready for dispatch common records",
                       icon: Icons.assignment_turned_in,
                       gradient: [
                         const Color.fromARGB(255, 79, 203, 249)!,
-                        const Color.fromARGB(255, 79, 203, 249)!,
+                        const Color.fromARGB(255, 225, 106, 236)!,
                       ],
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => MDFCommonScreen()),
+                        );
+                      },
+                    ),
+
+                    _dashboardCard(
+                      title: "Jobcard View Pdf",
+                      subtitle: "job card pdf download",
+                      icon: Icons.local_shipping,
+                      gradient: [
+                        const Color.fromARGB(255, 238, 131, 101),
+                        const Color.fromARGB(255, 153, 235, 105),
+                      ],
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ViewSalesOrderPdfTab(),
+                          ),
                         );
                       },
                     ),

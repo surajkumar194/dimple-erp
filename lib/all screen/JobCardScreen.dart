@@ -62,7 +62,6 @@ class _JobCardScreenState extends State<JobCardScreen>
   }
 }
 
-// ==================== TAB 1: CREATE JOB CARD ====================
 class CreateJobCardTab extends StatefulWidget {
   const CreateJobCardTab({super.key});
 
@@ -90,16 +89,27 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
   final _extraInstructionController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now();
+
+  // 🔥 Price controllers for each section
+  final _trayPriceController = TextEditingController();
+  final _salophinPriceController = TextEditingController();
+  final _boxCoverPriceController = TextEditingController();
+  final _innerPriceController = TextEditingController();
+  final _bottomPriceController = TextEditingController();
+  final _diePriceController = TextEditingController();
+  final _otherPriceController = TextEditingController();
+
   String _priority = 'High';
   bool _isSaving = false;
   String? _selectedSalesPerson;
   String? _customSalesPerson;
 
-  // 🔥 Product List - Each product has name, quantity, and images
+  // 🔥 Product List - Each product has name, quantity, price and images
   final List<Map<String, dynamic>> _products = [
     {
       'nameController': TextEditingController(),
       'quantityController': TextEditingController(),
+      'priceController': TextEditingController(),
       'images': <XFile>[],
     },
   ];
@@ -160,6 +170,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
       _products.add({
         'nameController': TextEditingController(),
         'quantityController': TextEditingController(),
+        'priceController': TextEditingController(),
         'images': <XFile>[],
       });
     });
@@ -171,6 +182,7 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
       setState(() {
         _products[index]['nameController'].dispose();
         _products[index]['quantityController'].dispose();
+        _products[index]['priceController'].dispose();
         _products.removeAt(index);
       });
     }
@@ -287,6 +299,57 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
     );
   }
 
+  // 🔥🔥🔥 TOTAL CALCULATION (Products price*qty + all selected section prices)
+  double _calculateProductsTotal() {
+    double total = 0;
+    for (var product in _products) {
+      final qty = int.tryParse(
+            (product['quantityController'] as TextEditingController)
+                .text
+                .trim(),
+          ) ??
+          0;
+      final price = double.tryParse(
+            (product['priceController'] as TextEditingController)
+                .text
+                .trim(),
+          ) ??
+          0;
+      total += qty * price;
+    }
+    return total;
+  }
+
+  double _calculateSectionsTotal() {
+    double total = 0;
+    if (_sectionSelected['Tray'] == true) {
+      total += double.tryParse(_trayPriceController.text.trim()) ?? 0;
+    }
+    if (_sectionSelected['Salophin'] == true) {
+      total += double.tryParse(_salophinPriceController.text.trim()) ?? 0;
+    }
+    if (_sectionSelected['Box Cover'] == true) {
+      total += double.tryParse(_boxCoverPriceController.text.trim()) ?? 0;
+    }
+    if (_sectionSelected['Inner'] == true) {
+      total += double.tryParse(_innerPriceController.text.trim()) ?? 0;
+    }
+    if (_sectionSelected['Bottom'] == true) {
+      total += double.tryParse(_bottomPriceController.text.trim()) ?? 0;
+    }
+    if (_sectionSelected['Die'] == true) {
+      total += double.tryParse(_diePriceController.text.trim()) ?? 0;
+    }
+    if (_sectionSelected['Others'] == true) {
+      total += double.tryParse(_otherPriceController.text.trim()) ?? 0;
+    }
+    return total;
+  }
+
+  double _calculateGrandTotal() {
+    return _calculateProductsTotal() + _calculateSectionsTotal();
+  }
+
   Future<void> _saveJobCard() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -323,6 +386,8 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
             product['nameController'] as TextEditingController;
         final quantityController =
             product['quantityController'] as TextEditingController;
+        final priceController =
+            product['priceController'] as TextEditingController;
         final images = product['images'] as List<XFile>;
 
         // Upload images for this product
@@ -344,11 +409,15 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
           imageUrls.add(await ref.getDownloadURL());
         }
 
+        final qty = int.tryParse(quantityController.text.trim()) ?? 0;
+        final price = double.tryParse(priceController.text.trim()) ?? 0;
+
         // Add product data
         productsData.add({
           'name': nameController.text.trim(),
-          'quantity':
-              int.tryParse(quantityController.text.trim()) ?? 0, // ✅ INT
+          'quantity': qty, // ✅ INT
+          'price': price, // ✅ DOUBLE
+          'amount': qty * price, // ✅ qty * price
           'images': imageUrls,
         });
       }
@@ -380,30 +449,56 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
       final Map<String, dynamic> sections = {};
 
       if (_sectionSelected['Tray'] == true) {
-        sections['tray'] = _trayController.text.trim();
+        sections['tray'] = {
+          'details': _trayController.text.trim(),
+          'price': double.tryParse(_trayPriceController.text.trim()) ?? 0,
+        };
       }
       if (_sectionSelected['Salophin'] == true) {
-        sections['salophin'] = _salophinController.text.trim();
+        sections['salophin'] = {
+          'details': _salophinController.text.trim(),
+          'price':
+              double.tryParse(_salophinPriceController.text.trim()) ?? 0,
+        };
       }
       if (_sectionSelected['Box Cover'] == true) {
-        sections['boxCover'] = _boxCoverController.text.trim();
+        sections['boxCover'] = {
+          'details': _boxCoverController.text.trim(),
+          'price':
+              double.tryParse(_boxCoverPriceController.text.trim()) ?? 0,
+        };
       }
       if (_sectionSelected['Inner'] == true) {
-        sections['inner'] = _innerController.text.trim();
+        sections['inner'] = {
+          'details': _innerController.text.trim(),
+          'price': double.tryParse(_innerPriceController.text.trim()) ?? 0,
+        };
       }
       if (_sectionSelected['Bottom'] == true) {
-        sections['bottom'] = _bottomController.text.trim();
+        sections['bottom'] = {
+          'details': _bottomController.text.trim(),
+          'price': double.tryParse(_bottomPriceController.text.trim()) ?? 0,
+        };
       }
       if (_sectionSelected['Die'] == true) {
-        sections['die'] = _dieController.text.trim();
+        sections['die'] = {
+          'details': _dieController.text.trim(),
+          'price': double.tryParse(_diePriceController.text.trim()) ?? 0,
+        };
       }
       if (_sectionSelected['Others'] == true) {
-        sections['other'] = _otherController.text.trim();
+        sections['other'] = {
+          'details': _otherController.text.trim(),
+          'price': double.tryParse(_otherPriceController.text.trim()) ?? 0,
+        };
       }
+
+      final productsTotal = _calculateProductsTotal();
+      final sectionsTotal = _calculateSectionsTotal();
+      final grandTotal = productsTotal + sectionsTotal;
 
       await FirebaseFirestore.instance.collection('jobCards').doc(jobNo).set({
         'jobNo': jobNo,
-
         'date': Timestamp.fromDate(_selectedDate),
         'priority': _priority,
         'customer': _customerController.text.trim(),
@@ -416,6 +511,9 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
         'extraInstruction': _extraInstructionController.text.trim(),
         'partialDispatches':
             partialDispatchesData, // 🔥 Save partial dispatches
+        'productsTotal': productsTotal, // 🔥 sum of qty*price of products
+        'sectionsTotal': sectionsTotal, // 🔥 sum of selected section prices
+        'totalAmount': grandTotal, // 🔥 grand total
         'status': 'Pending',
         'deliveryDate': 'deliveryDate',
         'unit': 'unit',
@@ -549,7 +647,13 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
                       product['nameController'] as TextEditingController;
                   final quantityController =
                       product['quantityController'] as TextEditingController;
+                  final priceController =
+                      product['priceController'] as TextEditingController;
                   final images = product['images'] as List<XFile>;
+
+                  final qty = int.tryParse(quantityController.text.trim()) ?? 0;
+                  final price = double.tryParse(priceController.text.trim()) ?? 0;
+                  final productAmount = qty * price;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -591,15 +695,41 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
                           validator: _req,
                         ),
                         const SizedBox(height: 12),
-                        _buildTextField(
-                          controller: quantityController,
-                          label: 'Quantity',
-                          icon: Icons.numbers,
-                          keyboardType: TextInputType.number,
-                          validator: _req,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildTextField(
+                                controller: quantityController,
+                                label: 'Quantity',
+                                icon: Icons.numbers,
+                                keyboardType: TextInputType.number,
+                                validator: _req,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                onChanged: (_) => setState(() {}),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildPriceField(
+                                controller: priceController,
+                                label: 'Price (per unit)',
+                                onChanged: (_) => setState(() {}),
+                              ),
+                            ),
                           ],
+                        ),
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'Amount: ₹${productAmount.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF169a8d),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 12),
                         const Text(
@@ -1014,13 +1144,19 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
             ],
           ),
 
-          // Conditional Fields
+          // Conditional Fields — ab har section me Details + Price dono
           if (_sectionSelected['Tray'] == true) ...[
             const SizedBox(height: 16),
             _buildTextField(
               controller: _trayController,
               label: 'Tray Details',
               icon: Icons.view_agenda,
+            ),
+            const SizedBox(height: 12),
+            _buildPriceField(
+              controller: _trayPriceController,
+              label: 'Tray Price',
+              onChanged: (_) => setState(() {}),
             ),
           ],
           if (_sectionSelected['Salophin'] == true) ...[
@@ -1030,6 +1166,12 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               label: 'Salophin Details',
               icon: Icons.layers,
             ),
+            const SizedBox(height: 12),
+            _buildPriceField(
+              controller: _salophinPriceController,
+              label: 'Salophin Price',
+              onChanged: (_) => setState(() {}),
+            ),
           ],
           if (_sectionSelected['Box Cover'] == true) ...[
             const SizedBox(height: 16),
@@ -1037,6 +1179,12 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               controller: _boxCoverController,
               label: 'Box Cover Details',
               icon: Icons.cases_outlined,
+            ),
+            const SizedBox(height: 12),
+            _buildPriceField(
+              controller: _boxCoverPriceController,
+              label: 'Box Cover Price',
+              onChanged: (_) => setState(() {}),
             ),
           ],
           if (_sectionSelected['Inner'] == true) ...[
@@ -1046,6 +1194,12 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               label: 'Inner Details',
               icon: Icons.table_rows,
             ),
+            const SizedBox(height: 12),
+            _buildPriceField(
+              controller: _innerPriceController,
+              label: 'Inner Price',
+              onChanged: (_) => setState(() {}),
+            ),
           ],
           if (_sectionSelected['Bottom'] == true) ...[
             const SizedBox(height: 16),
@@ -1053,6 +1207,12 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               controller: _bottomController,
               label: 'Bottom Details',
               icon: Icons.align_vertical_bottom,
+            ),
+            const SizedBox(height: 12),
+            _buildPriceField(
+              controller: _bottomPriceController,
+              label: 'Bottom Price',
+              onChanged: (_) => setState(() {}),
             ),
           ],
           if (_sectionSelected['Die'] == true) ...[
@@ -1062,6 +1222,12 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               label: 'Die ',
               icon: Icons.align_vertical_bottom,
             ),
+            const SizedBox(height: 12),
+            _buildPriceField(
+              controller: _diePriceController,
+              label: 'Die Price',
+              onChanged: (_) => setState(() {}),
+            ),
           ],
           if (_sectionSelected['Others'] == true) ...[
             const SizedBox(height: 16),
@@ -1069,6 +1235,12 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               controller: _otherController,
               label: 'Other Details',
               icon: Icons.align_vertical_bottom,
+            ),
+            const SizedBox(height: 12),
+            _buildPriceField(
+              controller: _otherPriceController,
+              label: 'Other Price',
+              onChanged: (_) => setState(() {}),
             ),
           ],
           const SizedBox(height: 20),
@@ -1086,6 +1258,11 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
               ),
             ],
           ),
+
+          const SizedBox(height: 20),
+
+          // 🔥🔥🔥 TOTAL AMOUNT CARD — Products + Sections ka grand total
+          _buildTotalAmountCard(),
 
           const SizedBox(height: 32),
 
@@ -1110,6 +1287,67 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
           const SizedBox(height: 30),
         ],
       ),
+    );
+  }
+
+  // 🔥 Total Amount Card — Products total + Sections total + Grand total
+  Widget _buildTotalAmountCard() {
+    final productsTotal = _calculateProductsTotal();
+    final sectionsTotal = _calculateSectionsTotal();
+    final grandTotal = productsTotal + sectionsTotal;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF169a8d).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF169a8d), width: 1.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.calculate_outlined, color: Color(0xFF169a8d)),
+              SizedBox(width: 10),
+              Text(
+                'Total Amount',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _totalRow('Products Total', productsTotal),
+          const SizedBox(height: 6),
+          _totalRow('Sections Total (Tray/Bottom/Other/etc.)', sectionsTotal),
+          const Divider(height: 24, thickness: 1),
+          _totalRow('Grand Total', grandTotal, isGrand: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _totalRow(String label, double amount, {bool isGrand = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: isGrand ? 16 : 14,
+            fontWeight: isGrand ? FontWeight.bold : FontWeight.w500,
+            color: isGrand ? const Color(0xFF169a8d) : Colors.black87,
+          ),
+        ),
+        Text(
+          '₹${amount.toStringAsFixed(2)}',
+          style: TextStyle(
+            fontSize: isGrand ? 18 : 14,
+            fontWeight: FontWeight.bold,
+            color: isGrand ? const Color(0xFF169a8d) : Colors.black87,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1155,12 +1393,14 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
     String? Function(String?)? validator,
     int maxLines = 1,
     List<TextInputFormatter>? inputFormatters,
+    void Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
       inputFormatters: inputFormatters,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF169a8d)),
@@ -1177,6 +1417,37 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
         fillColor: Colors.white,
       ),
       validator: validator,
+    );
+  }
+
+  // 🔥 Reusable Price Field (₹) — used for products + all sections
+  Widget _buildPriceField({
+    required TextEditingController controller,
+    required String label,
+    void Function(String)? onChanged,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: onChanged,
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+      ],
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: const Icon(Icons.currency_rupee, color: Color(0xFF169a8d)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF169a8d), width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+      ),
     );
   }
 
@@ -1247,13 +1518,25 @@ class _CreateJobCardTabState extends State<CreateJobCardTab> {
     _boxCoverController.dispose();
     _innerController.dispose();
     _bottomController.dispose();
+    _dieController.dispose();
+    _otherController.dispose();
     _extraInstructionController.dispose();
     _otherSalesPersonController.dispose();
+
+    // Dispose section price controllers
+    _trayPriceController.dispose();
+    _salophinPriceController.dispose();
+    _boxCoverPriceController.dispose();
+    _innerPriceController.dispose();
+    _bottomPriceController.dispose();
+    _diePriceController.dispose();
+    _otherPriceController.dispose();
 
     // Dispose product controllers
     for (var product in _products) {
       (product['nameController'] as TextEditingController).dispose();
       (product['quantityController'] as TextEditingController).dispose();
+      (product['priceController'] as TextEditingController).dispose();
     }
     for (var dispatch in _partialDispatches) {
       (dispatch['nameController'] as TextEditingController).dispose();

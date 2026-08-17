@@ -64,6 +64,7 @@ dependencies:
   saver_gallery: ^4.1.1
   permission_handler: ^12.0.1
   image_gallery_saver: ^2.0.3
+  dropdown_search: ^6.0.2
 
 dev_dependencies:
   flutter_test:
@@ -90,6 +91,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/
+    - assets/qr.jpeg
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

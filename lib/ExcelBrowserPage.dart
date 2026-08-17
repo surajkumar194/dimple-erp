@@ -5,13 +5,16 @@ import 'package:excel/excel.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-const String kStorageFolder = 'EXCEL/'; 
+
+const String kStorageFolder = 'EXCEL/';
 const int kMaxExcelBytes = 20 * 1024 * 1024;
+
 class ExcelBrowserPage extends StatefulWidget {
   const ExcelBrowserPage({super.key});
   @override
   State<ExcelBrowserPage> createState() => _ExcelBrowserPageState();
 }
+
 class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
   bool _initDone = false;
   bool _loading = false;
@@ -26,6 +29,7 @@ class _ExcelBrowserPageState extends State<ExcelBrowserPage> {
     super.initState();
     _bootstrap();
   }
+
   Future<void> _bootstrap() async {
     try {
       WidgetsFlutterBinding.ensureInitialized();

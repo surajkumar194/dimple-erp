@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dimple_erp/all%20screen/DemoScreen.dart';
+import 'package:dimple_erp/all%20screen/MainScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sizer/sizer.dart';
-import 'package:dimple_erp/all screen/MainScreen.dart';
 
 class LoginScreen extends StatefulWidget {
   final bool isDemo;
@@ -52,51 +52,135 @@ class _LoginScreenState extends State<LoginScreen> {
     // 🔥 CHECK APP MODE FROM FIRESTORE
    final mode = widget.isDemo ? "demo" : "live";
     // ================= DEMO MODE =================
-    if (mode == "demo") {
+    // if (mode == "demo") {
 
-      if (_emailController.text.trim() == "demo@erp.com" &&
-          _passwordController.text.trim() == "123456") {
+    //   if (_emailController.text.trim() == "demo@erp.com" &&
+    //       _passwordController.text.trim() == "123456") {
 
-        final prefs = await SharedPreferences.getInstance();
+    //     final prefs = await SharedPreferences.getInstance();
 
-        // Demo admin access
-        await prefs.setString('role', 'admin');
+    //     // Demo admin access
+    //     await prefs.setString('role', 'admin');
 
-        await prefs.setString(
-          'permissions',
-          jsonEncode({
-            'stock': true,
-            'sales': true,
-            'production': true,
-            'purchase': true,
-            'quality': true,
-            'mom': true,
-            'master': true,
-            'unit2 stock': true,
-            'unit2 sales': true,
-            'contractor': true,
-            'customer': true,
-            'paymentapproval': true,
-          }),
-        );
+    //     await prefs.setString(
+    //       'permissions',
+    //       jsonEncode({
+    //         'stock': true,
+    //         'sales': true,
+    //         'production': true,
+    //         'purchase': true,
+    //         'quality': true,
+    //         'mom': true,
+    //         'master': true,
+    //         'unit2 stock': true,
+    //         'unit2 sales': true,
+    //         'contractor': true,
+    //         'customer': true,
+    //         'paymentapproval': true,
+    //         'challan': true,
+    //       }),
+    //     );
 
-        if (!mounted) return;
+    //     if (!mounted) return;
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DemoDashboard()),
-        );
+    //     Navigator.pushReplacement(
+    //       context,
+    //       MaterialPageRoute(builder: (_) => const DemoDashboard()),
+    //     );
 
-        _showSnackBar("Demo login successful!");
+    //     _showSnackBar("Demo login successful!");
 
-        setState(() => _isLoading = false);
-        return;
-      } else {
-        _showSnackBar("Use demo@erp.com / 123456", isError: true);
-        setState(() => _isLoading = false);
-        return;
-      }
+    //     setState(() => _isLoading = false);
+    //     return;
+    //   } else {
+    //     _showSnackBar("Use demo@erp.com / 123456", isError: true);
+    //     setState(() => _isLoading = false);
+    //     return;
+    //   }
+    // ================= DEMO MODE =================
+if (mode == "demo") {
+
+  final email = _emailController.text.trim();
+  final password = _passwordController.text.trim();
+
+  // Demo admin OR Challan login
+  if ((email == "demo@erp.com" && password == "123456") ||
+      (email == "challan@gmail.com" &&
+       password == "challan123@")) {
+
+    final prefs = await SharedPreferences.getInstance();
+
+    // ===== Challan User =====
+    if (email == "challan@gmail.com") {
+
+      await prefs.setString('role', 'challan');
+
+      await prefs.setString(
+        'permissions',
+        jsonEncode({
+          'challan': true,
+        }),
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const MainScreen(),
+        ),
+      );
+
+    } else {
+
+      // ===== Demo Admin =====
+      await prefs.setString('role', 'admin');
+
+      await prefs.setString(
+        'permissions',
+        jsonEncode({
+          'stock': true,
+          'sales': true,
+          'production': true,
+          'purchase': true,
+          'quality': true,
+          'mom': true,
+          'master': true,
+          'unit2 stock': true,
+          'unit2 sales': true,
+          'contractor': true,
+          'customer': true,
+          'paymentapproval': true,
+          'challan': true,
+        }),
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const DemoDashboard(),
+        ),
+      );
     }
+
+    _showSnackBar("Demo login successful!");
+
+    setState(() => _isLoading = false);
+    return;
+  }
+
+  _showSnackBar(
+    "Try Again!",
+   // "Use demo@erp.com/123456 OR challan@gmail.com/challan123@",
+    isError: true,
+  );
+
+  setState(() => _isLoading = false);
+  return;
+}
+    
 
     // ================= LIVE MODE =================
 
@@ -137,7 +221,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   if (mounted) setState(() => _isLoading = false);
 }
-  // ================= SNACKBAR =================
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

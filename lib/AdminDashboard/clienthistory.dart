@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -21,16 +24,17 @@ class _HistoryPageState extends State<HistoryPage>
   String? _selectedAlphabet;
   bool _filtersExpanded = false;
 
-  // Track which cards are expanded — key = docId
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
   final Set<String> _expandedCards = {};
 
-  // Color palette
   static const Color _primary = Color(0xFF4F46E5);
   static const Color _accent = Color(0xFF10B981);
   static const Color _warning = Color(0xFFF59E0B);
   static const Color _danger = Color(0xFFEF4444);
   static const Color _surface = Color(0xFFF8F9FF);
-  static const Color _textPrimary = Color(0xFF1E1B4B);
+  static const Color _textPrimary = Color.fromARGB(255, 106, 98, 224);
   static const Color _textSecondary = Color(0xFF6B7280);
   static const Color _border = Color(0xFFE5E7EB);
 
@@ -43,6 +47,7 @@ class _HistoryPageState extends State<HistoryPage>
     "Gunnet Singh",
     "Hardeep Singh",
     "Jagdish Chawla",
+    "JAGDISH SURI JI",
     "Karan",
     "Krishna Arora",
     "Kuldeep Singh",
@@ -63,13 +68,16 @@ class _HistoryPageState extends State<HistoryPage>
       vsync: this,
     );
     _fadeAnimation = CurvedAnimation(
-        parent: _animationController, curve: Curves.easeOut);
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
     _animationController.forward();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -78,10 +86,36 @@ class _HistoryPageState extends State<HistoryPage>
 
   String _monthName(int m) {
     const months = [
-      'Jan','Feb','Mar','Apr','May','Jun',
-      'Jul','Aug','Sep','Oct','Nov','Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return months[m - 1];
+  }
+
+  String _fmtAmount(num? amount) {
+    if (amount == null) return '-';
+    final isWhole = amount == amount.roundToDouble();
+    final val = isWhole ? amount.toStringAsFixed(0) : amount.toStringAsFixed(2);
+    final parts = val.split('.');
+    final intPart = parts[0];
+    final buffer = StringBuffer();
+    for (int i = 0; i < intPart.length; i++) {
+      final posFromRight = intPart.length - i;
+      if (i != 0 && posFromRight % 3 == 0) buffer.write(',');
+      buffer.write(intPart[i]);
+    }
+    final result = buffer.toString() + (parts.length > 1 ? '.${parts[1]}' : '');
+    return 'Rs. $result';
   }
 
   DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -94,11 +128,11 @@ class _HistoryPageState extends State<HistoryPage>
       case TimeFilter.all:
         return null;
       case TimeFilter.today:
-        return DateTimeRange(
-            start: _startOfDay(now), end: _endOfDay(now));
+        return DateTimeRange(start: _startOfDay(now), end: _endOfDay(now));
       case TimeFilter.thisWeek:
-        final start =
-            _startOfDay(now.subtract(Duration(days: now.weekday - 1)));
+        final start = _startOfDay(
+          now.subtract(Duration(days: now.weekday - 1)),
+        );
         final end = _endOfDay(start.add(const Duration(days: 6)));
         return DateTimeRange(start: start, end: end);
       case TimeFilter.thisMonth:
@@ -122,6 +156,246 @@ class _HistoryPageState extends State<HistoryPage>
     return ca?.toDate();
   }
 
+  String _getPdfTitle() {
+    final range = _resolveRange();
+    final parts = <String>[];
+    if (!_showAll && _selectedClient != null) {
+      parts.add(_selectedClient!);
+    } else {
+      parts.add('All Sales Persons');
+    }
+    if (range != null) {
+      parts.add('${_fmt(range.start)} - ${_fmt(range.end)}');
+    } else {
+      parts.add('All Dates');
+    }
+    return parts.join(' | ');
+  }
+
+  Future<void> _generateAndDownloadPdf(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) async {
+    final filtered = _applyFilters(docs);
+    if (filtered.isEmpty) {
+      _showSnackBar('No records to export', isError: true);
+      return;
+    }
+ filtered.sort((a, b) {
+    final nameA = (a.data()['customer'] as String? ?? '').toLowerCase();
+    final nameB = (b.data()['customer'] as String? ?? '').toLowerCase();
+    return nameA.compareTo(nameB);
+  });
+    final pdf = pw.Document();
+    final now = DateTime.now();
+
+    num totalAmount = 0;
+    for (final doc in filtered) {
+      final a = doc.data()['amount'];
+      if (a is num) totalAmount += a;
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        header: (context) {
+          if (context.pageNumber != 1) return pw.SizedBox();
+          return pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 14,
+            ),
+            decoration: pw.BoxDecoration(
+              gradient: const pw.LinearGradient(
+                colors: [
+                  PdfColor.fromInt(0xFF4F46E5),
+                  PdfColor.fromInt(0xFF7C3AED),
+                ],
+              ),
+              borderRadius: pw.BorderRadius.circular(12),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'Customer Follow-up Report',
+                  style: pw.TextStyle(
+                    fontSize: 20,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.white,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  _getPdfTitle(),
+                  style: const pw.TextStyle(
+                    fontSize: 11,
+                    color: PdfColor.fromInt(0xFFCBD5E1),
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Generated: ${_fmt(now)}  |  Total Records: ${filtered.length}  |  Total Amount: ${_fmtAmount(totalAmount)}',
+                  style: const pw.TextStyle(
+                    fontSize: 10,
+                    color: PdfColor.fromInt(0xFFCBD5E1),
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Container(
+                  decoration: const pw.BoxDecoration(
+                    color: PdfColor.fromInt(0xFF4F46E5),
+                    borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
+                  ),
+                  child: pw.Row(
+                    children: [
+                      _pdfHeaderCell('Customer', flex: 3),
+                      _pdfHeaderCell('Phone', flex: 3),
+                      _pdfHeaderCell('Sales Person', flex: 2),
+                      _pdfHeaderCell('Amount', flex: 2),
+                      _pdfHeaderCell('Description', flex: 6),
+                      _pdfHeaderCell('Follow-ups', flex: 2),
+                      _pdfHeaderCell('Next Date', flex: 3),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+        footer: (context) => pw.Column(
+          children: [
+            pw.SizedBox(height: 4),
+            pw.Divider(color: const PdfColor.fromInt(0xFFE5E7EB)),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'DPL Customer Follow-up System',
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColor.fromInt(0xFF9CA3AF),
+                  ),
+                ),
+                pw.Text(
+                  'Page ${context.pageNumber} of ${context.pagesCount}',
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColor.fromInt(0xFF9CA3AF),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        // ✅ Ye sabse important part: pure list build() mein do,
+        // MultiPage khud decide karega kaunsi row kis page pe jayegi.
+        build: (context) => [
+          ...filtered.asMap().entries.map((entry) {
+            final globalIdx = entry.key;
+            final doc = entry.value;
+            final d = doc.data();
+            final customer = d['customer'] as String? ?? '-';
+            final phone = d['phone'] as String? ?? '-';
+            final client = d['client'] as String? ?? '-';
+            final desc = d['description'] as String? ?? '-';
+            final amount = d['amount'] as num?;
+            final fuCount = (d['followupCount'] as int?) ?? 1;
+            final latestDate = _latestFollowupDate(d);
+            final isEven = globalIdx % 2 == 0;
+
+            return pw.Container(
+              decoration: pw.BoxDecoration(
+                color: isEven
+                    ? const PdfColor.fromInt(0xFFF8F9FF)
+                    : PdfColors.white,
+                border: const pw.Border(
+                  bottom: pw.BorderSide(
+                    color: PdfColor.fromInt(0xFFE5E7EB),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: pw.Row(
+                children: [
+                  _pdfDataCell(customer, flex: 3, bold: true),
+                  _pdfDataCell(phone, flex: 3),
+                  _pdfDataCell(
+                    client,
+                    flex: 2,
+                    color: const PdfColor.fromInt(0xFF4F46E5),
+                  ),
+                  _pdfDataCell(
+                    _fmtAmount(amount),
+                    flex: 2,
+                    color: const PdfColor.fromInt(0xFFF59E0B),
+                    bold: true,
+                  ),
+                  _pdfDataCell(desc, flex: 6),
+                  _pdfDataCell(
+                    '$fuCount',
+                    flex: 2,
+                    color: const PdfColor.fromInt(0xFF10B981),
+                    bold: true,
+                  ),
+                  _pdfDataCell(
+                    latestDate != null ? _fmt(latestDate) : '-',
+                    flex: 3,
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'followup_report_${now.millisecondsSinceEpoch}.pdf',
+    );
+  }
+
+  pw.Widget _pdfHeaderCell(String text, {required int flex}) {
+    return pw.Expanded(
+      flex: flex,
+      child: pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(
+            fontSize: 10,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _pdfDataCell(
+    String text, {
+    required int flex,
+    bool bold = false,
+    PdfColor color = const PdfColor.fromInt(0xFF1E1B4B),
+  }) {
+    return pw.Expanded(
+      flex: flex,
+      child: pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(
+            fontSize: 10,
+            fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _addNextFollowup(String docId, Map<String, dynamic> d) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -133,10 +407,10 @@ class _HistoryPageState extends State<HistoryPage>
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: _primary,
+            primary: Color.fromARGB(255, 202, 201, 237),
             onPrimary: Colors.white,
             surface: Colors.white,
-            onSurface: _textPrimary,
+            onSurface: Color.fromARGB(255, 167, 162, 235),
           ),
         ),
         child: child!,
@@ -146,10 +420,9 @@ class _HistoryPageState extends State<HistoryPage>
 
     final int currentCount = (d['followupCount'] as int?) ?? 1;
     await FirebaseFirestore.instance.collection('followups').doc(docId).update({
-      'log': FieldValue.arrayUnion([{
-        'date': Timestamp.fromDate(picked),
-        'createdAt': Timestamp.now(),
-      }]),
+      'log': FieldValue.arrayUnion([
+        {'date': Timestamp.fromDate(picked), 'createdAt': Timestamp.now()},
+      ]),
       'followUpDate': Timestamp.fromDate(picked),
       'followupCount': currentCount + 1,
       'createdAt': Timestamp.now(),
@@ -183,10 +456,10 @@ class _HistoryPageState extends State<HistoryPage>
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: _primary,
+            primary: Color.fromARGB(255, 145, 140, 238),
             onPrimary: Colors.white,
             surface: Colors.white,
-            onSurface: _textPrimary,
+            onSurface: Color.fromARGB(255, 202, 222, 133),
           ),
         ),
         child: child!,
@@ -195,11 +468,9 @@ class _HistoryPageState extends State<HistoryPage>
     if (picked == null) return;
 
     final newLog = List<Map<String, dynamic>>.from(
-        log.map((e) => Map<String, dynamic>.from(e as Map)));
-    newLog[newLog.length - 1] = {
-      ...latest,
-      'date': Timestamp.fromDate(picked)
-    };
+      log.map((e) => Map<String, dynamic>.from(e as Map)),
+    );
+    newLog[newLog.length - 1] = {...latest, 'date': Timestamp.fromDate(picked)};
 
     await FirebaseFirestore.instance.collection('followups').doc(docId).update({
       'log': newLog,
@@ -214,7 +485,10 @@ class _HistoryPageState extends State<HistoryPage>
   Future<void> _deleteDoc(String docId) async {
     final confirmed = await _showDeleteConfirmation();
     if (!confirmed) return;
-    await FirebaseFirestore.instance.collection('followups').doc(docId).delete();
+    await FirebaseFirestore.instance
+        .collection('followups')
+        .doc(docId)
+        .delete();
     if (!mounted) return;
     _expandedCards.remove(docId);
     _showSnackBar('Record deleted successfully 🗑️', isError: true);
@@ -225,7 +499,8 @@ class _HistoryPageState extends State<HistoryPage>
           context: context,
           builder: (context) => Dialog(
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24)),
+              borderRadius: BorderRadius.circular(24),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -237,23 +512,30 @@ class _HistoryPageState extends State<HistoryPage>
                       color: _danger.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.delete_forever_rounded,
-                        color: _danger, size: 32),
+                    child: const Icon(
+                      Icons.delete_forever_rounded,
+                      color: _danger,
+                      size: 32,
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Delete Record',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: _textPrimary)),
+                  const Text(
+                    'Delete Record',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: _textPrimary,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'This action cannot be undone. The customer record will be permanently removed.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        fontSize: 14,
-                        color: _textSecondary,
-                        height: 1.5),
+                      fontSize: 14,
+                      color: _textSecondary,
+                      height: 1.5,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -264,13 +546,17 @@ class _HistoryPageState extends State<HistoryPage>
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             side: const BorderSide(color: _border),
                           ),
-                          child: const Text('Cancel',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: _textSecondary)),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: _textSecondary,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -282,12 +568,16 @@ class _HistoryPageState extends State<HistoryPage>
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             elevation: 0,
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                          child: const Text('Delete',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white)),
+                          child: const Text(
+                            'Delete',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -319,9 +609,13 @@ class _HistoryPageState extends State<HistoryPage>
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(message,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w500)),
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
           ],
         ),
@@ -335,14 +629,17 @@ class _HistoryPageState extends State<HistoryPage>
   }
 
   Future<void> _editTextField(
-      String docId, String field, String currentValue, String title,
-      {Color accentColor = _primary}) async {
+    String docId,
+    String field,
+    String currentValue,
+    String title, {
+    Color accentColor = _primary,
+  }) async {
     final controller = TextEditingController(text: currentValue);
     final result = await showDialog<String>(
       context: context,
       builder: (context) => Dialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -366,11 +663,14 @@ class _HistoryPageState extends State<HistoryPage>
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: _textPrimary)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: _textPrimary,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
@@ -404,13 +704,17 @@ class _HistoryPageState extends State<HistoryPage>
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         side: const BorderSide(color: _border),
                       ),
-                      child: const Text('Cancel',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _textSecondary)),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: _textSecondary,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -423,12 +727,16 @@ class _HistoryPageState extends State<HistoryPage>
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: const Text('Save Changes',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white)),
+                      child: const Text(
+                        'Save Changes',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -467,13 +775,13 @@ class _HistoryPageState extends State<HistoryPage>
         opacity: _fadeAnimation,
         child: Column(
           children: [
-            _buildFilterPanel(),
+            _buildFilterPanel(allStream, filteredStream),
             Expanded(
               child: _showAll
                   ? _buildAllList(allStream)
                   : (_selectedClient == null
-                      ? _buildEmptyState()
-                      : _buildFilteredList(filteredStream)),
+                        ? _buildEmptyState()
+                        : _buildFilteredList(filteredStream)),
             ),
           ],
         ),
@@ -491,11 +799,7 @@ class _HistoryPageState extends State<HistoryPage>
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                Color(0xFF4F46E5),
-                Color(0xFF7C3AED),
-                Color(0xFF0EA5E9)
-              ],
+              colors: [Color(0xFF4F46E5), Color(0xFF7C3AED), Color(0xFF0EA5E9)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -513,11 +817,13 @@ class _HistoryPageState extends State<HistoryPage>
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: Colors.white.withOpacity(0.3)),
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
                   ),
-                  child: const Icon(Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white, size: 18),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
               ),
               const SizedBox(width: 14),
@@ -526,8 +832,7 @@ class _HistoryPageState extends State<HistoryPage>
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: Colors.white.withOpacity(0.3)),
+                  border: Border.all(color: Colors.white.withOpacity(0.3)),
                 ),
                 child: Image.asset('assets/dpl.png', height: 32),
               ),
@@ -537,18 +842,24 @@ class _HistoryPageState extends State<HistoryPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Customer History',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 19,
-                            color: Colors.white,
-                            letterSpacing: -0.3)),
+                    Text(
+                      'Customer History',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 19,
+                        color: Colors.white,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
                     SizedBox(height: 2),
-                    Text('View & manage all records',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w400)),
+                    Text(
+                      'View & manage all records',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -559,11 +870,15 @@ class _HistoryPageState extends State<HistoryPage>
     );
   }
 
-  Widget _buildFilterPanel() {
+  Widget _buildFilterPanel(
+    Stream<QuerySnapshot<Map<String, dynamic>>> allStream,
+    Stream<QuerySnapshot<Map<String, dynamic>>> filteredStream,
+  ) {
     return Container(
       color: Colors.white,
       child: Column(
         children: [
+          // ── TAB BUTTONS ──────────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Container(
@@ -575,23 +890,117 @@ class _HistoryPageState extends State<HistoryPage>
               padding: const EdgeInsets.all(4),
               child: Row(
                 children: [
-                  _buildTabButton('All Customers', Icons.people_outline, _showAll,
-                      () => setState(() {
-                            _showAll = true;
-                            _selectedClient = null;
-                          })),
                   _buildTabButton(
-                      'By Sales Person', Icons.person_search_outlined, !_showAll,
-                      () => setState(() => _showAll = false)),
+                    'All Customers',
+                    Icons.people_outline,
+                    _showAll,
+                    () => setState(() {
+                      _showAll = true;
+                      _selectedClient = null;
+                    }),
+                  ),
+                  _buildTabButton(
+                    'By Sales Person',
+                    Icons.person_search_outlined,
+                    !_showAll,
+                    () => setState(() => _showAll = false),
+                  ),
                 ],
               ),
             ),
           ),
 
+          // ── SEARCH BAR ───────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              height: 48,
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _searchQuery.isNotEmpty ? _primary : _border,
+                  width: _searchQuery.isNotEmpty ? 1.8 : 1,
+                ),
+                boxShadow: _searchQuery.isNotEmpty
+                    ? [
+                        BoxShadow(
+                          color: _primary.withOpacity(0.14),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Icon(
+                      Icons.search_rounded,
+                      color: _searchQuery.isNotEmpty
+                          ? _primary
+                          : _textSecondary,
+                      size: 20,
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: _textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Search by customer name or phone...',
+                        hintStyle: TextStyle(
+                          color: _textSecondary.withOpacity(0.55),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                  if (_searchQuery.isNotEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: _danger.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: _danger,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ),
+
+          // ── ADVANCED FILTERS TOGGLE ──────────────────────────────────────────
           InkWell(
             onTap: () => setState(() => _filtersExpanded = !_filtersExpanded),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
                   Container(
@@ -600,29 +1009,39 @@ class _HistoryPageState extends State<HistoryPage>
                       color: _primary.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.tune_rounded,
-                        color: _primary, size: 16),
+                    child: const Icon(
+                      Icons.tune_rounded,
+                      color: _primary,
+                      size: 16,
+                    ),
                   ),
                   const SizedBox(width: 10),
-                  const Text('Advanced Filters',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _textPrimary)),
+                  const Text(
+                    'Advanced Filters',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _textPrimary,
+                    ),
+                  ),
                   const Spacer(),
                   _buildActiveFiltersCount(),
                   const SizedBox(width: 8),
                   AnimatedRotation(
                     turns: _filtersExpanded ? 0.5 : 0,
                     duration: const Duration(milliseconds: 200),
-                    child: const Icon(Icons.keyboard_arrow_down_rounded,
-                        color: _textSecondary, size: 20),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: _textSecondary,
+                      size: 20,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
 
+          // ── ADVANCED FILTERS PANEL ───────────────────────────────────────────
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
@@ -639,27 +1058,36 @@ class _HistoryPageState extends State<HistoryPage>
                               value: _timeFilter,
                               isDense: true,
                               style: const TextStyle(
-                                  color: _primary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14),
-                              icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                                  color: _primary, size: 18),
+                                color: _primary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                              icon: const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                color: _primary,
+                                size: 18,
+                              ),
                               items: const [
                                 DropdownMenuItem(
-                                    value: TimeFilter.all,
-                                    child: Text('All Dates')),
+                                  value: TimeFilter.all,
+                                  child: Text('All Dates'),
+                                ),
                                 DropdownMenuItem(
-                                    value: TimeFilter.today,
-                                    child: Text('Today')),
+                                  value: TimeFilter.today,
+                                  child: Text('Today'),
+                                ),
                                 DropdownMenuItem(
-                                    value: TimeFilter.thisWeek,
-                                    child: Text('This Week')),
+                                  value: TimeFilter.thisWeek,
+                                  child: Text('This Week'),
+                                ),
                                 DropdownMenuItem(
-                                    value: TimeFilter.thisMonth,
-                                    child: Text('This Month')),
+                                  value: TimeFilter.thisMonth,
+                                  child: Text('This Month'),
+                                ),
                                 DropdownMenuItem(
-                                    value: TimeFilter.custom,
-                                    child: Text('Custom Range')),
+                                  value: TimeFilter.custom,
+                                  child: Text('Custom Range'),
+                                ),
                               ],
                               onChanged: (v) async {
                                 if (v == null) return;
@@ -669,16 +1097,17 @@ class _HistoryPageState extends State<HistoryPage>
                                     context: context,
                                     firstDate: DateTime(now.year - 2),
                                     lastDate: DateTime(now.year + 2),
-                                    initialDateRange: _customRange ??
+                                    initialDateRange:
+                                        _customRange ??
                                         DateTimeRange(
                                           start: now.subtract(
-                                              const Duration(days: 7)),
+                                            const Duration(days: 7),
+                                          ),
                                           end: now,
                                         ),
                                     builder: (context, child) => Theme(
                                       data: Theme.of(context).copyWith(
-                                        colorScheme:
-                                            const ColorScheme.light(
+                                        colorScheme: const ColorScheme.light(
                                           primary: _primary,
                                           onPrimary: Colors.white,
                                         ),
@@ -713,29 +1142,35 @@ class _HistoryPageState extends State<HistoryPage>
                                   value: _selectedAlphabet,
                                   isDense: true,
                                   style: const TextStyle(
-                                      color: _primary,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14),
+                                    color: _primary,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
                                   icon: const Icon(
-                                      Icons.keyboard_arrow_down_rounded,
-                                      color: _primary, size: 18),
-                                  hint: const Text('All Names',
-                                      style: TextStyle(
-                                          color: _textSecondary,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500)),
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: _primary,
+                                    size: 18,
+                                  ),
+                                  hint: const Text(
+                                    'All Names',
+                                    style: TextStyle(
+                                      color: _textSecondary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
                                   items: [
                                     const DropdownMenuItem<String?>(
-                                        value: null,
-                                        child: Text('All Names')),
-                                    ...List.generate(
-                                      26,
-                                      (i) {
-                                        final l = String.fromCharCode(65 + i);
-                                        return DropdownMenuItem<String?>(
-                                            value: l, child: Text(l));
-                                      },
+                                      value: null,
+                                      child: Text('All Names'),
                                     ),
+                                    ...List.generate(26, (i) {
+                                      final l = String.fromCharCode(65 + i);
+                                      return DropdownMenuItem<String?>(
+                                        value: l,
+                                        child: Text(l),
+                                      );
+                                    }),
                                   ],
                                   onChanged: (v) =>
                                       setState(() => _selectedAlphabet = v),
@@ -744,16 +1179,19 @@ class _HistoryPageState extends State<HistoryPage>
                               if (_selectedAlphabet != null) ...[
                                 const SizedBox(width: 8),
                                 GestureDetector(
-                                  onTap: () => setState(
-                                      () => _selectedAlphabet = null),
+                                  onTap: () =>
+                                      setState(() => _selectedAlphabet = null),
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: BoxDecoration(
                                       color: _danger.withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
-                                    child: const Icon(Icons.close_rounded,
-                                        size: 14, color: _danger),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      size: 14,
+                                      color: _danger,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -769,21 +1207,31 @@ class _HistoryPageState extends State<HistoryPage>
                               child: DropdownButton<String>(
                                 value: _selectedClient,
                                 isDense: true,
-                                hint: const Text('Select...',
-                                    style: TextStyle(
-                                        color: _textSecondary,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500)),
+                                hint: const Text(
+                                  'Select...',
+                                  style: TextStyle(
+                                    color: _textSecondary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                                 style: const TextStyle(
-                                    color: _primary,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14),
+                                  color: _primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
                                 icon: const Icon(
-                                    Icons.keyboard_arrow_down_rounded,
-                                    color: _primary, size: 18),
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: _primary,
+                                  size: 18,
+                                ),
                                 items: _clientNames
-                                    .map((c) => DropdownMenuItem(
-                                        value: c, child: Text(c)))
+                                    .map(
+                                      (c) => DropdownMenuItem(
+                                        value: c,
+                                        child: Text(c),
+                                      ),
+                                    )
                                     .toList(),
                                 onChanged: (v) =>
                                     setState(() => _selectedClient = v),
@@ -791,6 +1239,112 @@ class _HistoryPageState extends State<HistoryPage>
                             ),
                           ),
                         ],
+                        const SizedBox(height: 12),
+
+                        // ── PDF DOWNLOAD BUTTON ────────────────────────────────
+                        StreamBuilder(
+                          stream: _showAll ? allStream : filteredStream,
+                          builder: (context, snap) {
+                            final docs = snap.data?.docs ?? [];
+                            return GestureDetector(
+                              onTap: docs.isEmpty
+                                  ? null
+                                  : () => _generateAndDownloadPdf(
+                                      docs
+                                          .cast<
+                                            QueryDocumentSnapshot<
+                                              Map<String, dynamic>
+                                            >
+                                          >(),
+                                    ),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: docs.isEmpty
+                                        ? [
+                                            Colors.grey.shade300,
+                                            Colors.grey.shade300,
+                                          ]
+                                        : [
+                                            const Color(0xFFDC2626),
+                                            const Color(0xFFEF4444),
+                                          ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(13),
+                                  boxShadow: docs.isEmpty
+                                      ? null
+                                      : [
+                                          BoxShadow(
+                                            color: const Color(
+                                              0xFFEF4444,
+                                            ).withOpacity(0.35),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(
+                                        Icons.picture_as_pdf_rounded,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Download PDF Report',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        Text(
+                                          docs.isEmpty
+                                              ? 'No records available'
+                                              : '${_applyFilters(docs.cast<QueryDocumentSnapshot<Map<String, dynamic>>>()).length} records · current filters',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.white.withOpacity(
+                                              0.8,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const Spacer(),
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 14),
+                                      child: Icon(
+                                        Icons.download_rounded,
+                                        color: Colors.white.withOpacity(0.8),
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   )
@@ -804,7 +1358,11 @@ class _HistoryPageState extends State<HistoryPage>
   }
 
   Widget _buildTabButton(
-      String label, IconData icon, bool selected, VoidCallback onTap) {
+    String label,
+    IconData icon,
+    bool selected,
+    VoidCallback onTap,
+  ) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -817,24 +1375,30 @@ class _HistoryPageState extends State<HistoryPage>
             boxShadow: selected
                 ? [
                     BoxShadow(
-                        color: _primary.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3))
+                      color: _primary.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
                   ]
                 : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon,
-                  size: 16,
-                  color: selected ? Colors.white : _textSecondary),
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? Colors.white : _textSecondary,
+              ),
               const SizedBox(width: 6),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: selected ? Colors.white : _textSecondary)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : _textSecondary,
+                ),
+              ),
             ],
           ),
         ),
@@ -842,10 +1406,11 @@ class _HistoryPageState extends State<HistoryPage>
     );
   }
 
-  Widget _buildFilterRow(
-      {required IconData icon,
-      required String label,
-      required Widget child}) {
+  Widget _buildFilterRow({
+    required IconData icon,
+    required String label,
+    required Widget child,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -857,11 +1422,14 @@ class _HistoryPageState extends State<HistoryPage>
         children: [
           Icon(icon, color: _primary, size: 18),
           const SizedBox(width: 10),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: _textSecondary)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _textSecondary,
+            ),
+          ),
           const Spacer(),
           child,
         ],
@@ -874,6 +1442,7 @@ class _HistoryPageState extends State<HistoryPage>
     if (_timeFilter != TimeFilter.all) count++;
     if (_selectedAlphabet != null) count++;
     if (!_showAll && _selectedClient != null) count++;
+    if (_searchQuery.trim().isNotEmpty) count++;
 
     if (count == 0) return const SizedBox.shrink();
     return Container(
@@ -882,14 +1451,21 @@ class _HistoryPageState extends State<HistoryPage>
         color: _primary,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text('$count active',
-          style: const TextStyle(
-              color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+      child: Text(
+        '$count active',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 
+  // ── APPLY FILTERS (search added here) ───────────────────────────────────────
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _applyFilters(
-      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
     final range = _resolveRange();
     var filtered = range == null
         ? docs
@@ -906,6 +1482,19 @@ class _HistoryPageState extends State<HistoryPage>
         return customer[0].toUpperCase() == _selectedAlphabet;
       }).toList();
     }
+
+    // ── SEARCH FILTER ──────────────────────────────────────────────────────────
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      filtered = filtered.where((doc) {
+        final customer = (doc.data()['customer'] as String? ?? '')
+            .toLowerCase();
+        final phone = (doc.data()['phone'] as String? ?? '').toLowerCase();
+        return customer.contains(q) || phone.contains(q);
+      }).toList();
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     return filtered;
   }
 
@@ -925,7 +1514,9 @@ class _HistoryPageState extends State<HistoryPage>
         final filtered = _applyFilters(docs);
         if (filtered.isEmpty) {
           return _buildNoDataState(
-            message: _selectedAlphabet != null
+            message: _searchQuery.trim().isNotEmpty
+                ? 'No results for "$_searchQuery"'
+                : _selectedAlphabet != null
                 ? 'No customers starting with "$_selectedAlphabet"'
                 : 'No records in this period',
           );
@@ -936,7 +1527,9 @@ class _HistoryPageState extends State<HistoryPage>
     );
   }
 
-  Widget _buildFilteredList(Stream<QuerySnapshot<Map<String, dynamic>>> stream) {
+  Widget _buildFilteredList(
+    Stream<QuerySnapshot<Map<String, dynamic>>> stream,
+  ) {
     return StreamBuilder(
       stream: stream,
       builder: (context, snap) {
@@ -955,14 +1548,17 @@ class _HistoryPageState extends State<HistoryPage>
           ..sort((a, b) {
             final ta = a.data()['createdAt'] as Timestamp?;
             final tb = b.data()['createdAt'] as Timestamp?;
-            return (tb?.toDate() ?? DateTime(0))
-                .compareTo(ta?.toDate() ?? DateTime(0));
+            return (tb?.toDate() ?? DateTime(0)).compareTo(
+              ta?.toDate() ?? DateTime(0),
+            );
           });
 
         final filtered = _applyFilters(sorted);
         if (filtered.isEmpty) {
           return _buildNoDataState(
-            message: _selectedAlphabet != null
+            message: _searchQuery.trim().isNotEmpty
+                ? 'No results for "$_searchQuery"'
+                : _selectedAlphabet != null
                 ? 'No customers starting with "$_selectedAlphabet"'
                 : 'No records in this period',
           );
@@ -984,9 +1580,10 @@ class _HistoryPageState extends State<HistoryPage>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                    color: _primary.withOpacity(0.2),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8))
+                  color: _primary.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
               ],
             ),
             child: const CircularProgressIndicator(
@@ -995,11 +1592,14 @@ class _HistoryPageState extends State<HistoryPage>
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Loading records...',
-              style: TextStyle(
-                  color: _textSecondary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500)),
+          const Text(
+            'Loading records...',
+            style: TextStyle(
+              color: _textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -1018,23 +1618,31 @@ class _HistoryPageState extends State<HistoryPage>
                 color: _primary.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.person_search_rounded,
-                  size: 48, color: _primary),
+              child: const Icon(
+                Icons.person_search_rounded,
+                size: 48,
+                color: _primary,
+              ),
             ),
             const SizedBox(height: 20),
-            const Text('Select a Sales Person',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: _textPrimary)),
+            const Text(
+              'Select a Sales Person',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: _textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
             const Text(
-                'Use the filter above to select a specific sales person and view their records.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 14,
-                    color: _textSecondary,
-                    height: 1.5)),
+              'Use the filter above to select a specific sales person and view their records.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: _textSecondary,
+                height: 1.5,
+              ),
+            ),
           ],
         ),
       ),
@@ -1054,20 +1662,31 @@ class _HistoryPageState extends State<HistoryPage>
                 color: _danger.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.cloud_off_rounded,
-                  size: 48, color: _danger),
+              child: const Icon(
+                Icons.cloud_off_rounded,
+                size: 48,
+                color: _danger,
+              ),
             ),
             const SizedBox(height: 20),
-            const Text('Something went wrong',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: _textPrimary)),
+            const Text(
+              'Something went wrong',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: _textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(error,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 13, color: _textSecondary, height: 1.5)),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: _textSecondary,
+                height: 1.5,
+              ),
+            ),
           ],
         ),
       ),
@@ -1087,19 +1706,27 @@ class _HistoryPageState extends State<HistoryPage>
                 color: Colors.grey.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.inbox_outlined,
-                  size: 48, color: _textSecondary),
+              child: const Icon(
+                Icons.inbox_outlined,
+                size: 48,
+                color: _textSecondary,
+              ),
             ),
             const SizedBox(height: 20),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: _textPrimary)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: _textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
-            const Text('Try adjusting your filters',
-                style: TextStyle(fontSize: 13, color: _textSecondary)),
+            const Text(
+              'Try adjusting your filters',
+              style: TextStyle(fontSize: 13, color: _textSecondary),
+            ),
           ],
         ),
       ),
@@ -1107,7 +1734,8 @@ class _HistoryPageState extends State<HistoryPage>
   }
 
   Widget _historyListView(
-      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: docs.length,
@@ -1122,7 +1750,6 @@ class _HistoryPageState extends State<HistoryPage>
     );
   }
 
-  // ─── MAIN CARD — collapsed header + animated body ───────────────────────────
   Widget _buildCustomerCard(String docId, Map<String, dynamic> d) {
     final client = d['client'] as String? ?? '-';
     final customer = d['customer'] as String? ?? '-';
@@ -1130,6 +1757,7 @@ class _HistoryPageState extends State<HistoryPage>
     final desc = d['description'] as String? ?? '';
     final problem = d['problem'] as String? ?? '';
     final fuCount = (d['followupCount'] as int?) ?? 1;
+    final amount = d['amount'] as num?;
     final List<dynamic> log = (d['log'] as List?) ?? [];
 
     DateTime? latestDate;
@@ -1139,8 +1767,7 @@ class _HistoryPageState extends State<HistoryPage>
           : null;
     }
 
-    final isOverdue =
-        latestDate != null && latestDate.isBefore(DateTime.now());
+    final isOverdue = latestDate != null && latestDate.isBefore(DateTime.now());
     final isToday =
         latestDate != null && DateUtils.isSameDay(latestDate, DateTime.now());
 
@@ -1155,8 +1782,8 @@ class _HistoryPageState extends State<HistoryPage>
           color: isOverdue && !isToday
               ? _danger.withOpacity(0.3)
               : isToday
-                  ? _warning.withOpacity(0.4)
-                  : _border,
+              ? _warning.withOpacity(0.4)
+              : _border,
           width: isOverdue || isToday ? 1.5 : 1,
         ),
         boxShadow: [
@@ -1169,7 +1796,6 @@ class _HistoryPageState extends State<HistoryPage>
       ),
       child: Column(
         children: [
-          // ── HEADER (always visible) — tap to expand/collapse ──────────────
           InkWell(
             onTap: () => setState(() {
               if (isExpanded) {
@@ -1198,7 +1824,6 @@ class _HistoryPageState extends State<HistoryPage>
               ),
               child: Row(
                 children: [
-                  // Avatar
                   Container(
                     width: 48,
                     height: 48,
@@ -1214,66 +1839,97 @@ class _HistoryPageState extends State<HistoryPage>
                       child: Text(
                         customer.isNotEmpty ? customer[0].toUpperCase() : '?',
                         style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700),
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
-
-                  // Name + sales person badge
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(customer,
-                            style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                color: _textPrimary,
-                                letterSpacing: -0.3)),
+                        Text(
+                          customer,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: _textPrimary,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: _primary.withOpacity(0.08),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text(client,
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: _primary)),
+                              child: Text(
+                                client,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: _primary,
+                                ),
+                              ),
                             ),
-                            // Show date chip in collapsed state
+                            if (amount != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _warning.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  _fmtAmount(amount),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: _warning,
+                                  ),
+                                ),
+                              ),
+                            ],
                             if (!isExpanded && latestDate != null) ...[
                               const SizedBox(width: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: (isOverdue && !isToday
-                                          ? _danger
-                                          : isToday
+                                  color:
+                                      (isOverdue && !isToday
+                                              ? _danger
+                                              : isToday
                                               ? _warning
                                               : _accent)
-                                      .withOpacity(0.1),
+                                          .withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
                                   _fmt(latestDate),
                                   style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: isOverdue && !isToday
-                                          ? _danger
-                                          : isToday
-                                              ? _warning
-                                              : _accent),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isOverdue && !isToday
+                                        ? _danger
+                                        : isToday
+                                        ? _warning
+                                        : _accent,
+                                  ),
                                 ),
                               ),
                             ],
@@ -1282,12 +1938,8 @@ class _HistoryPageState extends State<HistoryPage>
                       ],
                     ),
                   ),
-
-                  // Follow-up count badge
                   _buildFollowupBadge(fuCount),
                   const SizedBox(width: 10),
-
-                  // Expand / collapse arrow
                   AnimatedRotation(
                     turns: isExpanded ? 0.5 : 0,
                     duration: const Duration(milliseconds: 250),
@@ -1297,16 +1949,17 @@ class _HistoryPageState extends State<HistoryPage>
                         color: _primary.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.keyboard_arrow_down_rounded,
-                          color: _primary, size: 20),
+                      child: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: _primary,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-
-          // ── BODY (shown only when expanded) ──────────────────────────────
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
@@ -1318,13 +1971,10 @@ class _HistoryPageState extends State<HistoryPage>
                       children: [
                         const Divider(height: 1),
                         const SizedBox(height: 14),
-
-                        // Phone + date chips
                         Row(
                           children: [
                             Expanded(
-                              child: _buildInfoChip(Icons.phone_rounded, phone,
-                                  const Color(0xFF0EA5E9)),
+                              child: _buildEditablePhoneChip(docId, phone),
                             ),
                             const SizedBox(width: 10),
                             if (latestDate != null)
@@ -1335,35 +1985,44 @@ class _HistoryPageState extends State<HistoryPage>
                                   isOverdue && !isToday
                                       ? _danger
                                       : isToday
-                                          ? _warning
-                                          : _accent,
+                                      ? _warning
+                                      : _accent,
                                 ),
                               ),
                           ],
                         ),
-
-                        // Overdue / today banners
+                        const SizedBox(height: 10),
+                        _buildEditableAmountChip(docId, amount),
                         if (isOverdue && !isToday) ...[
                           const SizedBox(height: 10),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: _danger.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(10),
-                              border:
-                                  Border.all(color: _danger.withOpacity(0.2)),
+                              border: Border.all(
+                                color: _danger.withOpacity(0.2),
+                              ),
                             ),
                             child: Row(
                               children: const [
-                                Icon(Icons.warning_amber_rounded,
-                                    color: _danger, size: 16),
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: _danger,
+                                  size: 16,
+                                ),
                                 SizedBox(width: 8),
-                                Text('Follow-up overdue!',
-                                    style: TextStyle(
-                                        color: _danger,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600)),
+                                Text(
+                                  'Follow-up overdue!',
+                                  style: TextStyle(
+                                    color: _danger,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -1372,29 +2031,36 @@ class _HistoryPageState extends State<HistoryPage>
                           const SizedBox(height: 10),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: _warning.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                  color: _warning.withOpacity(0.3)),
+                                color: _warning.withOpacity(0.3),
+                              ),
                             ),
                             child: Row(
                               children: const [
-                                Icon(Icons.today_rounded,
-                                    color: _warning, size: 16),
+                                Icon(
+                                  Icons.today_rounded,
+                                  color: _warning,
+                                  size: 16,
+                                ),
                                 SizedBox(width: 8),
-                                Text('Follow-up due today!',
-                                    style: TextStyle(
-                                        color: _warning,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600)),
+                                Text(
+                                  'Follow-up due today!',
+                                  style: TextStyle(
+                                    color: _warning,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ],
-
-                        // Description
                         if (desc.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           _buildTextSection(
@@ -1403,12 +2069,14 @@ class _HistoryPageState extends State<HistoryPage>
                             content: desc,
                             color: _primary,
                             onEdit: () => _editTextField(
-                                docId, 'description', desc, 'Description',
-                                accentColor: _primary),
+                              docId,
+                              'description',
+                              desc,
+                              'Description',
+                              accentColor: _primary,
+                            ),
                           ),
                         ],
-
-                        // Problem
                         if (problem.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           _buildTextSection(
@@ -1417,14 +2085,15 @@ class _HistoryPageState extends State<HistoryPage>
                             content: problem,
                             color: _warning,
                             onEdit: () => _editTextField(
-                                docId, 'problem', problem, 'Problem',
-                                accentColor: _warning),
+                              docId,
+                              'problem',
+                              problem,
+                              'Problem',
+                              accentColor: _warning,
+                            ),
                           ),
                         ],
-
                         const SizedBox(height: 16),
-
-                        // Action buttons
                         Row(
                           children: [
                             Expanded(
@@ -1438,16 +2107,18 @@ class _HistoryPageState extends State<HistoryPage>
                             ),
                             const SizedBox(width: 8),
                             _buildIconButton(
-                                Icons.edit_calendar_rounded,
-                                const Color(0xFF0EA5E9),
-                                () => _editLatestDate(docId)),
+                              Icons.edit_calendar_rounded,
+                              const Color(0xFF0EA5E9),
+                              () => _editLatestDate(docId),
+                            ),
                             const SizedBox(width: 8),
-                            _buildIconButton(Icons.delete_outline_rounded,
-                                _danger, () => _deleteDoc(docId)),
+                            _buildIconButton(
+                              Icons.delete_outline_rounded,
+                              _danger,
+                              () => _deleteDoc(docId),
+                            ),
                           ],
                         ),
-
-                        // Timeline
                         if (log.isNotEmpty) ...[
                           const SizedBox(height: 16),
                           _buildTimeline(log),
@@ -1467,27 +2138,30 @@ class _HistoryPageState extends State<HistoryPage>
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            _accent.withOpacity(0.15),
-            _accent.withOpacity(0.08),
-          ],
+          colors: [_accent.withOpacity(0.15), _accent.withOpacity(0.08)],
         ),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: _accent.withOpacity(0.3)),
       ),
       child: Column(
         children: [
-          Text('$count',
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: _accent,
-                  height: 1)),
-          const Text('follow-ups',
-              style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
-                  color: _accent)),
+          Text(
+            '$count',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: _accent,
+              height: 1,
+            ),
+          ),
+          const Text(
+            'follow-ups',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              color: _accent,
+            ),
+          ),
         ],
       ),
     );
@@ -1506,15 +2180,367 @@ class _HistoryPageState extends State<HistoryPage>
           Icon(icon, color: color, size: 16),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(text,
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: color)),
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildEditablePhoneChip(String docId, String phone) {
+    const color = Color(0xFF0EA5E9);
+    return GestureDetector(
+      onTap: () => _editPhone(docId, phone),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.phone_rounded, color: color, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                phone,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: const Icon(Icons.edit_outlined, size: 13, color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditableAmountChip(String docId, num? amount) {
+    const color = _warning;
+    return GestureDetector(
+      onTap: () => _editAmount(docId, amount),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.currency_rupee_rounded, color: color, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _fmtAmount(amount),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: const Icon(Icons.edit_outlined, size: 13, color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editAmount(String docId, num? currentAmount) async {
+    const color = _warning;
+    final controller = TextEditingController(
+      text: currentAmount != null ? currentAmount.toString() : '',
+    );
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.currency_rupee_rounded,
+                      color: color,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Edit Amount',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: _textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                style: const TextStyle(fontSize: 15, height: 1.4),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(
+                    Icons.currency_rupee_rounded,
+                    color: color,
+                    size: 20,
+                  ),
+                  hintText: 'Enter amount...',
+                  hintStyle: TextStyle(color: _textSecondary.withOpacity(0.6)),
+                  filled: true,
+                  fillColor: _surface,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: color, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: const BorderSide(color: _border),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: _textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () =>
+                          Navigator.pop(context, controller.text.trim()),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: color,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Save',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (result == null) return;
+    final trimmed = result.trim();
+    final parsed = trimmed.isEmpty ? null : num.tryParse(trimmed);
+    if (trimmed.isNotEmpty && parsed == null) {
+      if (!mounted) return;
+      _showSnackBar('Please enter a valid amount', isError: true);
+      return;
+    }
+    await FirebaseFirestore.instance.collection('followups').doc(docId).update({
+      'amount': parsed,
+      'createdAt': Timestamp.now(),
+    });
+    if (!mounted) return;
+    _showSnackBar('Amount updated successfully 💰');
+  }
+
+  Future<void> _editPhone(String docId, String currentPhone) async {
+    const color = Color(0xFF0EA5E9);
+    final controller = TextEditingController(text: currentPhone);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.phone_rounded,
+                      color: color,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Edit Contact',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: _textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.phone,
+                style: const TextStyle(fontSize: 15, height: 1.4),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(
+                    Icons.phone_outlined,
+                    color: color,
+                    size: 20,
+                  ),
+                  hintText: 'Enter phone number...',
+                  hintStyle: TextStyle(color: _textSecondary.withOpacity(0.6)),
+                  filled: true,
+                  fillColor: _surface,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: color, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: const BorderSide(color: _border),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: _textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () =>
+                          Navigator.pop(context, controller.text.trim()),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: color,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Save',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (result != null && result.isNotEmpty && result != currentPhone) {
+      await FirebaseFirestore.instance
+          .collection('followups')
+          .doc(docId)
+          .update({'phone': result, 'createdAt': Timestamp.now()});
+      if (!mounted) return;
+      _showSnackBar('Contact updated to $result 📞');
+    }
   }
 
   Widget _buildTextSection({
@@ -1538,12 +2564,15 @@ class _HistoryPageState extends State<HistoryPage>
             children: [
               Icon(icon, color: color, size: 16),
               const SizedBox(width: 8),
-              Text(title,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: color,
-                      letterSpacing: 0.3)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  letterSpacing: 0.3,
+                ),
+              ),
               const Spacer(),
               GestureDetector(
                 onTap: onEdit,
@@ -1559,9 +2588,14 @@ class _HistoryPageState extends State<HistoryPage>
             ],
           ),
           const SizedBox(height: 8),
-          Text(content,
-              style: const TextStyle(
-                  fontSize: 13, color: _textSecondary, height: 1.5)),
+          Text(
+            content,
+            style: const TextStyle(
+              fontSize: 13,
+              color: _textSecondary,
+              height: 1.5,
+            ),
+          ),
         ],
       ),
     );
@@ -1597,19 +2631,21 @@ class _HistoryPageState extends State<HistoryPage>
           children: [
             Icon(icon, color: Colors.white, size: 18),
             const SizedBox(width: 8),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white)),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildIconButton(
-      IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildIconButton(IconData icon, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1638,26 +2674,35 @@ class _HistoryPageState extends State<HistoryPage>
         children: [
           Row(
             children: [
-              const Icon(Icons.timeline_rounded, color: _primary, size: 18),
+              const Icon(
+                Icons.timeline_rounded,
+                color: Color.fromARGB(255, 124, 118, 246),
+                size: 18,
+              ),
               const SizedBox(width: 8),
-              const Text('Follow-up Timeline',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: _textPrimary)),
+              const Text(
+                'Follow-up Timeline',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color.fromARGB(255, 112, 104, 237),
+                ),
+              ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: _primary.withOpacity(0.1),
+                  color: Color.fromARGB(255, 112, 104, 237).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text('${log.length} entries',
-                    style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _primary)),
+                child: Text(
+                  '${log.length} entries',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color.fromARGB(255, 112, 104, 237),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1704,8 +2749,7 @@ class _HistoryPageState extends State<HistoryPage>
                           Expanded(
                             child: Container(
                               width: 2,
-                              margin:
-                                  const EdgeInsets.symmetric(vertical: 2),
+                              margin: const EdgeInsets.symmetric(vertical: 2),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
@@ -1726,10 +2770,13 @@ class _HistoryPageState extends State<HistoryPage>
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(
-                          bottom: idx < log.length - 1 ? 12 : 0),
+                        bottom: idx < log.length - 1 ? 12 : 0,
+                      ),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
                           color: isLatest
                               ? _accent.withOpacity(0.08)
@@ -1748,23 +2795,22 @@ class _HistoryPageState extends State<HistoryPage>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    dt != null
-                                        ? _fmt(dt)
-                                        : 'Invalid Date',
+                                    dt != null ? _fmt(dt) : 'Invalid Date',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: isLatest
-                                          ? _accent
-                                          : _textPrimary,
+                                      color: isLatest ? _accent : _textPrimary,
                                     ),
                                   ),
                                   if (crt != null) ...[
                                     const SizedBox(height: 2),
-                                    Text('Added ${_fmt(crt)}',
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            color: _textSecondary)),
+                                    Text(
+                                      'Added ${_fmt(crt)}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: _textSecondary,
+                                      ),
+                                    ),
                                   ],
                                 ],
                               ),
@@ -1772,16 +2818,21 @@ class _HistoryPageState extends State<HistoryPage>
                             if (isLatest)
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: _accent,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Text('NEXT',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800)),
+                                child: const Text(
+                                  'NEXT',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
                               ),
                           ],
                         ),

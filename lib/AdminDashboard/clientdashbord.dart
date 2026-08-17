@@ -1,8 +1,5 @@
-import 'package:dimple_erp/AdminDashboard/ContractorReportScreen.dart';
-import 'package:dimple_erp/AdminDashboard/ContractorReportScreendetails.dart';
 import 'package:dimple_erp/AdminDashboard/client.dart';
 import 'package:dimple_erp/AdminDashboard/clienthistory.dart';
-import 'package:dimple_erp/AdminDashboard/constrctlist.dart';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
@@ -127,7 +124,7 @@ class _ClientdashboardState extends State<Clientdashboard> {
             //   onTap: () {
             //     Navigator.push(
             //       context,
-            //       MaterialPageRoute(builder: (_) => ConstructionProductionDashboard()),
+            //       MaterialPageRoute(builder: (_) => KrishnaHistoryPage()),
             //     );
             //   },
             // ),

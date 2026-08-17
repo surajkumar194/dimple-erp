@@ -1,21 +1,18 @@
+import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dimple_erp/AdminDashboard/clienthistory.dart';
-
 class ClientFormPage extends StatefulWidget {
   const ClientFormPage({super.key});
-
   @override
   State<ClientFormPage> createState() => _ClientFormPageState();
 }
-
 class _ClientFormPageState extends State<ClientFormPage>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   bool _submitted = false;
   bool _isLoading = false;
-
   late AnimationController _fadeCtrl;
   late AnimationController _slideCtrl;
   late AnimationController _successCtrl;
@@ -34,6 +31,7 @@ class _ClientFormPageState extends State<ClientFormPage>
     "Gunnet Singh",
     "Hardeep Singh",
     "Jagdish Chawla",
+    "JAGDISH SURI JI",
     "Karan",
     "Krishna Arora",
     "Kuldeep Singh",
@@ -63,6 +61,14 @@ class _ClientFormPageState extends State<ClientFormPage>
   final _problemCtrl = TextEditingController();
   DateTime? _followUpDate;
 
+  // NEW: existing customer names loaded from Firestore.
+  // Stored lowercase for case-insensitive duplicate checking.
+  Set<String> _existingCustomerNames = {};
+  bool _loadingNames = true;
+
+  // NEW: real-time duplicate flag, updated as user types (before submit)
+  bool _isDuplicateName = false;
+
   @override
   void initState() {
     super.initState();
@@ -85,16 +91,63 @@ class _ClientFormPageState extends State<ClientFormPage>
       begin: const Offset(0, 0.06),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOutCubic));
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.97).animate(
-      CurvedAnimation(parent: _successCtrl, curve: Curves.easeInOut),
-    );
+    _scaleAnim = Tween<double>(
+      begin: 1.0,
+      end: 0.97,
+    ).animate(CurvedAnimation(parent: _successCtrl, curve: Curves.easeInOut));
 
     _fadeCtrl.forward();
     _slideCtrl.forward();
+
+    _loadExistingCustomerNames();
+
+    // NEW: listen to every keystroke in customer name field
+    // and check for duplicates in real time, before submit.
+    _customerCtrl.addListener(_checkDuplicateNameRealtime);
+  }
+
+  // NEW: called on every change of the customer name field.
+  void _checkDuplicateNameRealtime() {
+    final text = _customerCtrl.text.trim().toLowerCase();
+    final isDup = text.isNotEmpty && _existingCustomerNames.contains(text);
+    if (isDup != _isDuplicateName) {
+      setState(() => _isDuplicateName = isDup);
+    }
+  }
+
+  // NEW: fetch all existing customer names from Firestore,
+  // dedupe + sort a-z (case-insensitive) using SplayTreeSet.
+  Future<void> _loadExistingCustomerNames() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('followups')
+          .get();
+
+      final names = snapshot.docs
+          .map((doc) => (doc.data()['customer'] ?? '').toString().trim())
+          .where((name) => name.isNotEmpty);
+
+      final sortedSet = SplayTreeSet<String>(
+        (a, b) => a.toLowerCase().compareTo(b.toLowerCase()),
+      )..addAll(names);
+
+      if (!mounted) return;
+      setState(() {
+        _existingCustomerNames = sortedSet.map((n) => n.toLowerCase()).toSet();
+        _loadingNames = false;
+      });
+      // re-check whatever the user has already typed against the
+      // freshly loaded name list
+      _checkDuplicateNameRealtime();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingNames = false);
+    }
   }
 
   @override
   void dispose() {
+    _customerCtrl.removeListener(_checkDuplicateNameRealtime);
     _customerCtrl.dispose();
     _phoneCtrl.dispose();
     _descriptionCtrl.dispose();
@@ -158,7 +211,7 @@ class _ClientFormPageState extends State<ClientFormPage>
               ? Timestamp.fromDate(_followUpDate!)
               : Timestamp.now(),
           'createdAt': Timestamp.now(),
-        }
+        },
       ],
       'createdAt': Timestamp.now(),
     };
@@ -167,25 +220,28 @@ class _ClientFormPageState extends State<ClientFormPage>
       await FirebaseFirestore.instance.collection('followups').add(data);
       if (!mounted) return;
 
+      // NEW: add the freshly saved name into our local set so it's
+      // immediately blocked if the same user tries to add it again
+      // in this session, without waiting for a fresh Firestore fetch.
+      _existingCustomerNames.add(_customerCtrl.text.trim().toLowerCase());
+
       await _successCtrl.forward();
       await _successCtrl.reverse();
 
-      // Keyboard hide
       FocusScope.of(context).unfocus();
 
-      // Controllers clear karo
       _customerCtrl.clear();
       _phoneCtrl.clear();
       _descriptionCtrl.clear();
       _problemCtrl.clear();
 
-      // State reset with new UniqueKey — triggers full Form rebuild
       setState(() {
         _selectedClient = null;
         _followUpDate = null;
         _submitted = false;
         _isLoading = false;
-        _formKeyWidget = UniqueKey(); // 🔥 Form poora rebuild hoga
+        _isDuplicateName = false;
+        _formKeyWidget = UniqueKey();
       });
 
       _showSnackBar(
@@ -194,9 +250,9 @@ class _ClientFormPageState extends State<ClientFormPage>
         action: SnackBarAction(
           label: 'VIEW HISTORY',
           textColor: Colors.white,
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const HistoryPage()),
-          ),
+          onPressed: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const HistoryPage())),
         ),
       );
     } catch (e) {
@@ -206,8 +262,11 @@ class _ClientFormPageState extends State<ClientFormPage>
     }
   }
 
-  void _showSnackBar(String message,
-      {bool isError = false, SnackBarAction? action}) {
+  void _showSnackBar(
+    String message, {
+    bool isError = false,
+    SnackBarAction? action,
+  }) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -226,16 +285,19 @@ class _ClientFormPageState extends State<ClientFormPage>
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(message,
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w500)),
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
           ],
         ),
         backgroundColor: isError ? const Color(0xFFEF4444) : _accent,
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 4),
         action: action,
@@ -243,13 +305,18 @@ class _ClientFormPageState extends State<ClientFormPage>
     );
   }
 
-  InputDecoration _inputDecoration(
-      {required String label, required IconData icon, String? hint}) {
+  InputDecoration _inputDecoration({
+    required String label,
+    required IconData icon,
+    String? hint,
+  }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      labelStyle:
-          const TextStyle(color: _textSecondary, fontWeight: FontWeight.w500),
+      labelStyle: const TextStyle(
+        color: _textSecondary,
+        fontWeight: FontWeight.w500,
+      ),
       hintStyle: TextStyle(color: _textSecondary.withOpacity(0.6)),
       prefixIcon: Container(
         margin: const EdgeInsets.all(12),
@@ -262,8 +329,7 @@ class _ClientFormPageState extends State<ClientFormPage>
       ),
       filled: true,
       fillColor: _surface,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: _border, width: 1.5),
@@ -278,13 +344,11 @@ class _ClientFormPageState extends State<ClientFormPage>
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide:
-            const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide:
-            const BorderSide(color: Color(0xFFEF4444), width: 2),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 2),
       ),
     );
   }
@@ -322,9 +386,7 @@ class _ClientFormPageState extends State<ClientFormPage>
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildFormCard(),
-                    ],
+                    children: [_buildFormCard()],
                   ),
                 );
               },
@@ -363,11 +425,13 @@ class _ClientFormPageState extends State<ClientFormPage>
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: Colors.white.withOpacity(0.3)),
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
                   ),
-                  child: const Icon(Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white, size: 18),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
               ),
               const SizedBox(width: 14),
@@ -386,18 +450,24 @@ class _ClientFormPageState extends State<ClientFormPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Add Customer',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 19,
-                            color: Colors.white,
-                            letterSpacing: -0.3)),
+                    Text(
+                      'Add Customer',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 19,
+                        color: Colors.white,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
                     SizedBox(height: 2),
-                    Text('Create new customer record',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w400)),
+                    Text(
+                      'Create new customer record',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -425,11 +495,7 @@ class _ClientFormPageState extends State<ClientFormPage>
         padding: const EdgeInsets.all(12),
         child: Form(
           key: _formKey,
-          // ✅ _formKeyWidget se Form poora rebuild hoga jab UniqueKey change ho
-          child: KeyedSubtree(
-            key: _formKeyWidget,
-            child: _buildFormFields(),
-          ),
+          child: KeyedSubtree(key: _formKeyWidget, child: _buildFormFields()),
         ),
       ),
     );
@@ -446,37 +512,73 @@ class _ClientFormPageState extends State<ClientFormPage>
         DropdownButtonFormField<String>(
           value: _selectedClient,
           decoration: _inputDecoration(
-              label: 'Sales Person', icon: Icons.badge_outlined),
+            label: 'Sales Person',
+            icon: Icons.badge_outlined,
+          ),
           items: _clientNames
-              .map((c) => DropdownMenuItem(
-                    value: c,
-                    child: Text(c,
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w500)),
-                  ))
+              .map(
+                (c) => DropdownMenuItem(
+                  value: c,
+                  child: Text(
+                    c,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              )
               .toList(),
           onChanged: (val) => setState(() => _selectedClient = val),
-          validator: (v) =>
-              v == null ? 'Please select a sales person' : null,
+          validator: (v) => v == null ? 'Please select a sales person' : null,
           dropdownColor: Colors.white,
           icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _primary),
         ),
         const SizedBox(height: 16),
 
-        // Customer Name
+        // Customer Name (with real-time + submit-time duplicate check)
         TextFormField(
           controller: _customerCtrl,
-          decoration: _inputDecoration(
-              label: 'Customer Name',
-              icon: Icons.person_outline_rounded,
-              hint: 'Enter customer full name'),
+          decoration:
+              _inputDecoration(
+                label: 'Customer Name',
+                icon: Icons.person_outline_rounded,
+                hint: _loadingNames
+                    ? 'Loading existing customers...'
+                    : 'Enter customer full name',
+              ).copyWith(
+                // NEW: show a live "already exists" hint under the field
+                // as soon as the typed name matches an existing one,
+                // even before the user taps Save.
+                helperText: _isDuplicateName
+                    ? 'This customer already exists'
+                    : null,
+                helperStyle: const TextStyle(
+                  color: Color(0xFFEF4444),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+                suffixIcon: _isDuplicateName
+                    ? const Icon(
+                        Icons.error_outline_rounded,
+                        color: Color(0xFFEF4444),
+                      )
+                    : null,
+              ),
           style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: _textPrimary),
-          validator: (v) => (v == null || v.trim().isEmpty)
-              ? 'Please enter a customer name'
-              : null,
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: _textPrimary,
+          ),
+          // Validator still runs as a final safety check on Save.
+          validator: (v) {
+            final text = (v ?? '').trim();
+            if (text.isEmpty) return 'Please enter a customer name';
+            if (_existingCustomerNames.contains(text.toLowerCase())) {
+              return 'This customer already exists';
+            }
+            return null;
+          },
         ),
         const SizedBox(height: 16),
 
@@ -489,13 +591,15 @@ class _ClientFormPageState extends State<ClientFormPage>
             LengthLimitingTextInputFormatter(10),
           ],
           decoration: _inputDecoration(
-              label: 'Phone Number',
-              icon: Icons.phone_outlined,
-              hint: '10-digit mobile number'),
+            label: 'Phone Number',
+            icon: Icons.phone_outlined,
+            hint: '10-digit mobile number',
+          ),
           style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: _textPrimary),
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: _textPrimary,
+          ),
           validator: (v) {
             final text = (v ?? '').trim();
             if (text.isEmpty) return 'Phone is required';
@@ -510,9 +614,8 @@ class _ClientFormPageState extends State<ClientFormPage>
 
         // Follow-up Date Picker
         FormField<DateTime>(
-          validator: (_) => _followUpDate == null
-              ? 'Please select a follow-up date'
-              : null,
+          validator: (_) =>
+              _followUpDate == null ? 'Please select a follow-up date' : null,
           builder: (state) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -521,7 +624,9 @@ class _ClientFormPageState extends State<ClientFormPage>
                 borderRadius: BorderRadius.circular(14),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 16),
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
                   decoration: BoxDecoration(
                     color: _surface,
                     borderRadius: BorderRadius.circular(14),
@@ -529,10 +634,9 @@ class _ClientFormPageState extends State<ClientFormPage>
                       color: state.hasError
                           ? const Color(0xFFEF4444)
                           : _followUpDate != null
-                              ? _primary
-                              : _border,
-                      width:
-                          state.hasError || _followUpDate != null ? 2 : 1.5,
+                          ? _primary
+                          : _border,
+                      width: state.hasError || _followUpDate != null ? 2 : 1.5,
                     ),
                   ),
                   child: Row(
@@ -543,8 +647,11 @@ class _ClientFormPageState extends State<ClientFormPage>
                           color: _primary.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.calendar_month_outlined,
-                            color: _primary, size: 18),
+                        child: const Icon(
+                          Icons.calendar_month_outlined,
+                          color: _primary,
+                          size: 18,
+                        ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -554,9 +661,10 @@ class _ClientFormPageState extends State<ClientFormPage>
                             Text(
                               'Next Follow-up Date',
                               style: TextStyle(
-                                  fontSize: 12,
-                                  color: _textSecondary,
-                                  fontWeight: FontWeight.w500),
+                                fontSize: 12,
+                                color: _textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -578,8 +686,7 @@ class _ClientFormPageState extends State<ClientFormPage>
                         _followUpDate != null
                             ? Icons.check_circle_rounded
                             : Icons.arrow_forward_ios_rounded,
-                        color:
-                            _followUpDate != null ? _accent : _textSecondary,
+                        color: _followUpDate != null ? _accent : _textSecondary,
                         size: _followUpDate != null ? 20 : 16,
                       ),
                     ],
@@ -592,7 +699,9 @@ class _ClientFormPageState extends State<ClientFormPage>
                   child: Text(
                     state.errorText!,
                     style: const TextStyle(
-                        color: Color(0xFFEF4444), fontSize: 12),
+                      color: Color(0xFFEF4444),
+                      fontSize: 12,
+                    ),
                   ),
                 ),
             ],
@@ -607,31 +716,40 @@ class _ClientFormPageState extends State<ClientFormPage>
         TextFormField(
           controller: _descriptionCtrl,
           maxLines: 4,
-          decoration: _inputDecoration(
-            label: 'Description',
-            icon: Icons.description_outlined,
-            hint: 'Enter product/service description...',
-          ).copyWith(
-            prefixIcon: Padding(
-              padding: const EdgeInsets.only(
-                  bottom: 60, left: 12, right: 12, top: 12),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
+          decoration:
+              _inputDecoration(
+                label: 'Description',
+                icon: Icons.description_outlined,
+                hint: 'Enter product/service description...',
+              ).copyWith(
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: 60,
+                    left: 12,
+                    right: 12,
+                    top: 12,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.description_outlined,
+                      color: _primary,
+                      size: 18,
+                    ),
+                  ),
                 ),
-                child: const Icon(Icons.description_outlined,
-                    color: _primary, size: 18),
+                alignLabelWithHint: true,
               ),
-            ),
-            alignLabelWithHint: true,
-          ),
           style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w400,
-              color: _textPrimary,
-              height: 1.5),
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+            color: _textPrimary,
+            height: 1.5,
+          ),
           validator: (v) => (v == null || v.trim().isEmpty)
               ? 'Please enter a description'
               : null,
@@ -642,36 +760,44 @@ class _ClientFormPageState extends State<ClientFormPage>
         TextFormField(
           controller: _problemCtrl,
           maxLines: 4,
-          decoration: _inputDecoration(
-            label: 'Problem / Issue',
-            icon: Icons.report_problem_outlined,
-            hint: 'Describe the customer\'s problem...',
-          ).copyWith(
-            prefixIcon: Padding(
-              padding: const EdgeInsets.only(
-                  bottom: 60, left: 12, right: 12, top: 12),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+          decoration:
+              _inputDecoration(
+                label: 'Problem / Issue',
+                icon: Icons.report_problem_outlined,
+                hint: 'Describe the customer\'s problem...',
+              ).copyWith(
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.only(
+                    bottom: 60,
+                    left: 12,
+                    right: 12,
+                    top: 12,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.report_problem_outlined,
+                      color: Colors.orange,
+                      size: 18,
+                    ),
+                  ),
                 ),
-                child: const Icon(Icons.report_problem_outlined,
-                    color: Colors.orange, size: 18),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Colors.orange, width: 2),
+                ),
+                alignLabelWithHint: true,
               ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide:
-                  const BorderSide(color: Colors.orange, width: 2),
-            ),
-            alignLabelWithHint: true,
-          ),
           style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w400,
-              color: _textPrimary,
-              height: 1.5),
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+            color: _textPrimary,
+            height: 1.5,
+          ),
           validator: (v) => (v == null || v.trim().isEmpty)
               ? 'Please describe the problem'
               : null,
@@ -762,31 +888,41 @@ class _ClientFormPageState extends State<ClientFormPage>
                         height: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       ),
                       SizedBox(width: 12),
-                      Text('Saving...',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                              letterSpacing: 0.3)),
+                      Text(
+                        'Saving...',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
                     ],
                   )
                 : const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.cloud_upload_outlined,
-                          color: Colors.white, size: 22),
+                      Icon(
+                        Icons.cloud_upload_outlined,
+                        color: Colors.white,
+                        size: 22,
+                      ),
                       SizedBox(width: 10),
-                      Text('Save Customer Record',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              letterSpacing: 0.3)),
+                      Text(
+                        'Save Customer Record',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
                     ],
                   ),
           ),
@@ -800,8 +936,18 @@ class _ClientFormPageState extends State<ClientFormPage>
 
   String _monthName(int m) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return months[m - 1];
   }

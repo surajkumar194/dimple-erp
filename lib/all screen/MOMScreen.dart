@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 class MinutesOfMeetingScreen extends StatefulWidget {
   const MinutesOfMeetingScreen({super.key});
-
   @override
   State<MinutesOfMeetingScreen> createState() => _MinutesOfMeetingScreenState();
 }
@@ -14,7 +13,6 @@ class _MinutesOfMeetingScreenState extends State<MinutesOfMeetingScreen>
   final _formKey = GlobalKey<FormState>();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Controllers
   final TextEditingController meetingTitleController = TextEditingController();
   final TextEditingController departmentController = TextEditingController();
   final TextEditingController chairpersonController = TextEditingController();

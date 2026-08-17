@@ -18,6 +18,587 @@ class _AppColors {
   static const purple = Color(0xFF6A1B9A);
 }
 
+class _BoxSizeData {
+  final int topL, topW, topH;
+  final int botL, botW, botH;
+  const _BoxSizeData({
+    required this.topL,
+    required this.topW,
+    required this.topH,
+    required this.botL,
+    required this.botW,
+    required this.botH,
+  });
+}
+
+const Map<String, _BoxSizeData> _boxSizeTable = {
+  '250G MM': _BoxSizeData(
+    topL: 137,
+    topW: 110,
+    topH: 23,
+    botL: 133,
+    botW: 106,
+    botH: 37,
+  ),
+  '500G MM': _BoxSizeData(
+    topL: 178,
+    topW: 143,
+    topH: 28,
+    botL: 174,
+    botW: 139,
+    botH: 40,
+  ),
+  '1KG MM': _BoxSizeData(
+    topL: 254,
+    topW: 176,
+    topH: 25,
+    botL: 249,
+    botW: 173,
+    botH: 46,
+  ),
+  '1KG AAM SZIE': _BoxSizeData(
+    topL: 249,
+    topW: 174,
+    topH: 25,
+    botL: 244,
+    botW: 170,
+    botH: 40,
+  ),
+  '1KG AAM SIZE': _BoxSizeData(
+    topL: 249,
+    topW: 174,
+    topH: 25,
+    botL: 244,
+    botW: 170,
+    botH: 40,
+  ),
+  'HR SIZE': _BoxSizeData(
+    topL: 312,
+    topW: 183,
+    topH: 35,
+    botL: 307,
+    botW: 178,
+    botH: 35,
+  ),
+  'NEW HR SIZE': _BoxSizeData(
+    topL: 350,
+    topW: 220,
+    topH: 36,
+    botL: 345,
+    botW: 215,
+    botH: 40,
+  ),
+  'LSPT': _BoxSizeData(
+    topL: 265,
+    topW: 192,
+    topH: 25,
+    botL: 261,
+    botW: 188,
+    botH: 38,
+  ),
+  '500G KAJU KATLI': _BoxSizeData(
+    topL: 239,
+    topW: 162,
+    topH: 24,
+    botL: 234,
+    botW: 157,
+    botH: 27,
+  ),
+  '1KG KAJU KATLI': _BoxSizeData(
+    topL: 305,
+    topW: 204,
+    topH: 32,
+    botL: 300,
+    botW: 199,
+    botH: 34,
+  ),
+  '1KG JUMBO KAJU': _BoxSizeData(
+    topL: 339,
+    topW: 244,
+    topH: 22,
+    botL: 335,
+    botW: 240,
+    botH: 31,
+  ),
+  '500G BENGLUR SIZE': _BoxSizeData(
+    topL: 217,
+    topW: 156,
+    topH: 25,
+    botL: 212,
+    botW: 152,
+    botH: 39,
+  ),
+  '6X6': _BoxSizeData(
+    topL: 160,
+    topW: 160,
+    topH: 25,
+    botL: 154,
+    botW: 154,
+    botH: 35,
+  ),
+  '8X8 BAJAJ': _BoxSizeData(
+    topL: 207,
+    topW: 207,
+    topH: 28,
+    botL: 202,
+    botW: 202,
+    botH: 42,
+  ),
+  '9X9': _BoxSizeData(
+    topL: 233,
+    topW: 233,
+    topH: 25,
+    botL: 229,
+    botW: 229,
+    botH: 36,
+  ),
+  '11X11': _BoxSizeData(
+    topL: 272,
+    topW: 272,
+    topH: 25,
+    botL: 268,
+    botW: 268,
+    botH: 50,
+  ),
+  '12X12': _BoxSizeData(
+    topL: 304,
+    topW: 304,
+    topH: 27,
+    botL: 300,
+    botW: 300,
+    botH: 51,
+  ),
+  'HARIBHOG': _BoxSizeData(
+    topL: 348,
+    topW: 272,
+    topH: 25,
+    botL: 343,
+    botW: 267,
+    botH: 52,
+  ),
+  '14X14': _BoxSizeData(
+    topL: 356,
+    topW: 357,
+    topH: 25,
+    botL: 351,
+    botW: 351,
+    botH: 50,
+  ),
+  '20 LADDO': _BoxSizeData(
+    topL: 276,
+    topW: 207,
+    topH: 40,
+    botL: 272,
+    botW: 203,
+    botH: 45,
+  ),
+  '24 LADDO': _BoxSizeData(
+    topL: 311,
+    topW: 200,
+    topH: 42,
+    botL: 305,
+    botW: 195,
+    botH: 45,
+  ),
+  '20 LADDO JUMBO': _BoxSizeData(
+    topL: 319,
+    topW: 251,
+    topH: 40,
+    botL: 315,
+    botW: 246,
+    botH: 53,
+  ),
+  '500G CANADA': _BoxSizeData(
+    topL: 205,
+    topW: 135,
+    topH: 38,
+    botL: 200,
+    botW: 131,
+    botH: 42,
+  ),
+  '1KG CANADA': _BoxSizeData(
+    topL: 243,
+    topW: 166,
+    topH: 39,
+    botL: 240,
+    botW: 163,
+    botH: 46,
+  ),
+  '500G GANGAOUR': _BoxSizeData(
+    topL: 178,
+    topW: 131,
+    topH: 25,
+    botL: 174,
+    botW: 127,
+    botH: 32,
+  ),
+  'AMRITSHARI': _BoxSizeData(
+    topL: 288,
+    topW: 176,
+    topH: 30,
+    botL: 284,
+    botW: 171,
+    botH: 39,
+  ),
+  '10 CAVITY TIP TOP': _BoxSizeData(
+    topL: 260,
+    topW: 121,
+    topH: 29,
+    botL: 255,
+    botW: 161,
+    botH: 55,
+  ),
+  '250G KAJU KATLI TIP TOP': _BoxSizeData(
+    topL: 225,
+    topW: 127,
+    topH: 22,
+    botL: 220,
+    botW: 122,
+    botH: 25,
+  ),
+  '1KG MARBLE': _BoxSizeData(
+    topL: 277,
+    topW: 172,
+    topH: 36,
+    botL: 272,
+    botW: 167,
+    botH: 38,
+  ),
+  '12 LADDO': _BoxSizeData(
+    topL: 198,
+    topW: 155,
+    topH: 37,
+    botL: 195,
+    botW: 151,
+    botH: 40,
+  ),
+  'MEBSTO DABBI': _BoxSizeData(
+    topL: 62,
+    topW: 62,
+    topH: 49,
+    botL: 59,
+    botW: 59,
+    botH: 62,
+  ),
+  'MEBSTO OUTER': _BoxSizeData(
+    topL: 329,
+    topW: 137,
+    topH: 57,
+    botL: 325,
+    botW: 134,
+    botH: 70,
+  ),
+  '1 LADDO': _BoxSizeData(
+    topL: 106,
+    topW: 106,
+    topH: 16,
+    botL: 101,
+    botW: 101,
+    botH: 67,
+  ),
+  '2 LADDO': _BoxSizeData(
+    topL: 189,
+    topW: 106,
+    topH: 19,
+    botL: 185,
+    botW: 101,
+    botH: 67,
+  ),
+  '4 LADDO': _BoxSizeData(
+    topL: 199,
+    topW: 199,
+    topH: 21,
+    botL: 194,
+    botW: 194,
+    botH: 67,
+  ),
+  '6 LADDO': _BoxSizeData(
+    topL: 163,
+    topW: 133,
+    topH: 32,
+    botL: 158,
+    botW: 128,
+    botH: 40,
+  ),
+  '250G ITC': _BoxSizeData(
+    topL: 40,
+    topW: 132,
+    topH: 30,
+    botL: 161,
+    botW: 128,
+    botH: 40,
+  ),
+  '500G ITC': _BoxSizeData(
+    topL: 222,
+    topW: 159,
+    topH: 31,
+    botL: 218,
+    botW: 155,
+    botH: 35,
+  ),
+  '16 BITE': _BoxSizeData(
+    topL: 190,
+    topW: 190,
+    topH: 35,
+    botL: 186,
+    botW: 186,
+    botH: 70,
+  ),
+  '49 BITE': _BoxSizeData(
+    topL: 329,
+    topW: 329,
+    topH: 30,
+    botL: 324,
+    botW: 324,
+    botH: 35,
+  ),
+  '500G GUJIYA': _BoxSizeData(
+    topL: 202,
+    topW: 192,
+    topH: 25,
+    botL: 197,
+    botW: 187,
+    botH: 50,
+  ),
+  '1KG GUJIYA': _BoxSizeData(
+    topL: 317,
+    topW: 194,
+    topH: 25,
+    botL: 313,
+    botW: 191,
+    botH: 47,
+  ),
+  '1KG MAKHAN BARA': _BoxSizeData(
+    topL: 231,
+    topW: 198,
+    topH: 38,
+    botL: 226,
+    botW: 194,
+    botH: 58,
+  ),
+  '500G MAKHAN BARA': _BoxSizeData(
+    topL: 182,
+    topW: 151,
+    topH: 38,
+    botL: 178,
+    botW: 147,
+    botH: 60,
+  ),
+  '250G AHUJA SPL': _BoxSizeData(
+    topL: 185,
+    topW: 124,
+    topH: 26,
+    botL: 183,
+    botW: 119,
+    botH: 64,
+  ),
+  '500G GUJRAT SIZE': _BoxSizeData(
+    topL: 240,
+    topW: 141,
+    topH: 36,
+    botL: 235,
+    botW: 137,
+    botH: 41,
+  ),
+  '500G PAKPATTNIAN': _BoxSizeData(
+    topL: 235,
+    topW: 157,
+    topH: 35,
+    botL: 230,
+    botW: 152,
+    botH: 45,
+  ),
+  '20 CAVITY TIP TOP': _BoxSizeData(
+    topL: 260,
+    topW: 215,
+    topH: 29,
+    botL: 255,
+    botW: 210,
+    botH: 55,
+  ),
+  'SARTAJ MARBLE': _BoxSizeData(
+    topL: 276,
+    topW: 173,
+    topH: 35,
+    botL: 271,
+    botW: 168,
+    botH: 35,
+  ),
+  '500G BOMBAY SIZE': _BoxSizeData(
+    topL: 208,
+    topW: 176,
+    topH: 20,
+    botL: 203,
+    botW: 171,
+    botH: 38,
+  ),
+  '6X6 PRASHANT': _BoxSizeData(
+    topL: 160,
+    topW: 160,
+    topH: 22,
+    botL: 155,
+    botW: 155,
+    botH: 36,
+  ),
+  '9X9 SARTAJ': _BoxSizeData(
+    topL: 234,
+    topW: 234,
+    topH: 49,
+    botL: 230,
+    botW: 230,
+    botH: 70,
+  ),
+  '20 CAVITY UTTAM': _BoxSizeData(
+    topL: 261,
+    topW: 215,
+    topH: 54,
+    botL: 256,
+    botW: 210,
+    botH: 64,
+  ),
+  '10 CAVITY UTTAM': _BoxSizeData(
+    topL: 262,
+    topW: 123,
+    topH: 54,
+    botL: 257,
+    botW: 119,
+    botH: 64,
+  ),
+  '6.5X6.5 CLASSIC': _BoxSizeData(
+    topL: 172,
+    topW: 172,
+    topH: 32,
+    botL: 168,
+    botW: 168,
+    botH: 40,
+  ),
+  'LOVELEY SIZE': _BoxSizeData(
+    topL: 295,
+    topW: 225,
+    topH: 29,
+    botL: 290,
+    botW: 220,
+    botH: 39,
+  ),
+  '7X7 GOPAL': _BoxSizeData(
+    topL: 186,
+    topW: 186,
+    topH: 24,
+    botL: 181,
+    botW: 181,
+    botH: 30,
+  ),
+  '9X9X3 (25 CAVITY)': _BoxSizeData(
+    topL: 246,
+    topW: 246,
+    topH: 35,
+    botL: 241,
+    botW: 241,
+    botH: 70,
+  ),
+  '9X9 (4KHANA)': _BoxSizeData(
+    topL: 233,
+    topW: 233,
+    topH: 32,
+    botL: 228,
+    botW: 228,
+    botH: 50,
+  ),
+  '7X10': _BoxSizeData(
+    topL: 260,
+    topW: 187,
+    topH: 45,
+    botL: 255,
+    botW: 182,
+    botH: 65,
+  ),
+  '9X9 LOVELEY': _BoxSizeData(
+    topL: 236,
+    topW: 236,
+    topH: 36,
+    botL: 232,
+    botW: 232,
+    botH: 55,
+  ),
+  '500G SHAGUN KAJU': _BoxSizeData(
+    topL: 270,
+    topW: 150,
+    topH: 25,
+    botL: 265,
+    botW: 145,
+    botH: 35,
+  ),
+  '35 CAVITY NEW (DT)': _BoxSizeData(
+    topL: 334,
+    topW: 243,
+    topH: 20,
+    botL: 328,
+    botW: 238,
+    botH: 45,
+  ),
+  '12 CAVITY KHOLI (PARDEEP)': _BoxSizeData(
+    topL: 195,
+    topW: 151,
+    topH: 36,
+    botL: 190,
+    botW: 147,
+    botH: 70,
+  ),
+  '8X8 RAJDHANI': _BoxSizeData(
+    topL: 207,
+    topW: 207,
+    topH: 25,
+    botL: 203,
+    botW: 203,
+    botH: 39,
+  ),
+  '7X7 RAJDHANI': _BoxSizeData(
+    topL: 175,
+    topW: 175,
+    topH: 25,
+    botL: 171,
+    botW: 171,
+    botH: 39,
+  ),
+  '250GM MUMBAI SIZE': _BoxSizeData(
+    topL: 141,
+    topW: 141,
+    topH: 20,
+    botL: 137,
+    botW: 137,
+    botH: 38,
+  ),
+  'LSPT JHODPUR': _BoxSizeData(
+    topL: 0,
+    topW: 0,
+    topH: 0,
+    botL: 264,
+    botW: 185,
+    botH: 43,
+  ),
+  '500G SPL SIZE': _BoxSizeData(
+    topL: 0,
+    topW: 0,
+    topH: 0,
+    botL: 210,
+    botW: 150,
+    botH: 39,
+  ),
+};
+
+/// Returns matched size data or null.  Matching is case-insensitive + trims spaces.
+_BoxSizeData? _lookupSize(String name) {
+  final key = name.trim().toUpperCase();
+  if (_boxSizeTable.containsKey(key)) return _boxSizeTable[key];
+  // fuzzy: try contains match
+  for (final entry in _boxSizeTable.entries) {
+    if (entry.key.contains(key) || key.contains(entry.key)) {
+      return entry.value;
+    }
+  }
+  return null;
+}
+
 class ProductionUnit2Screen extends StatefulWidget {
   const ProductionUnit2Screen({super.key});
   @override
@@ -25,8 +606,9 @@ class ProductionUnit2Screen extends StatefulWidget {
 }
 
 class _ProductionUnit2ScreenState extends State<ProductionUnit2Screen> {
-  TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -125,7 +707,6 @@ class _ProductionUnit2ScreenState extends State<ProductionUnit2Screen> {
               },
             ),
           ),
-
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -135,23 +716,18 @@ class _ProductionUnit2ScreenState extends State<ProductionUnit2Screen> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const _LoadingState();
                 }
-
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return _buildBody([]);
                 }
-
                 final validDocs = snapshot.data!.docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   return _filterRigidBoxProducts(data['products']).isNotEmpty;
                 }).toList();
 
-                // 🔥 SEARCH FILTER
                 final filteredDocs = validDocs.where((doc) {
                   if (_searchQuery.isEmpty) return true;
-
                   final data = doc.data() as Map<String, dynamic>;
                   final products = _filterRigidBoxProducts(data['products']);
-
                   return products.any((p) {
                     final name = (p['productName'] ?? '')
                         .toString()
@@ -159,13 +735,10 @@ class _ProductionUnit2ScreenState extends State<ProductionUnit2Screen> {
                     final customer = (data['customerName'] ?? '')
                         .toString()
                         .toLowerCase();
-
                     final length = (p['length'] ?? '').toString().toLowerCase();
                     final height = (p['height'] ?? '').toString().toLowerCase();
                     final width = (p['width'] ?? '').toString().toLowerCase();
-
                     final size = '$length $height $width';
-
                     return name.contains(_searchQuery) ||
                         customer.contains(_searchQuery) ||
                         size.contains(_searchQuery);
@@ -186,12 +759,11 @@ class _ProductionUnit2ScreenState extends State<ProductionUnit2Screen> {
     sorted.sort((a, b) {
       final aData = a.data() as Map<String, dynamic>;
       final bData = b.data() as Map<String, dynamic>;
-
-   final aTime = aData['createdAt'] as Timestamp?;
-final bTime = bData['createdAt'] as Timestamp?;
-
-return (bTime?.millisecondsSinceEpoch ?? 0)
-    .compareTo(aTime?.millisecondsSinceEpoch ?? 0); // 🔥 latest number first
+      final aTime = aData['createdAt'] as Timestamp?;
+      final bTime = bData['createdAt'] as Timestamp?;
+      return (bTime?.millisecondsSinceEpoch ?? 0).compareTo(
+        aTime?.millisecondsSinceEpoch ?? 0,
+      );
     });
 
     return sorted.isEmpty
@@ -209,19 +781,8 @@ return (bTime?.millisecondsSinceEpoch ?? 0)
             },
           );
   }
-
-  // Extract numeric part from "DPL-HSP-54" → 54
-  int? _parseJobCardNumber(dynamic raw) {
-    final str = (raw ?? '').toString().trim();
-    if (str.isEmpty) return null;
-    final parts = str.split('-');
-    return int.tryParse(parts.last);
-  }
 }
 
-// ══════════════════════════════════════════════════
-//  HELPERS
-// ══════════════════════════════════════════════════
 List<Map<String, dynamic>> _filterRigidBoxProducts(dynamic rawProducts) {
   List<Map<String, dynamic>> products = [];
   if (rawProducts is List) {
@@ -229,7 +790,6 @@ List<Map<String, dynamic>> _filterRigidBoxProducts(dynamic rawProducts) {
   } else if (rawProducts is Map) {
     products = [Map<String, dynamic>.from(rawProducts)];
   }
-  
   return products.where((p) {
     final cat = (p['productCategory'] ?? '').toString().trim().toLowerCase();
     return cat.contains('rigid box');
@@ -249,7 +809,6 @@ String _formatDate(dynamic ts) {
 // ══════════════════════════════════════════════════
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
-
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -291,7 +850,6 @@ class _LoadingState extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
-
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -321,7 +879,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Koi matching order nahi mila.',
+            'No pending job cards.',
             style: TextStyle(fontSize: 14, color: _AppColors.textLight),
           ),
         ],
@@ -330,7 +888,10 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _OrderCard extends StatefulWidget {
+// ══════════════════════════════════════════════════
+//  ORDER CARD
+// ══════════════════════════════════════════════════
+class _OrderCard extends StatelessWidget {
   final int serialNumber;
   final String docId;
   final Map<String, dynamic> data;
@@ -341,53 +902,75 @@ class _OrderCard extends StatefulWidget {
     required this.data,
   });
 
-  @override
-  State<_OrderCard> createState() => _OrderCardState();
-}
-
-class _OrderCardState extends State<_OrderCard> {
-  bool _customerExpanded = false;
-
   List<Map<String, dynamic>> _extractProducts() =>
-      _filterRigidBoxProducts(widget.data['products']);
+      _filterRigidBoxProducts(data['products']);
 
   @override
   Widget build(BuildContext context) {
-    final data = widget.data;
     final status = data['productionStatus'] ?? 'Pending';
     final products = _extractProducts();
     if (products.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: _AppColors.cardBg,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+    // ════════════════════════════════════════════
+    // 🔥 KEY CHANGE: We use StreamBuilder to get
+    // ALL existing job cards for this order, then
+    // filter out products that already have one.
+    // ════════════════════════════════════════════
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('unit2ProductJobCards')
+          .where('orderId', isEqualTo: docId)
+          .snapshots(),
+      builder: (context, jcSnap) {
+        // Build a set of product indices that already have a job card
+        final Set<int> createdIndices = {};
+        if (jcSnap.hasData) {
+          for (final doc in jcSnap.data!.docs) {
+            final d = doc.data() as Map<String, dynamic>;
+            final idx = d['productIndex'];
+            if (idx != null) createdIndices.add(idx as int);
+          }
+        }
+
+        // Filter products: only show those WITHOUT a job card
+        final pendingProducts = products.asMap().entries.where((entry) {
+          return !createdIndices.contains(entry.key);
+        }).toList();
+
+        // If ALL products of this order have job cards → hide this card entirely
+        if (pendingProducts.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 24),
+          decoration: BoxDecoration(
+            color: _AppColors.cardBg,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: _AppColors.midGreen.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          BoxShadow(
-            color: _AppColors.midGreen.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+          child: Column(
+            children: [
+              _buildHeader(data, status, pendingProducts.length),
+              Container(
+                height: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                color: const Color(0xFFEEF2EE),
+              ),
+              _buildProductsSection(pendingProducts),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _buildHeader(data, status, products.length),
-          //  _buildCustomerSection(data),
-          Container(
-            height: 1,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            color: const Color(0xFFEEF2EE),
-          ),
-          _buildProductsSection(products),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -424,7 +1007,7 @@ class _OrderCardState extends State<_OrderCard> {
                 ),
                 child: Center(
                   child: Text(
-                    '#${widget.serialNumber}',
+                    '#$serialNumber',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -485,14 +1068,9 @@ class _OrderCardState extends State<_OrderCard> {
           const SizedBox(height: 16),
           Row(
             children: [
-              // _HeaderChip(
-              //   icon: Icons.local_shipping_outlined,
-              //   text: _formatDate(data['deliveryDate']),
-              // ),
-              // const SizedBox(width: 8),
               _HeaderChip(
                 icon: Icons.inventory_2_outlined,
-                text: '$count Items',
+                text: '$count Pending',
               ),
               const SizedBox(width: 8),
               _PriorityChip(priority: data['priority']?.toString() ?? 'Normal'),
@@ -503,121 +1081,9 @@ class _OrderCardState extends State<_OrderCard> {
     );
   }
 
-  // Widget _buildCustomerSection(Map<String, dynamic> data) {
-  //   return AnimatedContainer(
-  //     duration: const Duration(milliseconds: 250),
-  //     color: const Color(0xFFF8FBF8),
-  //     child: Column(
-  //       children: [
-  //         InkWell(
-  //           onTap: () => setState(() => _customerExpanded = !_customerExpanded),
-  //           child: Padding(
-  //             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-  //             child: Row(
-  //               children: [
-  //                 Container(
-  //                   padding: const EdgeInsets.all(7),
-  //                   decoration: BoxDecoration(
-  //                     color: _AppColors.midGreen.withOpacity(0.1),
-  //                     borderRadius: BorderRadius.circular(8),
-  //                   ),
-  //                   child: const Icon(
-  //                     Icons.person_pin_outlined,
-  //                     size: 16,
-  //                     color: _AppColors.midGreen,
-  //                   ),
-  //                 ),
-  //                 const SizedBox(width: 10),
-  //                 const Text(
-  //                   'Customer Details',
-  //                   style: TextStyle(
-  //                     fontSize: 13,
-  //                     fontWeight: FontWeight.w700,
-  //                     color: _AppColors.textDark,
-  //                   ),
-  //                 ),
-  //                 const Spacer(),
-  //                 _MiniPill(
-  //                   icon: Icons.phone,
-  //                   text: data['phone']?.toString() ?? 'N/A',
-  //                 ),
-  //                 const SizedBox(width: 8),
-  //                 AnimatedRotation(
-  //                   turns: _customerExpanded ? 0.5 : 0,
-  //                   duration: const Duration(milliseconds: 250),
-  //                   child: const Icon(
-  //                     Icons.keyboard_arrow_down,
-  //                     color: _AppColors.midGreen,
-  //                     size: 22,
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //           ),
-  //         ),
-  //         AnimatedCrossFade(
-  //           duration: const Duration(milliseconds: 280),
-  //           crossFadeState: _customerExpanded
-  //               ? CrossFadeState.showSecond
-  //               : CrossFadeState.showFirst,
-  //           firstChild: const SizedBox.shrink(),
-  //           secondChild: Padding(
-  //             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-  //             child: Column(
-  //               children: [
-  //                 Row(
-  //                   children: [
-  //                     Expanded(
-  //                       child: _DetailTile(
-  //                         icon: Icons.phone_in_talk_outlined,
-  //                         label: 'Phone',
-  //                         value: data['phone']?.toString() ?? 'N/A',
-  //                         color: _AppColors.blue,
-  //                       ),
-  //                     ),
-  //                     const SizedBox(width: 10),
-  //                     Expanded(
-  //                       child: _DetailTile(
-  //                         icon: Icons.location_on_outlined,
-  //                         label: 'Location',
-  //                         value: data['location']?.toString() ?? 'N/A',
-  //                         color: _AppColors.red,
-  //                       ),
-  //                     ),
-  //                   ],
-  //                 ),
-  //                 const SizedBox(height: 10),
-  //                 Row(
-  //                   children: [
-  //                     Expanded(
-  //                       child: _DetailTile(
-  //                         icon: Icons.calendar_today_outlined,
-  //                         label: 'Order Date',
-  //                         value: _formatDate(data['orderDate']),
-  //                         color: _AppColors.purple,
-  //                       ),
-  //                     ),
-  //                     const SizedBox(width: 10),
-  //                     Expanded(
-  //                       child: _DetailTile(
-  //                         icon: Icons.local_shipping_outlined,
-  //                         label: 'Delivery',
-  //                         value: _formatDate(data['deliveryDate']),
-  //                         color: _AppColors.orange,
-  //                       ),
-  //                     ),
-  //                   ],
-  //                 ),
-  //               ],
-  //             ),
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
-
-  Widget _buildProductsSection(List<Map<String, dynamic>> products) {
+  Widget _buildProductsSection(
+    List<MapEntry<int, Map<String, dynamic>>> pendingProducts,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       child: Column(
@@ -657,7 +1123,7 @@ class _OrderCardState extends State<_OrderCard> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${products.length}',
+                  '${pendingProducts.length}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -668,13 +1134,16 @@ class _OrderCardState extends State<_OrderCard> {
             ],
           ),
           const SizedBox(height: 12),
-          ...products.asMap().entries.map(
+          ...pendingProducts.map(
             (entry) => _ProductTile(
               product: entry.value,
-              index: entry.key,
-              jobCardDocId: '${widget.docId}_${entry.key}',
-              orderDocId: widget.docId,
-              orderData: widget.data,
+              index: entry.key, // original index in full products list
+              displayIndex: pendingProducts.indexOf(
+                entry,
+              ), // for display numbering
+              jobCardDocId: '${docId}_${entry.key}',
+              orderDocId: docId,
+              orderData: data,
             ),
           ),
         ],
@@ -688,8 +1157,8 @@ class _OrderCardState extends State<_OrderCard> {
 // ══════════════════════════════════════════════════
 class _ProductTile extends StatelessWidget {
   final Map<String, dynamic> product;
-  final int index;
-  // ✅ jobCardDocId = orderId_productIndex (unique per product)
+  final int index; // real index in full products array
+  final int displayIndex; // just for tile numbering UI
   final String jobCardDocId;
   final String orderDocId;
   final Map<String, dynamic> orderData;
@@ -697,6 +1166,7 @@ class _ProductTile extends StatelessWidget {
   const _ProductTile({
     required this.product,
     required this.index,
+    required this.displayIndex,
     required this.jobCardDocId,
     required this.orderDocId,
     required this.orderData,
@@ -706,7 +1176,7 @@ class _ProductTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final sections = product['sections'] as Map<String, dynamic>? ?? {};
     final extras = product['customExtraSections'] as List? ?? [];
-    final productName = product['productName'] ?? 'Product ${index + 1}';
+    final productName = product['productName'] ?? 'Product ${displayIndex + 1}';
     final quantity = product['quantity'] ?? 0;
     final length = product['length']?.toString() ?? '';
     final height = product['height']?.toString() ?? '';
@@ -751,7 +1221,7 @@ class _ProductTile extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    '${index + 1}',
+                    '${displayIndex + 1}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -851,44 +1321,12 @@ class _ProductTile extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 14),
-
-            // ✅ FIX: Per-product job card stream using jobCardDocId
-            StreamBuilder<DocumentSnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('unit2ProductJobCards')
-                  .doc(jobCardDocId)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(
-                    height: 44,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _AppColors.midGreen,
-                      ),
-                    ),
-                  );
-                }
-
-                final exists = snapshot.hasData && snapshot.data!.exists;
-
-                if (exists) {
-                  final jobData = snapshot.data!.data() as Map<String, dynamic>;
-                  return _JobCardCreatedBadge(
-                    jobCardData: jobData,
-                    docId: jobCardDocId,
-                  );
-                }
-
-                return _CreateJobCardButton(
-                  jobCardDocId: jobCardDocId,
-                  orderDocId: orderDocId,
-                  orderData: orderData,
-                  product: product,
-                  productIndex: index,
-                );
-              },
+            _CreateJobCardButton(
+              jobCardDocId: jobCardDocId,
+              orderDocId: orderDocId,
+              orderData: orderData,
+              product: product,
+              productIndex: index,
             ),
           ],
         ),
@@ -902,7 +1340,6 @@ class _ProductTile extends StatelessWidget {
 // ══════════════════════════════════════════════════
 class _ProductDetailsGrid extends StatelessWidget {
   final Map<String, dynamic> product;
-
   const _ProductDetailsGrid({required this.product});
 
   @override
@@ -941,82 +1378,9 @@ class _ProductDetailsGrid extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════
-//  JOB CARD CREATED BADGE
-// ══════════════════════════════════════════════════
-class _JobCardCreatedBadge extends StatelessWidget {
-  final Map<String, dynamic> jobCardData;
-  final String docId;
-
-  const _JobCardCreatedBadge({required this.jobCardData, required this.docId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF2E7D32).withOpacity(0.08),
-            const Color(0xFF4CAF50).withOpacity(0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF2E7D32).withOpacity(0.25)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2E7D32),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.check_rounded,
-              color: Colors.white,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Job Card Created',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF4CAF50),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  jobCardData['jobCardNumber'] ?? '',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: _AppColors.darkGreen,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(
-            Icons.arrow_forward_ios_rounded,
-            size: 14,
-            color: _AppColors.textLight,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════
 //  CREATE JOB CARD BUTTON
 // ══════════════════════════════════════════════════
 class _CreateJobCardButton extends StatefulWidget {
-  // ✅ jobCardDocId = unique per product (orderId_productIndex)
   final String jobCardDocId;
   final String orderDocId;
   final Map<String, dynamic> orderData;
@@ -1039,24 +1403,60 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
   bool _isSubmitting = false;
 
   void _openJobCardForm(BuildContext context) {
-    // ✅ FIX: Controllers yahan banao — bottom sheet ke andar nahi
+    // ── Pre-fill size field with product name ──
     final sizeController = TextEditingController(
       text: widget.product['productName'] ?? '',
     );
-    final topSizeController = TextEditingController();
-    final traySizeController = TextEditingController();
-    final bottomSizeController = TextEditingController();
+
+    // ── Try auto-lookup on the product name ──
+    final initialData = _lookupSize(widget.product['productName'] ?? '');
+
+    String topText = initialData != null && initialData.topL > 0
+        ? '${initialData.topL} × ${initialData.topW} × ${initialData.topH}'
+        : '';
+    String bottomText = initialData != null
+        ? '${initialData.botL} × ${initialData.botW} × ${initialData.botH}'
+        : '';
+
+    final topSizeController = TextEditingController(text: topText);
+    final bottomSizeController = TextEditingController(text: bottomText);
+    bool autoFilled = initialData != null;
+
     String selectedTray = 'SBS';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      // ✅ FIX: useRootNavigator: true — sheet properly pop hoga
       useRootNavigator: true,
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
+            // ── Auto-fill when size name field changes ──
+            void onSizeChanged(String val) {
+              final found = _lookupSize(val);
+              if (found != null) {
+                setSheetState(() {
+                  autoFilled = true;
+                  topSizeController.text = found.topL > 0
+                      ? '${found.topL} × ${found.topW} × ${found.topH}'
+                      : 'TOP FOLDING';
+                  bottomSizeController.text =
+                      '${found.botL} × ${found.botW} × ${found.botH}';
+                });
+              } else {
+                if (autoFilled) {
+                  setSheetState(() {
+                    autoFilled = false;
+                  });
+                }
+              }
+            }
+
+            sizeController.addListener(
+              () => onSizeChanged(sizeController.text),
+            );
+
             return Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -1082,7 +1482,7 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Container(
@@ -1122,37 +1522,74 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 5),
-                    _FormSection(
-                      title: 'Size',
-                      icon: Icons.swap_horizontal_circle_sharp,
-                      color: const Color.fromARGB(255, 233, 31, 13),
-                      sizeController: sizeController,
+                    const SizedBox(height: 12),
+
+                    // ── Size Name (triggers auto-fill + A-Z dropdown) ──
+                    _SizeNameField(
+                      controller: sizeController,
+                      onChanged: onSizeChanged,
+                      autoFilled: autoFilled,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 8),
+
+                    // ── Auto-fill banner ──
+                    if (autoFilled)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _AppColors.lightGreen.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _AppColors.lightGreen.withOpacity(0.4),
+                          ),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(
+                              Icons.auto_awesome,
+                              size: 16,
+                              color: _AppColors.midGreen,
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Size auto-filled from lookup table ✓',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _AppColors.midGreen,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     _FormSection(
                       title: 'Top Part',
                       icon: Icons.vertical_align_top_rounded,
                       color: _AppColors.blue,
                       sizeController: topSizeController,
-                      keyboardType: TextInputType.text,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 8),
                     _FormSection(
                       title: 'Bottom Part',
                       icon: Icons.vertical_align_bottom_rounded,
                       color: _AppColors.orange,
                       sizeController: bottomSizeController,
-                      keyboardType: TextInputType.text,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 8),
                     _TrayDropdown(
                       selectedTray: selectedTray,
-                      onChanged: (val) {
-                        setSheetState(() => selectedTray = val!);
-                      },
+                      onChanged: (val) =>
+                          setSheetState(() => selectedTray = val!),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
+
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -1170,13 +1607,10 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
                                   );
                                   return;
                                 }
-                                // ✅ FIX: sheetContext se pehle pop karo,
-                                // phir Firestore call
                                 Navigator.of(
                                   sheetContext,
                                   rootNavigator: true,
                                 ).pop();
-
                                 await _createJobCard(
                                   context,
                                   size: sizeController.text.trim(),
@@ -1245,11 +1679,11 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
     if (mounted) setState(() => _isSubmitting = true);
 
     try {
-      final jobCardRef = FirebaseFirestore.instance.collection('unit2ProductJobCards');
+      final jobCardRef = FirebaseFirestore.instance.collection(
+        'unit2ProductJobCards',
+      );
 
-      // ✅ FIX: Check by jobCardDocId (per-product unique doc)
       final existingDoc = await jobCardRef.doc(widget.jobCardDocId).get();
-
       if (existingDoc.exists) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1263,7 +1697,7 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
         return;
       }
 
-      // ✅ Auto-increment job card number
+      // Auto-increment job card number
       final snapshot = await jobCardRef
           .orderBy('jobCardNumber', descending: true)
           .limit(1)
@@ -1279,7 +1713,6 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
 
       final jobCardNumber = 'DPL-HSP-${lastNumber.toString().padLeft(2, '0')}';
 
-      // ✅ Save with jobCardDocId as document ID (unique per product)
       await jobCardRef.doc(widget.jobCardDocId).set({
         'jobCardNumber': jobCardNumber,
         'orderId': widget.orderDocId,
@@ -1373,6 +1806,448 @@ class _CreateJobCardButtonState extends State<_CreateJobCardButton> {
 }
 
 // ══════════════════════════════════════════════════
+//  SIZE NAME FIELD (with A-Z dropdown + autocomplete)
+// ══════════════════════════════════════════════════
+class _SizeNameField extends StatefulWidget {
+  final TextEditingController controller;
+  final void Function(String) onChanged;
+  final bool autoFilled;
+
+  const _SizeNameField({
+    required this.controller,
+    required this.onChanged,
+    required this.autoFilled,
+  });
+
+  @override
+  State<_SizeNameField> createState() => _SizeNameFieldState();
+}
+
+class _SizeNameFieldState extends State<_SizeNameField> {
+  List<String> _suggestions = [];
+
+  // ── Sorted A-Z list of all size names ──
+  List<String> get _allSizesSorted {
+    final keys = _boxSizeTable.keys.toList();
+    keys.sort((a, b) => a.compareTo(b));
+    return keys;
+  }
+
+  void _updateSuggestions(String val) {
+    final query = val.trim().toUpperCase();
+    if (query.isEmpty) {
+      setState(() => _suggestions = []);
+      return;
+    }
+    final matches = _allSizesSorted
+        .where((k) => k.contains(query))
+        .take(6)
+        .toList();
+    setState(() => _suggestions = matches);
+  }
+
+  void _selectSize(String size) {
+    widget.controller.text = size;
+    widget.controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: size.length),
+    );
+    widget.onChanged(size);
+    setState(() => _suggestions = []);
+  }
+
+  // ── Opens full A-Z dropdown list in a bottom sheet ──
+  void _openAllSizesSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        List<String> filtered = _allSizesSorted;
+        final searchCtrl = TextEditingController();
+
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.75,
+              minChildSize: 0.4,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.list_alt_rounded,
+                            color: _AppColors.midGreen,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'All Sizes (A-Z)',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: _AppColors.textDark,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${filtered.length} sizes',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: _AppColors.textLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: searchCtrl,
+                        decoration: InputDecoration(
+                          hintText: 'Search size name...',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          filled: true,
+                          fillColor: Colors.grey.shade50,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                        ),
+                        onChanged: (v) {
+                          final q = v.trim().toUpperCase();
+                          setSheetState(() {
+                            filtered = q.isEmpty
+                                ? _allSizesSorted
+                                : _allSizesSorted
+                                      .where((k) => k.contains(q))
+                                      .toList();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: ListView.separated(
+                          controller: scrollController,
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) =>
+                              Divider(height: 1, color: Colors.grey.shade100),
+                          itemBuilder: (context, index) {
+                            final sizeName = filtered[index];
+                            final data = _boxSizeTable[sizeName]!;
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
+                              leading: Container(
+                                width: 34,
+                                height: 34,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: _AppColors.midGreen.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  sizeName.isNotEmpty ? sizeName[0] : '?',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: _AppColors.midGreen,
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                sizeName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: _AppColors.textDark,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'Top: ${data.topL}×${data.topW}×${data.topH}   '
+                                'Bottom: ${data.botL}×${data.botW}×${data.botH}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: _AppColors.textLight,
+                                ),
+                              ),
+                              trailing: const Icon(
+                                Icons.chevron_right_rounded,
+                                color: _AppColors.textLight,
+                              ),
+                              onTap: () {
+                                Navigator.of(sheetContext).pop();
+                                _selectSize(sizeName);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color.fromARGB(255, 233, 31, 13).withOpacity(0.04),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color.fromARGB(255, 233, 31, 13).withOpacity(0.2),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(
+                        255,
+                        233,
+                        31,
+                        13,
+                      ).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.swap_horizontal_circle_sharp,
+                      size: 16,
+                      color: Color.fromARGB(255, 233, 31, 13),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Size Name',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: Color.fromARGB(255, 233, 31, 13),
+                    ),
+                  ),
+                  const Spacer(),
+                  if (widget.autoFilled)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _AppColors.lightGreen.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.check_circle,
+                            size: 12,
+                            color: _AppColors.midGreen,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Auto-filled',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: _AppColors.midGreen,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: widget.controller,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _AppColors.textDark,
+                      ),
+                      onChanged: (v) {
+                        widget.onChanged(v);
+                        _updateSuggestions(v);
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Enter size name (e.g. 1KG MM)',
+                        labelStyle: TextStyle(
+                          fontSize: 12,
+                          color: const Color.fromARGB(
+                            255,
+                            233,
+                            31,
+                            13,
+                          ).withOpacity(0.7),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          size: 16,
+                          color: const Color.fromARGB(
+                            255,
+                            233,
+                            31,
+                            13,
+                          ).withOpacity(0.6),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 12,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: const Color.fromARGB(
+                              255,
+                              233,
+                              31,
+                              13,
+                            ).withOpacity(0.25),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: Color.fromARGB(255, 233, 31, 13),
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // ── Dropdown button: opens full A-Z list of all sizes ──
+                  GestureDetector(
+                    onTap: () => _openAllSizesSheet(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _AppColors.midGreen,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_drop_down_circle_outlined,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        // ── Suggestion chips (A-Z filtered, as-you-type) ──
+        if (_suggestions.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 6),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Suggestions:',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _AppColors.textLight,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _suggestions
+                      .map(
+                        (s) => GestureDetector(
+                          onTap: () => _selectSize(s),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _AppColors.midGreen.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: _AppColors.midGreen.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Text(
+                              s,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: _AppColors.darkGreen,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════
 //  TRAY DROPDOWN
 // ══════════════════════════════════════════════════
 class _TrayDropdown extends StatelessWidget {
@@ -1409,7 +2284,7 @@ class _TrayDropdown extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               const Text(
-                "Tray",
+                'Tray',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
@@ -1429,10 +2304,10 @@ class _TrayDropdown extends StatelessWidget {
               ),
             ),
             items: const [
-              DropdownMenuItem(value: "SBS", child: Text("SBS")),
-              DropdownMenuItem(value: "Golden", child: Text("Golden")),
-              DropdownMenuItem(value: "Plastic", child: Text("Plastic")),
-              DropdownMenuItem(value: "N/A", child: Text("N/A")),
+              DropdownMenuItem(value: 'SBS', child: Text('SBS')),
+              DropdownMenuItem(value: 'Golden', child: Text('Golden')),
+              DropdownMenuItem(value: 'Plastic', child: Text('Plastic')),
+              DropdownMenuItem(value: 'N/A', child: Text('N/A')),
             ],
             onChanged: onChanged,
           ),
@@ -1498,7 +2373,7 @@ class _FormSection extends StatelessWidget {
           const SizedBox(height: 10),
           _StyledTextField(
             controller: sizeController,
-            label: 'Size (L×H×W)',
+            label: 'Size (L × W × H)',
             icon: Icons.straighten_outlined,
             color: color,
             keyboardType: keyboardType,
@@ -1708,38 +2583,6 @@ class _UnitBadge extends StatelessWidget {
           fontWeight: FontWeight.bold,
           color: _AppColors.blue,
         ),
-      ),
-    );
-  }
-}
-
-class _MiniPill extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _MiniPill({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _AppColors.midGreen.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: _AppColors.midGreen),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12,
-              color: _AppColors.textDark,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }

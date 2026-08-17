@@ -161,30 +161,54 @@ class PackagingScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('unit2MachineProcess')
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Center(
-              child: _LoadingWidget(message: "Loading machine data…"),
-            );
-          }
-          final groups = _groupByProduct(snap.data!.docs);
-          if (groups.isEmpty) {
-            return const Center(child: _EmptyWidget());
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
-            itemCount: groups.length,
-            itemBuilder: (context, i) =>
-                _ProductGroupCard(group: groups[i], serialNo: i + 1),
+    body: StreamBuilder<QuerySnapshot>(
+  stream: FirebaseFirestore.instance
+      .collection('unit2MachineProcess')
+      .orderBy('createdAt', descending: true)
+      .snapshots(),
+  builder: (context, machineSnap) {
+    if (!machineSnap.hasData) {
+      return const Center(
+        child: _LoadingWidget(message: "Loading machine data…"),
+      );
+    }
+    // Dusra stream — saved doc IDs
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('productionunit2')
+          .snapshots(),
+      builder: (context, savedSnap) {
+        if (!savedSnap.hasData) {
+          return const Center(
+            child: _LoadingWidget(message: "Checking saved records…"),
           );
-        },
-      ),
+        }
+
+        // Saved machineDocIds ka set banao
+        final savedIds = savedSnap.data!.docs
+            .map((d) => d.id)
+            .toSet();
+
+        // Sirf UNSAVED docs filter karo
+        final unsavedDocs = machineSnap.data!.docs
+            .where((doc) => !savedIds.contains(doc.id))
+            .toList();
+
+        final groups = _groupByProduct(unsavedDocs);
+
+        if (groups.isEmpty) {
+          return const Center(child: _EmptyWidget());
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+          itemCount: groups.length,
+          itemBuilder: (context, i) =>
+              _ProductGroupCard(group: groups[i], serialNo: i + 1),
+        );
+      },
     );
+  },
+));
   }
 }
 

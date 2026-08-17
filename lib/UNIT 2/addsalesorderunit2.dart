@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
-// ─── Color Theme ────────────────────────────────────────────────────────────
 class _AppColors {
   static const Color primary = Color(0xFF6A1B9A);
   static const Color primaryLight = Color(0xFF9C4DCC);
@@ -27,7 +26,6 @@ class _AppColors {
   );
 }
 
-// ─── Unit2 Sales Order Screen (New Booking) ─────────────────────────────────
 class Unit2SalesOrderScreen extends StatefulWidget {
   const Unit2SalesOrderScreen({super.key});
 
@@ -92,7 +90,6 @@ class _Unit2SalesOrderScreenState extends State<Unit2SalesOrderScreen> {
     _addProduct();
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
   String _generateCode(int index) {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     String code = '';
@@ -529,7 +526,6 @@ class _Unit2SalesOrderScreenState extends State<Unit2SalesOrderScreen> {
     );
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -640,13 +636,14 @@ class _Unit2SalesOrderScreenState extends State<Unit2SalesOrderScreen> {
               [_AppColors.primaryLight, _AppColors.primary],
               [
                 _buildTF(
-  _customerNameController,
-  'Customer Name *',
-  Icons.person_rounded,
-  validator: (v) =>
-      v == null || v.trim().isEmpty ? 'Customer name is required' : null,
-),
-               // _buildAutocompleteName(),
+                  _customerNameController,
+                  'Customer Name *',
+                  Icons.person_rounded,
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Customer name is required'
+                      : null,
+                ),
+                // _buildAutocompleteName(),
                 const SizedBox(height: 14),
                 _buildTF(
                   _companyNameController,
@@ -933,13 +930,13 @@ class _Unit2SalesOrderScreenState extends State<Unit2SalesOrderScreen> {
             onChanged: (v) => setState(() => p['category'] = v!),
           ),
           const SizedBox(height: 14),
-_buildTF(
-  p['name'] as TextEditingController,
-  'Product Name *',
-  Icons.shopping_bag_rounded,
-  validator: (v) =>
-      v == null || v.trim().isEmpty ? 'Product name required' : null,
-),
+          _buildTF(
+            p['name'] as TextEditingController,
+            'Product Name *',
+            Icons.shopping_bag_rounded,
+            validator: (v) =>
+                v == null || v.trim().isEmpty ? 'Product name required' : null,
+          ),
           // Product Name Autocomplete
           // Autocomplete<Map<String, dynamic>>(
           //   optionsBuilder: (TextEditingValue value) async {

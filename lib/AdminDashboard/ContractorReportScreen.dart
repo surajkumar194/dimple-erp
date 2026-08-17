@@ -66,7 +66,6 @@ class _ContractorPdfReportScreenState
     });
   }
 
-  // ── Date range ─────────────────────────────────────────────────────────────
   DateTimeRange _getDateRange() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);

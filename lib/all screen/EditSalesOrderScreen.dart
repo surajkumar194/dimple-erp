@@ -11,6 +11,18 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+String _hsnForCategory(String? category) {
+  if (category == 'MDF') return '44111200';
+  if (category == 'Laddu Paper') return '48062000';
+  return '48192090';
+}
+
+double _gstPctForCategory(String? category) {
+  if (category == 'MDF') return 18.0;
+  if (category == 'Laddu Paper') return 18.0;
+  return 5.0;
+}
+
 class AppColors {
   static const Color primary = Color(0xFF169a8d);
   static const Color secondary = Color(0xFFFF6B6B);
@@ -20,18 +32,17 @@ class AppColors {
   static const Color warning = Color(0xFFE74C3C);
   static const Color lightBg = Color(0xFFF8F9FA);
   static const Color darkText = Color(0xFF2C3E50);
+
   static const Gradient primaryGradient = LinearGradient(
     colors: [Color(0xFF169a8d), Color(0xFF0d7c70)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-
   static const Gradient accentGradient = LinearGradient(
     colors: [Color(0xFFFF6B6B), Color(0xFFFF8E72)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-
   static const Gradient successGradient = LinearGradient(
     colors: [Color(0xFF2ECC71), Color(0xFF27AE60)],
     begin: Alignment.topLeft,
@@ -79,75 +90,16 @@ class _EditSalesOrderScreenState extends State<EditSalesOrderScreen>
     'Meena Bazar',
     'College Road',
   ];
-
   bool _showPartialDispatch = false;
 
- void _openFullScreenImage(String imageUrl) {
-  showDialog(
-    context: context,
-    barrierColor: Colors.black,
-    builder: (_) => Dialog(
-      backgroundColor: Colors.black,
-      insetPadding: EdgeInsets.zero,
-      child: Stack(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: InteractiveViewer(
-              minScale: 1,
-              maxScale: 4,
-              child: Center(
-                child: Image.network(imageUrl, fit: BoxFit.contain),
-              ),
-            ),
-          ),
-
-          // 🔥 DOWNLOAD BUTTON
-          Positioned(
-            bottom: 30,
-            right: 20,
-            child: FloatingActionButton(
-              backgroundColor: Colors.white,
-              child: Icon(Icons.download, color: Colors.black),
-              onPressed: () {
-                downloadImage(imageUrl);
-              },
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-Future<void> downloadImage(String url) async {
-  try {
-    if (kIsWeb) {
-      await launchUrl(Uri.parse(url));
-    } else {
-      // ✅ MOBILE
-      var status = await Permission.storage.request();
-      if (!status.isGranted) return;
-
-      final response = await http.get(Uri.parse(url));
-
-      final result = await ImageGallerySaver.saveImage(
-        response.bodyBytes,
-        quality: 100,
-        name: "ERP_${DateTime.now().millisecondsSinceEpoch}",
-      );
-
-      print("Saved: $result");
-    }
-  } catch (e) {
-    print("Download error: $e");
-  }
-}
+  // ─── UPDATED: Added Laddu Paper ───────────────────────────────────────────
   final List<String> _productCategories = [
     'MDF',
     'Kappa Box (Gora)',
     'Packaging',
     'Shagun Envelope',
     'Rigid Box (unit 2 Hussainpura)',
+    'Laddu Paper',
     'Others',
   ];
 
@@ -176,6 +128,60 @@ Future<void> downloadImage(String url) async {
     "Others",
   ];
 
+  void _openFullScreenImage(String imageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: Center(
+                  child: Image.network(imageUrl, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 30,
+              right: 20,
+              child: FloatingActionButton(
+                backgroundColor: Colors.white,
+                child: const Icon(Icons.download, color: Colors.black),
+                onPressed: () => downloadImage(imageUrl),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> downloadImage(String url) async {
+    try {
+      if (kIsWeb) {
+        await launchUrl(Uri.parse(url));
+      } else {
+        var status = await Permission.storage.request();
+        if (!status.isGranted) return;
+        final response = await http.get(Uri.parse(url));
+        final result = await ImageGallerySaver.saveImage(
+          response.bodyBytes,
+          quality: 100,
+          name: "ERP_${DateTime.now().millisecondsSinceEpoch}",
+        );
+        debugPrint("Saved: $result");
+      }
+    } catch (e) {
+      debugPrint("Download error: $e");
+    }
+  }
+
   Map<String, String> _splitQuantityAndRemark(String input) {
     final number = RegExp(r'\d+').stringMatch(input) ?? '';
     final text = input.replaceAll(RegExp(r'\d+'), '').trim();
@@ -185,7 +191,7 @@ Future<void> downloadImage(String url) async {
   bool hasValue(dynamic v) {
     if (v == null) return false;
     if (v is String) return v.trim().isNotEmpty;
-    if (v is num) return true; // 👈 qty 0 bhi allow
+    if (v is num) return true;
     return false;
   }
 
@@ -193,7 +199,6 @@ Future<void> downloadImage(String url) async {
   void initState() {
     super.initState();
     _dispatchType = widget.orderData['dispatchType'];
-    // _productionUnit = widget.orderData['productionUnit'] ?? 'Unit 1';
 
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 600),
@@ -233,8 +238,8 @@ Future<void> downloadImage(String url) async {
         (widget.orderData['deliveryDate'] as Timestamp?)?.toDate() ??
         DateTime.now();
     _priority = widget.orderData['priority'] ?? 'Medium';
-    final savedSalesPerson = widget.orderData['salesPerson'];
 
+    final savedSalesPerson = widget.orderData['salesPerson'];
     if (_salesPersons.contains(savedSalesPerson)) {
       _selectedSalesPerson = savedSalesPerson;
       _customSalesPerson = null;
@@ -246,12 +251,11 @@ Future<void> downloadImage(String url) async {
     } else {
       _selectedSalesPerson = null;
     }
+
     _selectedUnit = widget.orderData['unit'] ?? 'Unit 1';
-    _dispatchType = widget.orderData['dispatchType'];
+
     final rawProducts = widget.orderData['products'];
-
     List productsList = [];
-
     if (rawProducts is List) {
       productsList = rawProducts;
     } else if (rawProducts is Map) {
@@ -261,14 +265,27 @@ Future<void> downloadImage(String url) async {
     _products = productsList.map((p) {
       final sections = p['sections'] as Map<String, dynamic>? ?? {};
       final extraSections = p['customExtraSections'] as List? ?? [];
-
       final rawQty = safeText(p['quantity']);
       final split = _splitQuantityAndRemark(rawQty);
+      final category = p['productCategory'] ?? p['category'] ?? 'MDF';
+
+      // ── Load saved gstPercent or derive from category ─────────────────
+      final savedGst = p['gstPercent'];
+      final double gstPct = savedGst != null
+          ? (savedGst as num).toDouble()
+          : _gstPctForCategory(category);
+
+      // ── Load saved hsnCode or derive from category ────────────────────
+      final String hsnCode = (p['hsnCode']?.toString().isNotEmpty == true)
+          ? p['hsnCode'].toString()
+          : _hsnForCategory(category);
 
       return {
         'id': p['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-        'sections': sections, // ✅ ADD THIS LINE
-
+        'sections': sections,
+        'category': category,
+        'gstPercent': gstPct,
+        'hsnCode': hsnCode,
         'nameController': TextEditingController(text: p['productName'] ?? ''),
         'quantityController': TextEditingController(text: split['qty']),
         'remarkController': TextEditingController(
@@ -280,7 +297,7 @@ Future<void> downloadImage(String url) async {
         'heightController': TextEditingController(text: p['height'] ?? ''),
         'widthController': TextEditingController(text: p['width'] ?? ''),
         'priceController': TextEditingController(text: safeText(p['price'])),
-        'productCategory': p['productCategory'] ?? 'MDF',
+        'productCategory': category,
         'images': List<String>.from(p['images'] ?? []),
         'newImages': <XFile>[],
         'sectionSelected': {
@@ -289,44 +306,37 @@ Future<void> downloadImage(String url) async {
               hasValue(sections['trayQty']) ||
               hasValue(sections['trayPrice']) ||
               hasValue(sections['tray']),
-
           'Salophin':
               hasValue(sections['salophinDetail']) ||
               hasValue(sections['salophinQty']) ||
               hasValue(sections['salophinPrice']) ||
               hasValue(sections['salophin']),
-
           'Box Cover':
               hasValue(sections['boxCoverDetail']) ||
               hasValue(sections['boxCoverQty']) ||
               hasValue(sections['boxCoverPrice']) ||
               hasValue(sections['boxCover']),
-
           'Inner':
               hasValue(sections['innerDetail']) ||
               hasValue(sections['innerQty']) ||
               hasValue(sections['innerPrice']) ||
               hasValue(sections['inner']),
-
           'Bottom':
               hasValue(sections['bottomDetail']) ||
               hasValue(sections['bottomQty']) ||
               hasValue(sections['bottomPrice']) ||
               hasValue(sections['bottom']),
-
           'Die':
               hasValue(sections['dieDetail']) ||
               hasValue(sections['dieQty']) ||
               hasValue(sections['diePrice']) ||
               hasValue(sections['die']),
-
           'Others':
               hasValue(sections['otherDetail']) ||
               hasValue(sections['otherQty']) ||
               hasValue(sections['otherPrice']) ||
               extraSections.isNotEmpty,
         },
-
         'trayDetailController': TextEditingController(
           text: sections['trayDetail'] ?? sections['tray'] ?? '',
         ),
@@ -390,7 +400,6 @@ Future<void> downloadImage(String url) async {
         'otherPriceController': TextEditingController(
           text: sections['otherPrice'] ?? '',
         ),
-
         'customExtraSections': extraSections
             .map<Map<String, TextEditingController>>((sec) {
               return {
@@ -427,6 +436,9 @@ Future<void> downloadImage(String url) async {
   Map<String, dynamic> _createEmptyProduct() {
     return {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'category': 'MDF',
+      'gstPercent': 18.0,
+      'hsnCode': '44111200',
       'nameController': TextEditingController(),
       'quantityController': TextEditingController(),
       'lengthController': TextEditingController(),
@@ -437,6 +449,7 @@ Future<void> downloadImage(String url) async {
       'productCategory': 'MDF',
       'images': <String>[],
       'newImages': <XFile>[],
+      'sections': <String, dynamic>{},
       'sectionSelected': {
         'Tray': false,
         'Salophin': false,
@@ -481,71 +494,62 @@ Future<void> downloadImage(String url) async {
   }
 
   void _addProduct() {
-    setState(() {
-      _products.add(_createEmptyProduct());
-    });
+    setState(() => _products.add(_createEmptyProduct()));
   }
 
   void _removeProduct(int index) {
     if (_products.length > 1) {
       setState(() {
-        final product = _products[index];
-        (_products[index]['nameController'] as TextEditingController).dispose();
-        (_products[index]['quantityController'] as TextEditingController)
-            .dispose();
-        (_products[index]['lengthController'] as TextEditingController)
-            .dispose();
-        (_products[index]['heightController'] as TextEditingController)
-            .dispose();
-        (_products[index]['widthController'] as TextEditingController)
-            .dispose();
-        (_products[index]['remarkController'] as TextEditingController)
-            .dispose();
-        (_products[index]['priceController'] as TextEditingController)
-            .dispose();
-        (product['trayDetailController'] as TextEditingController).dispose();
-        (product['trayQtyController'] as TextEditingController).dispose();
-        (product['trayPriceController'] as TextEditingController).dispose();
-        (product['salophinDetailController'] as TextEditingController)
-            .dispose();
-        (product['salophinQtyController'] as TextEditingController).dispose();
-        (product['salophinPriceController'] as TextEditingController).dispose();
-        (product['boxCoverDetailController'] as TextEditingController)
-            .dispose();
-        (product['boxCoverQtyController'] as TextEditingController).dispose();
-        (product['boxCoverPriceController'] as TextEditingController).dispose();
-        (product['innerDetailController'] as TextEditingController).dispose();
-        (product['innerQtyController'] as TextEditingController).dispose();
-        (product['innerPriceController'] as TextEditingController).dispose();
-        (product['bottomDetailController'] as TextEditingController).dispose();
-        (product['bottomQtyController'] as TextEditingController).dispose();
-        (product['bottomPriceController'] as TextEditingController).dispose();
-        (product['dieDetailController'] as TextEditingController).dispose();
-        (product['dieQtyController'] as TextEditingController).dispose();
-        (product['diePriceController'] as TextEditingController).dispose();
-        (product['otherDetailController'] as TextEditingController).dispose();
-        (product['otherQtyController'] as TextEditingController).dispose();
-        (product['otherPriceController'] as TextEditingController).dispose();
-        final extraSections =
-            product['customExtraSections']
-                as List<Map<String, TextEditingController>>?;
-        if (extraSections != null) {
-          for (final sec in extraSections) {
-            sec['title']?.dispose();
-            sec['detail']?.dispose();
-            sec['qty']?.dispose();
-            sec['price']?.dispose();
-          }
-        }
+        _disposeProductControllers(_products[index]);
         _products.removeAt(index);
       });
     }
   }
 
+  void _disposeProductControllers(Map<String, dynamic> product) {
+    (product['nameController'] as TextEditingController).dispose();
+    (product['quantityController'] as TextEditingController).dispose();
+    (product['lengthController'] as TextEditingController).dispose();
+    (product['heightController'] as TextEditingController).dispose();
+    (product['widthController'] as TextEditingController).dispose();
+    (product['remarkController'] as TextEditingController).dispose();
+    (product['priceController'] as TextEditingController).dispose();
+    (product['trayDetailController'] as TextEditingController).dispose();
+    (product['trayQtyController'] as TextEditingController).dispose();
+    (product['trayPriceController'] as TextEditingController).dispose();
+    (product['salophinDetailController'] as TextEditingController).dispose();
+    (product['salophinQtyController'] as TextEditingController).dispose();
+    (product['salophinPriceController'] as TextEditingController).dispose();
+    (product['boxCoverDetailController'] as TextEditingController).dispose();
+    (product['boxCoverQtyController'] as TextEditingController).dispose();
+    (product['boxCoverPriceController'] as TextEditingController).dispose();
+    (product['innerDetailController'] as TextEditingController).dispose();
+    (product['innerQtyController'] as TextEditingController).dispose();
+    (product['innerPriceController'] as TextEditingController).dispose();
+    (product['bottomDetailController'] as TextEditingController).dispose();
+    (product['bottomQtyController'] as TextEditingController).dispose();
+    (product['bottomPriceController'] as TextEditingController).dispose();
+    (product['dieDetailController'] as TextEditingController).dispose();
+    (product['dieQtyController'] as TextEditingController).dispose();
+    (product['diePriceController'] as TextEditingController).dispose();
+    (product['otherDetailController'] as TextEditingController).dispose();
+    (product['otherQtyController'] as TextEditingController).dispose();
+    (product['otherPriceController'] as TextEditingController).dispose();
+    final extraSections =
+        product['customExtraSections']
+            as List<Map<String, TextEditingController>>?;
+    if (extraSections != null) {
+      for (final sec in extraSections) {
+        sec['title']?.dispose();
+        sec['detail']?.dispose();
+        sec['qty']?.dispose();
+        sec['price']?.dispose();
+      }
+    }
+  }
+
   void _addPartialDispatch() {
-    setState(() {
-      _partialDispatches.add(_createEmptyDispatch());
-    });
+    setState(() => _partialDispatches.add(_createEmptyDispatch()));
   }
 
   void _removePartialDispatch(int index) {
@@ -604,10 +608,10 @@ Future<void> downloadImage(String url) async {
                 Navigator.pop(ctx);
                 final files = await _picker.pickMultiImage(imageQuality: 85);
                 if (files.isNotEmpty) {
-                  setState(() {
-                    (_products[productIndex]['newImages'] as List<XFile>)
-                        .addAll(files);
-                  });
+                  setState(
+                    () => (_products[productIndex]['newImages'] as List<XFile>)
+                        .addAll(files),
+                  );
                 }
               },
             ),
@@ -629,11 +633,10 @@ Future<void> downloadImage(String url) async {
                   imageQuality: 85,
                 );
                 if (file != null) {
-                  setState(() {
-                    (_products[productIndex]['newImages'] as List<XFile>).add(
-                      file,
-                    );
-                  });
+                  setState(
+                    () => (_products[productIndex]['newImages'] as List<XFile>)
+                        .add(file),
+                  );
                 }
               },
             ),
@@ -652,7 +655,6 @@ Future<void> downloadImage(String url) async {
       final jobDoc = FirebaseFirestore.instance
           .collection('jobCards')
           .doc(widget.orderId);
-
       await jobDoc.set({
         'linkedOrderId': widget.orderId,
         'jobCardNumber': widget.orderId,
@@ -671,19 +673,16 @@ Future<void> downloadImage(String url) async {
         'deliveryDate': Timestamp.fromDate(_deliveryDate),
         'orderDate': Timestamp.fromDate(_orderDate),
         'dispatchType': _dispatchType,
-
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-
-      print("✅ JobCard upserted safely");
+      debugPrint("✅ JobCard upserted safely");
     } catch (e) {
-      print("🔥 JobCard update error: $e");
+      debugPrint("🔥 JobCard update error: $e");
     }
   }
 
   Future<void> _saveOrder() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isSaving = true);
 
     try {
@@ -713,7 +712,6 @@ Future<void> downloadImage(String url) async {
           final ref = FirebaseStorage.instance.ref().child(
             'sales_orders/${widget.orderId}/product_$i/${DateTime.now().millisecondsSinceEpoch}.jpg',
           );
-
           if (kIsWeb) {
             final bytes = await image.readAsBytes();
             await ref.putData(
@@ -727,12 +725,12 @@ Future<void> downloadImage(String url) async {
         }
 
         final allImages = [...existingImages, ...newImageUrls];
-
         final sectionSelected = product['sectionSelected'] as Map<String, bool>;
         final oldSections = product['sections'] ?? {};
         final Map<String, dynamic> sections = Map<String, dynamic>.from(
           oldSections,
         );
+
         if (sectionSelected['Tray'] == true) {
           sections['trayDetail'] =
               (product['trayDetailController'] as TextEditingController).text
@@ -747,7 +745,6 @@ Future<void> downloadImage(String url) async {
               (product['trayPriceController'] as TextEditingController).text
                   .trim();
         }
-
         if (sectionSelected['Salophin'] == true) {
           sections['salophinDetail'] =
               (product['salophinDetailController'] as TextEditingController)
@@ -763,7 +760,6 @@ Future<void> downloadImage(String url) async {
               (product['salophinPriceController'] as TextEditingController).text
                   .trim();
         }
-
         if (sectionSelected['Box Cover'] == true) {
           sections['boxCoverDetail'] =
               (product['boxCoverDetailController'] as TextEditingController)
@@ -779,7 +775,6 @@ Future<void> downloadImage(String url) async {
               (product['boxCoverPriceController'] as TextEditingController).text
                   .trim();
         }
-
         if (sectionSelected['Inner'] == true) {
           sections['innerDetail'] =
               (product['innerDetailController'] as TextEditingController).text
@@ -794,7 +789,6 @@ Future<void> downloadImage(String url) async {
               (product['innerPriceController'] as TextEditingController).text
                   .trim();
         }
-
         if (sectionSelected['Bottom'] == true) {
           sections['bottomDetail'] =
               (product['bottomDetailController'] as TextEditingController).text
@@ -809,7 +803,6 @@ Future<void> downloadImage(String url) async {
               (product['bottomPriceController'] as TextEditingController).text
                   .trim();
         }
-
         if (sectionSelected['Die'] == true) {
           sections['dieDetail'] =
               (product['dieDetailController'] as TextEditingController).text
@@ -824,7 +817,6 @@ Future<void> downloadImage(String url) async {
               (product['diePriceController'] as TextEditingController).text
                   .trim();
         }
-
         if (sectionSelected['Others'] == true) {
           sections['otherDetail'] =
               (product['otherDetailController'] as TextEditingController).text
@@ -841,9 +833,6 @@ Future<void> downloadImage(String url) async {
         }
 
         final List<Map<String, dynamic>> extraSectionsData = [];
-        final selectedCategory = (product['productCategory'] ?? '')
-            .toString()
-            .trim();
         for (final sec
             in product['customExtraSections']
                 as List<Map<String, TextEditingController>>) {
@@ -851,7 +840,6 @@ Future<void> downloadImage(String url) async {
           final detail = sec['detail']!.text.trim();
           final qtyText = sec['qty']!.text.trim();
           final price = sec['price']!.text.trim();
-
           if (title.isNotEmpty ||
               detail.isNotEmpty ||
               qtyText.isNotEmpty ||
@@ -865,17 +853,36 @@ Future<void> downloadImage(String url) async {
           }
         }
 
-        productsData.add({
-          'id': product['id'], // ⭐ ADD THIS LINE
+        final selectedCategory = (product['productCategory'] ?? '')
+            .toString()
+            .trim();
+        final double gstPct =
+            (product['gstPercent'] as double?) ??
+            _gstPctForCategory(selectedCategory);
+        final String hsnCode =
+            (product['hsnCode']?.toString().isNotEmpty == true)
+            ? product['hsnCode'].toString()
+            : _hsnForCategory(selectedCategory);
+        final qty = double.tryParse(quantityController.text.trim()) ?? 0;
+        final price = double.tryParse(priceController.text.trim()) ?? 0;
+        final subAmount = qty * price;
+        final gstAmt = subAmount * gstPct / 100;
 
+        productsData.add({
+          'id': product['id'],
           'productName': nameController.text.trim(),
-          'quantity': int.tryParse(quantityController.text.trim()) ?? 0,
+          'productCategory': selectedCategory,
+          'hsnCode': hsnCode,
+          'quantity': qty,
+          'price': price,
+          'subAmount': subAmount,
+          'gstPercent': gstPct,
+          'gstAmount': gstAmt,
+          'amount': subAmount + gstAmt,
           'length': lengthController.text.trim(),
           'height': heightController.text.trim(),
           'width': widthController.text.trim(),
-          'price': double.tryParse(priceController.text.trim()) ?? 0,
           'remarks': remarkController.text.trim(),
-          'productCategory': selectedCategory,
           'images': allImages,
           'sections': sections,
           'customExtraSections': extraSectionsData,
@@ -891,7 +898,6 @@ Future<void> downloadImage(String url) async {
         final dateStr = (dispatch['dateController'] as TextEditingController)
             .text
             .trim();
-
         if (name.isNotEmpty || qty.isNotEmpty || dateStr.isNotEmpty) {
           partialDispatchesData.add({
             'name': name,
@@ -901,10 +907,24 @@ Future<void> downloadImage(String url) async {
           });
         }
       }
+
+      // Backup original order
       await FirebaseFirestore.instance
           .collection('orders_backup')
           .doc(widget.orderId)
           .set(widget.orderData);
+
+      // Calculate totals
+      double subTotal = productsData.fold(
+        0.0,
+        (s, p) => s + (p['subAmount'] as double),
+      );
+      double totalGst = productsData.fold(
+        0.0,
+        (s, p) => s + (p['gstAmount'] as double),
+      );
+      double grandTotal = subTotal + totalGst;
+
       await FirebaseFirestore.instance
           .collection('orders')
           .doc(widget.orderId)
@@ -924,11 +944,15 @@ Future<void> downloadImage(String url) async {
             'unit': _selectedUnit,
             'deliveryDate': Timestamp.fromDate(_deliveryDate),
             'orderDate': Timestamp.fromDate(_orderDate),
+            'subTotal': subTotal,
+            'totalGstAmount': totalGst,
+            'grandTotal': grandTotal,
             'updatedAt': FieldValue.serverTimestamp(),
           });
 
       await _updateLinkedJobCard(productsData, partialDispatchesData);
       await _saveToUnit2IfRigid(productsData);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -979,11 +1003,9 @@ Future<void> downloadImage(String url) async {
             .toString()
             .trim()
             .toLowerCase();
-
         return cat == 'rigid box (unit 2 hussainpura)';
       }).toList();
 
-      // ❌ agar rigid nahi hai → delete
       if (rigidProducts.isEmpty) {
         await FirebaseFirestore.instance
             .collection('unit2JobCards')
@@ -992,7 +1014,6 @@ Future<void> downloadImage(String url) async {
         return;
       }
 
-      // ✅ same doc update (no duplicate)
       await FirebaseFirestore.instance
           .collection('unit2JobCards')
           .doc(widget.orderId)
@@ -1012,10 +1033,9 @@ Future<void> downloadImage(String url) async {
             'products': rigidProducts,
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
-
-      print("✅ Unit2 synced properly");
+      debugPrint("✅ Unit2 synced properly");
     } catch (e) {
-      print("🔥 unit2 save error: $e");
+      debugPrint("🔥 unit2 save error: $e");
     }
   }
 
@@ -1023,7 +1043,6 @@ Future<void> downloadImage(String url) async {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightBg,
-
       appBar: AppBar(
         elevation: 0,
         flexibleSpace: Container(
@@ -1060,22 +1079,16 @@ Future<void> downloadImage(String url) async {
           ],
         ),
       ),
-
-      //  _buildAppBar(),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // _buildHeaderCard(),
-            // const SizedBox(height: 24),
             _buildSection(
               title: 'Customer Details',
               icon: Icons.person_outline,
               gradient: LinearGradient(
                 colors: [Colors.blue.shade100, Colors.cyan.shade100],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
               children: [
                 _buildTextField(
@@ -1100,7 +1113,6 @@ Future<void> downloadImage(String url) async {
               ],
             ),
             const SizedBox(height: 20),
-
             _buildSection(
               title: 'Dispatch Type',
               icon: Icons.local_shipping,
@@ -1119,11 +1131,7 @@ Future<void> downloadImage(String url) async {
                   items: _dispatchOptions
                       .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                       .toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      _dispatchType = val;
-                    });
-                  },
+                  onChanged: (val) => setState(() => _dispatchType = val),
                 ),
               ],
             ),
@@ -1133,8 +1141,6 @@ Future<void> downloadImage(String url) async {
               icon: Icons.location_on,
               gradient: LinearGradient(
                 colors: [Colors.orange.shade100, Colors.amber.shade100],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
               children: [
                 DropdownButtonFormField<String>(
@@ -1154,7 +1160,6 @@ Future<void> downloadImage(String url) async {
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
             _buildProductsSection(),
             const SizedBox(height: 20),
@@ -1163,8 +1168,6 @@ Future<void> downloadImage(String url) async {
               icon: Icons.badge_outlined,
               gradient: LinearGradient(
                 colors: [Colors.purple.shade100, Colors.pink.shade100],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
               children: [
                 DropdownButtonFormField<String>(
@@ -1175,19 +1178,17 @@ Future<void> downloadImage(String url) async {
                     'Select Sales Person',
                     Icons.person_pin,
                   ),
-                  items: _salesPersons.map((person) {
-                    return DropdownMenuItem<String>(
-                      value: person,
-                      child: Text(person),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedSalesPerson = value;
-                      _customSalesPerson = null;
-                      _otherSalesPersonController.clear();
-                    });
-                  },
+                  items: _salesPersons
+                      .map(
+                        (p) =>
+                            DropdownMenuItem<String>(value: p, child: Text(p)),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() {
+                    _selectedSalesPerson = value;
+                    _customSalesPerson = null;
+                    _otherSalesPersonController.clear();
+                  }),
                   validator: (value) =>
                       value == null ? 'Please select a sales person' : null,
                 ),
@@ -1218,8 +1219,6 @@ Future<void> downloadImage(String url) async {
               icon: Icons.local_shipping_outlined,
               gradient: LinearGradient(
                 colors: [Colors.green.shade100, Colors.teal.shade100],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
               children: [
                 DropdownButtonFormField<String>(
@@ -1232,16 +1231,13 @@ Future<void> downloadImage(String url) async {
                     DropdownMenuItem(value: 'No', child: Text('No')),
                     DropdownMenuItem(value: 'Yes', child: Text('Yes')),
                   ],
-                  onChanged: (val) {
-                    setState(() {
-                      _showPartialDispatch = val == 'Yes';
-                      if (_showPartialDispatch && _partialDispatches.isEmpty) {
-                        _partialDispatches.add(_createEmptyDispatch());
-                      }
-                    });
-                  },
+                  onChanged: (val) => setState(() {
+                    _showPartialDispatch = val == 'Yes';
+                    if (_showPartialDispatch && _partialDispatches.isEmpty) {
+                      _partialDispatches.add(_createEmptyDispatch());
+                    }
+                  }),
                 ),
-
                 if (_showPartialDispatch) ...[
                   const SizedBox(height: 16),
                   ListView.builder(
@@ -1272,8 +1268,6 @@ Future<void> downloadImage(String url) async {
               icon: Icons.schedule,
               gradient: LinearGradient(
                 colors: [Colors.red.shade100, Colors.orange.shade100],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
               children: [
                 Row(
@@ -1289,9 +1283,8 @@ Future<void> downloadImage(String url) async {
                             firstDate: DateTime(2020),
                             lastDate: DateTime(2035),
                           );
-                          if (picked != null) {
+                          if (picked != null)
                             setState(() => _orderDate = picked);
-                          }
                         },
                       ),
                     ),
@@ -1307,9 +1300,8 @@ Future<void> downloadImage(String url) async {
                             firstDate: DateTime(2020),
                             lastDate: DateTime(2035),
                           );
-                          if (picked != null) {
+                          if (picked != null)
                             setState(() => _deliveryDate = picked);
-                          }
                         },
                       ),
                     ),
@@ -1323,8 +1315,6 @@ Future<void> downloadImage(String url) async {
               icon: Icons.note_outlined,
               gradient: LinearGradient(
                 colors: [Colors.indigo.shade100, Colors.blue.shade100],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
               children: [
                 _buildTextField(
@@ -1344,88 +1334,13 @@ Future<void> downloadImage(String url) async {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      elevation: 2,
-      title: const Text(
-        'Edit Job Card',
-        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 22),
-      ),
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      centerTitle: true,
-      flexibleSpace: Container(
-        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-      ),
-    );
-  }
-
-  Widget _buildHeaderCard() {
-    return ScaleTransition(
-      scale: Tween<double>(begin: 0.8, end: 1.0).animate(
-        CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF169a8d), Color(0xFF8E24AA)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF169a8d).withOpacity(0.4),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.edit, color: Colors.white, size: 32),
-            ),
-            const SizedBox(width: 16),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Edit Sales Order',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Update order details and product information',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildProductsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(Icons.inventory_2, color: AppColors.primary),
+            const Icon(Icons.inventory_2, color: AppColors.primary),
             const SizedBox(width: 12),
             const Text(
               'Products',
@@ -1478,6 +1393,7 @@ Future<void> downloadImage(String url) async {
     );
   }
 
+  // ── UPDATED: Product card with Laddu Paper + HSN/GST support ──────────────
   Widget _buildProductCard(int index) {
     final product = _products[index];
     final nameController = product['nameController'] as TextEditingController;
@@ -1495,6 +1411,13 @@ Future<void> downloadImage(String url) async {
     final newImages = product['newImages'] as List<XFile>;
     final sectionSelected = product['sectionSelected'] as Map<String, bool>;
     final productCategory = product['productCategory'] ?? 'Others';
+    final double gstPct =
+        (product['gstPercent'] as double?) ??
+        _gstPctForCategory(productCategory);
+    final bool isLadduPaper = productCategory == 'Laddu Paper';
+    final bool isMdf = productCategory == 'MDF';
+    final bool isOthers = productCategory == 'Others';
+    final bool isHighGst = isMdf || isLadduPaper;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1502,8 +1425,6 @@ Future<void> downloadImage(String url) async {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.blue.shade50, Colors.cyan.shade50],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 2),
@@ -1511,6 +1432,7 @@ Future<void> downloadImage(String url) async {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Product header row ──────────────────────────────────────────
           Row(
             children: [
               Container(
@@ -1531,12 +1453,6 @@ Future<void> downloadImage(String url) async {
                   ),
                 ),
               ),
-              // const Spacer(),
-              // IconButton(
-              //   icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
-              //   onPressed: () {},
-              //   tooltip: 'Generate PDF',
-              // ),
               if (_products.length > 1)
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
@@ -1545,6 +1461,8 @@ Future<void> downloadImage(String url) async {
             ],
           ),
           const SizedBox(height: 12),
+
+          // ── Category Dropdown ───────────────────────────────────────────
           DropdownButtonFormField<String>(
             value: _productCategories.contains(productCategory)
                 ? productCategory
@@ -1556,10 +1474,228 @@ Future<void> downloadImage(String url) async {
             items: _productCategories
                 .map((c) => DropdownMenuItem<String>(value: c, child: Text(c)))
                 .toList(),
-            onChanged: (v) => setState(() => product['productCategory'] = v!),
+            onChanged: (v) => setState(() {
+              product['productCategory'] = v;
+              product['category'] = v;
+              // Auto-set GST and HSN on category change
+              product['gstPercent'] = _gstPctForCategory(v);
+              if (v == 'Laddu Paper') {
+                product['hsnCode'] = '48062000';
+              } else if (v == 'MDF') {
+                product['hsnCode'] = '44111200';
+              } else if (v != 'Others') {
+                product['hsnCode'] = '48192090';
+              }
+              // For Others, keep existing hsnCode or empty
+            }),
             validator: (v) => v == null ? 'Select category' : null,
           ),
-          const SizedBox(height: 12),
+
+          // ── Laddu Paper: fixed info banner ──────────────────────────────
+          if (isLadduPaper) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    color: Colors.orange.shade700,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'HSN Code: 48062000',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange.shade700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      Text(
+                        'GST: 18% — Fixed for Laddu Paper',
+                        style: TextStyle(
+                          color: Colors.orange.shade600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // ── MDF: fixed info banner ──────────────────────────────────────
+          if (isMdf) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    color: Colors.blue.shade700,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'HSN Code: 44111200',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      Text(
+                        'GST: 18% — Fixed for MDF',
+                        style: TextStyle(
+                          color: Colors.blue.shade600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // ── Others: custom HSN + GST selector ──────────────────────────
+          if (isOthers) ...[
+            const SizedBox(height: 10),
+            TextFormField(
+              initialValue: product['hsnCode'] ?? '',
+              decoration: const InputDecoration(
+                labelText: 'HSN Code (Optional)',
+                hintText: 'e.g. 48062000',
+                prefixIcon: Icon(Icons.tag_rounded),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (val) =>
+                  setState(() => product['hsnCode'] = val.trim()),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Select GST Rate',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [5.0, 18.0].map((pct) {
+                      final isActive = gstPct == pct;
+                      final btnColor = pct == 18.0
+                          ? Colors.orange.shade600
+                          : Colors.blue.shade600;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () =>
+                              setState(() => product['gstPercent'] = pct),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              gradient: isActive
+                                  ? LinearGradient(
+                                      colors: [
+                                        btnColor.withOpacity(0.85),
+                                        btnColor,
+                                      ],
+                                    )
+                                  : null,
+                              color: isActive ? null : Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isActive ? Colors.transparent : btnColor,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${pct.toInt()}%',
+                                style: TextStyle(
+                                  color: isActive ? Colors.white : btnColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // ── For other known categories (not MDF/Laddu/Others): show HSN ─
+          if (!isLadduPaper && !isMdf && !isOthers) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.tag_rounded,
+                    size: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'HSN: ${_hsnForCategory(productCategory)}  |  GST: ${_gstPctForCategory(productCategory).toInt()}%',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 8),
+
+          // ── Autocomplete Product Name ────────────────────────────────────
           Autocomplete<Map<String, dynamic>>(
             initialValue: TextEditingValue(text: nameController.text),
             optionsBuilder: (TextEditingValue value) async {
@@ -1570,7 +1706,6 @@ Future<void> downloadImage(String url) async {
                   .limit(500)
                   .get();
               final List<Map<String, dynamic>> results = [];
-
               for (final doc in snap.docs) {
                 final products = doc['products'];
                 if (products is List) {
@@ -1578,35 +1713,39 @@ Future<void> downloadImage(String url) async {
                     final name = (p['productName'] ?? '')
                         .toString()
                         .toLowerCase();
-
                     if (name.contains(value.text.toLowerCase())) {
                       results.add(Map<String, dynamic>.from(p));
                     }
                   }
                 }
               }
-
               return results;
             },
             displayStringForOption: (o) => o['productName'] ?? '',
-            fieldViewBuilder: (context, controller, focusNode, onSubmit) {
-              controller.text = nameController.text;
-              controller.addListener(() {
-                nameController.text = controller.text;
-              });
-              return TextFormField(
-                controller: controller,
-                focusNode: focusNode,
-                decoration: _buildInputDecoration(
-                  'Product Name',
-                  Icons.shopping_bag,
-                ),
-                validator: _req,
-                onChanged: (val) {
-                  nameController.text = val;
-                },
-              );
-            },
+           fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+
+  if (controller.text != nameController.text) {
+    controller.value = TextEditingValue(
+      text: nameController.text,
+      selection: TextSelection.collapsed(
+        offset: nameController.text.length,
+      ),
+    );
+  }
+
+  return TextFormField(
+    controller: controller,
+    focusNode: focusNode,
+    decoration: _buildInputDecoration(
+      'Product Name',
+      Icons.shopping_bag,
+    ),
+    validator: _req,
+    onChanged: (val) {
+      nameController.text = val;
+    },
+  );
+},
             onSelected: (data) {
               setState(() {
                 nameController.text = data['productName'] ?? '';
@@ -1618,12 +1757,24 @@ Future<void> downloadImage(String url) async {
                   remarkController.text = split['remark'] ?? '';
                 }
                 product['images'] = List<String>.from(data['images'] ?? []);
+                // Load category & GST/HSN from autocomplete data
+                final autoCategory =
+                    data['productCategory'] ?? data['category'] ?? '';
+                if (autoCategory.isNotEmpty &&
+                    _productCategories.contains(autoCategory)) {
+                  product['productCategory'] = autoCategory;
+                  product['category'] = autoCategory;
+                  product['gstPercent'] = _gstPctForCategory(autoCategory);
+                  product['hsnCode'] =
+                      (data['hsnCode']?.toString().isNotEmpty == true)
+                      ? data['hsnCode'].toString()
+                      : _hsnForCategory(autoCategory);
+                }
+                // Load sections
                 final sections =
                     data['sections'] as Map<String, dynamic>? ?? {};
                 sectionSelected['Tray'] =
                     hasValue(sections['trayDetail']) ||
-                    hasValue(sections['trayQty']) ||
-                    hasValue(sections['trayPrice']) ||
                     hasValue(sections['tray']);
                 (product['trayDetailController'] as TextEditingController)
                         .text =
@@ -1634,8 +1785,6 @@ Future<void> downloadImage(String url) async {
                     sections['trayPrice'] ?? '';
                 sectionSelected['Salophin'] =
                     hasValue(sections['salophinDetail']) ||
-                    hasValue(sections['salophinQty']) ||
-                    hasValue(sections['salophinPrice']) ||
                     hasValue(sections['salophin']);
                 (product['salophinDetailController'] as TextEditingController)
                         .text =
@@ -1648,8 +1797,6 @@ Future<void> downloadImage(String url) async {
                     sections['salophinPrice'] ?? '';
                 sectionSelected['Box Cover'] =
                     hasValue(sections['boxCoverDetail']) ||
-                    hasValue(sections['boxCoverQty']) ||
-                    hasValue(sections['boxCoverPrice']) ||
                     hasValue(sections['boxCover']);
                 (product['boxCoverDetailController'] as TextEditingController)
                         .text =
@@ -1662,8 +1809,6 @@ Future<void> downloadImage(String url) async {
                     sections['boxCoverPrice'] ?? '';
                 sectionSelected['Inner'] =
                     hasValue(sections['innerDetail']) ||
-                    hasValue(sections['innerQty']) ||
-                    hasValue(sections['innerPrice']) ||
                     hasValue(sections['inner']);
                 (product['innerDetailController'] as TextEditingController)
                         .text =
@@ -1675,8 +1820,6 @@ Future<void> downloadImage(String url) async {
                     sections['innerPrice'] ?? '';
                 sectionSelected['Bottom'] =
                     hasValue(sections['bottomDetail']) ||
-                    hasValue(sections['bottomQty']) ||
-                    hasValue(sections['bottomPrice']) ||
                     hasValue(sections['bottom']);
                 (product['bottomDetailController'] as TextEditingController)
                         .text =
@@ -1688,8 +1831,6 @@ Future<void> downloadImage(String url) async {
                     sections['bottomPrice'] ?? '';
                 sectionSelected['Die'] =
                     hasValue(sections['dieDetail']) ||
-                    hasValue(sections['dieQty']) ||
-                    hasValue(sections['diePrice']) ||
                     hasValue(sections['die']);
                 (product['dieDetailController'] as TextEditingController).text =
                     sections['dieDetail'] ?? sections['die'] ?? '';
@@ -1699,9 +1840,6 @@ Future<void> downloadImage(String url) async {
                     sections['diePrice'] ?? '';
                 sectionSelected['Others'] =
                     hasValue(sections['otherDetail']) ||
-                    hasValue(sections['otherQty']) ||
-                    hasValue(sections['otherPrice']) ||
-                    hasValue(sections['other']) ||
                     (data['customExtraSections'] as List?)?.isNotEmpty == true;
                 (product['otherDetailController'] as TextEditingController)
                         .text =
@@ -1735,6 +1873,7 @@ Future<void> downloadImage(String url) async {
               });
             },
           ),
+
           const SizedBox(height: 12),
           Row(
             children: [
@@ -1774,18 +1913,57 @@ Future<void> downloadImage(String url) async {
           _buildExtraSection(product),
           const SizedBox(height: 12),
           _buildImagesSection(index, existingImages, newImages),
+
+          // ── GST Summary chip ────────────────────────────────────────────
+          const SizedBox(height: 10),
+          Builder(
+            builder: (context) {
+              final qty = double.tryParse(quantityController.text) ?? 0;
+              final price = double.tryParse(priceController.text) ?? 0;
+              final sub = qty * price;
+              final gst = sub * gstPct / 100;
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isHighGst
+                        ? [Colors.orange.shade400, Colors.orange.shade600]
+                        : [Colors.green.shade400, Colors.green.shade600],
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Sub: Rs${sub.toStringAsFixed(0)} + GST ${gstPct.toInt()}%: Rs${gst.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                      ),
+                    ),
+                    Text(
+                      'Total: Rs${(sub + gst).toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
   Widget _buildSizeSection(Map<String, dynamic> product) {
-    final lengthController =
-        product['lengthController'] as TextEditingController;
-    final heightController =
-        product['heightController'] as TextEditingController;
-    final widthController = product['widthController'] as TextEditingController;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1802,7 +1980,8 @@ Future<void> downloadImage(String url) async {
           children: [
             Expanded(
               child: _buildTextField(
-                controller: lengthController,
+                controller:
+                    product['lengthController'] as TextEditingController,
                 label: 'Length',
                 icon: Icons.straighten,
               ),
@@ -1810,7 +1989,8 @@ Future<void> downloadImage(String url) async {
             const SizedBox(width: 8),
             Expanded(
               child: _buildTextField(
-                controller: heightController,
+                controller:
+                    product['heightController'] as TextEditingController,
                 label: 'Height',
                 icon: Icons.height,
               ),
@@ -1818,7 +1998,7 @@ Future<void> downloadImage(String url) async {
             const SizedBox(width: 8),
             Expanded(
               child: _buildTextField(
-                controller: widthController,
+                controller: product['widthController'] as TextEditingController,
                 label: 'Width',
                 icon: Icons.width_normal,
               ),
@@ -1858,11 +2038,7 @@ Future<void> downloadImage(String url) async {
                 ),
               ),
               selected: sectionSelected[key]!,
-              onSelected: (val) {
-                setState(() {
-                  sectionSelected[key] = val;
-                });
-              },
+              onSelected: (val) => setState(() => sectionSelected[key] = val),
               selectedColor: AppColors.primary.withOpacity(0.3),
               backgroundColor: Colors.grey.shade200,
               side: BorderSide(
@@ -1989,16 +2165,14 @@ Future<void> downloadImage(String url) async {
         OutlinedButton.icon(
           icon: const Icon(Icons.add),
           label: const Text('Add Extra Section'),
-          onPressed: () {
-            setState(() {
-              product['customExtraSections'].add({
-                'title': TextEditingController(),
-                'detail': TextEditingController(),
-                'qty': TextEditingController(),
-                'price': TextEditingController(),
-              });
+          onPressed: () => setState(() {
+            product['customExtraSections'].add({
+              'title': TextEditingController(),
+              'detail': TextEditingController(),
+              'qty': TextEditingController(),
+              'price': TextEditingController(),
             });
-          },
+          }),
         ),
         ...((product['customExtraSections']
                 as List<Map<String, TextEditingController>>)
@@ -2013,8 +2187,6 @@ Future<void> downloadImage(String url) async {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [Colors.amber.shade50, Colors.orange.shade50],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.accent.withOpacity(0.3)),
@@ -2035,7 +2207,6 @@ Future<void> downloadImage(String url) async {
                             controller: sec['detail']!,
                             label: '${sec['title']!.text} Details',
                             icon: Icons.description,
-                            maxLines: 1,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -2067,15 +2238,13 @@ Future<void> downloadImage(String url) async {
                       alignment: Alignment.centerRight,
                       child: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () {
-                          setState(() {
-                            sec['title']!.dispose();
-                            sec['detail']!.dispose();
-                            sec['qty']!.dispose();
-                            sec['price']!.dispose();
-                            product['customExtraSections'].removeAt(i);
-                          });
-                        },
+                        onPressed: () => setState(() {
+                          sec['title']!.dispose();
+                          sec['detail']!.dispose();
+                          sec['qty']!.dispose();
+                          sec['price']!.dispose();
+                          product['customExtraSections'].removeAt(i);
+                        }),
                       ),
                     ),
                   ],
@@ -2103,25 +2272,113 @@ Future<void> downloadImage(String url) async {
           ),
         ),
         const SizedBox(height: 12),
-        _buildProductImagesGrid(productIndex, existingImages, newImages),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            ...existingImages.map(
+              (url) => Stack(
+                children: [
+                  GestureDetector(
+                    onTap: () => _openFullScreenImage(url),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(
+                        width: 140,
+                        height: 140,
+                        child: Image.network(url, fit: BoxFit.cover),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: GestureDetector(
+                      onTap: () => setState(() => existingImages.remove(url)),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ...newImages.map(
+              (x) => Stack(
+                children: [
+                  GestureDetector(
+                    onTap: () => _openFullScreenImage(x.path),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(
+                        width: 100,
+                        height: 100,
+                        child: kIsWeb
+                            ? Image.network(x.path, fit: BoxFit.cover)
+                            : Image.file(File(x.path), fit: BoxFit.cover),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: GestureDetector(
+                      onTap: () => setState(() => newImages.remove(x)),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            GestureDetector(
+              onTap: () => _chooseImageForProduct(productIndex),
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary, width: 2),
+                ),
+                child: const Icon(
+                  Icons.add_a_photo,
+                  size: 40,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
 
   Widget _buildDispatchItem(int index) {
     final dispatch = _partialDispatches[index];
-    final nameController = dispatch['nameController'] as TextEditingController;
-    final qtyController = dispatch['qtyController'] as TextEditingController;
-    final dateController = dispatch['dateController'] as TextEditingController;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.orange.shade50, Colors.amber.shade50],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.accent.withOpacity(0.3), width: 2),
@@ -2159,13 +2416,13 @@ Future<void> downloadImage(String url) async {
           ),
           const SizedBox(height: 12),
           _buildTextField(
-            controller: nameController,
+            controller: dispatch['nameController'] as TextEditingController,
             label: 'Dispatch Name',
             icon: Icons.person_outline,
           ),
           const SizedBox(height: 12),
           _buildTextField(
-            controller: qtyController,
+            controller: dispatch['qtyController'] as TextEditingController,
             label: 'Dispatch Quantity',
             icon: Icons.confirmation_number_outlined,
             keyboardType: TextInputType.number,
@@ -2173,7 +2430,7 @@ Future<void> downloadImage(String url) async {
           ),
           const SizedBox(height: 12),
           TextFormField(
-            controller: dateController,
+            controller: dispatch['dateController'] as TextEditingController,
             readOnly: true,
             decoration: _buildInputDecoration(
               'Dispatch Date',
@@ -2187,7 +2444,7 @@ Future<void> downloadImage(String url) async {
                 lastDate: DateTime(2035),
               );
               if (picked != null) {
-                dateController.text =
+                (dispatch['dateController'] as TextEditingController).text =
                     '${picked.day}/${picked.month}/${picked.year}';
                 dispatch['selectedDate'] = picked;
               }
@@ -2210,8 +2467,6 @@ Future<void> downloadImage(String url) async {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [Colors.red.shade50, Colors.orange.shade50],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
@@ -2233,7 +2488,11 @@ Future<void> downloadImage(String url) async {
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.calendar_today, color: AppColors.primary, size: 20),
+                const Icon(
+                  Icons.calendar_today,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   '${date.day}/${date.month}/${date.year}',
@@ -2327,116 +2586,6 @@ Future<void> downloadImage(String url) async {
     );
   }
 
-  Widget _buildProductImagesGrid(
-    int productIndex,
-    List<String> existingImages,
-    List<XFile> newImages,
-  ) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        ...existingImages.map(
-          (url) => Stack(
-            children: [
-              GestureDetector(
-                onTap: () => _openFullScreenImage(url),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: 140,
-                    height: 140,
-                    child: Image.network(url, fit: BoxFit.cover),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 4,
-                top: 4,
-                child: GestureDetector(
-                  onTap: () => setState(() => existingImages.remove(url)),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(50),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.red.withOpacity(0.3),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      size: 18,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        ...newImages.map(
-          (x) => Stack(
-            children: [
-              GestureDetector(
-        onTap: () => _openFullScreenImage(x.path), // ✅ FIXED
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: 100,
-                    height: 100,
-                    child: kIsWeb
-                        ? Image.network(x.path, fit: BoxFit.cover)
-                        : Image.file(File(x.path), fit: BoxFit.cover),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 4,
-                top: 4,
-                child: GestureDetector(
-                  onTap: () => setState(() => newImages.remove(x)),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(50),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.red.withOpacity(0.3),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      size: 18,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        GestureDetector(
-          onTap: () => _chooseImageForProduct(productIndex),
-          child: Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary, width: 2),
-            ),
-            child: const Icon(Icons.add_a_photo, size: 40, color: Colors.white),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildSaveButton() {
     return Container(
       decoration: BoxDecoration(
@@ -2488,45 +2637,7 @@ Future<void> downloadImage(String url) async {
     _notesController.dispose();
     _otherSalesPersonController.dispose();
     for (var product in _products) {
-      (product['nameController'] as TextEditingController).dispose();
-      (product['quantityController'] as TextEditingController).dispose();
-      (product['lengthController'] as TextEditingController).dispose();
-      (product['heightController'] as TextEditingController).dispose();
-      (product['widthController'] as TextEditingController).dispose();
-      (product['priceController'] as TextEditingController).dispose();
-      (product['remarkController'] as TextEditingController).dispose();
-      (product['trayDetailController'] as TextEditingController).dispose();
-      (product['trayQtyController'] as TextEditingController).dispose();
-      (product['trayPriceController'] as TextEditingController).dispose();
-      (product['salophinDetailController'] as TextEditingController).dispose();
-      (product['salophinQtyController'] as TextEditingController).dispose();
-      (product['salophinPriceController'] as TextEditingController).dispose();
-      (product['boxCoverDetailController'] as TextEditingController).dispose();
-      (product['boxCoverQtyController'] as TextEditingController).dispose();
-      (product['boxCoverPriceController'] as TextEditingController).dispose();
-      (product['innerDetailController'] as TextEditingController).dispose();
-      (product['innerQtyController'] as TextEditingController).dispose();
-      (product['innerPriceController'] as TextEditingController).dispose();
-      (product['bottomDetailController'] as TextEditingController).dispose();
-      (product['bottomQtyController'] as TextEditingController).dispose();
-      (product['bottomPriceController'] as TextEditingController).dispose();
-      (product['dieDetailController'] as TextEditingController).dispose();
-      (product['dieQtyController'] as TextEditingController).dispose();
-      (product['diePriceController'] as TextEditingController).dispose();
-      (product['otherDetailController'] as TextEditingController).dispose();
-      (product['otherQtyController'] as TextEditingController).dispose();
-      (product['otherPriceController'] as TextEditingController).dispose();
-      final extraSections =
-          product['customExtraSections']
-              as List<Map<String, TextEditingController>>?;
-      if (extraSections != null) {
-        for (final sec in extraSections) {
-          sec['title']?.dispose();
-          sec['detail']?.dispose();
-          sec['qty']?.dispose();
-          sec['price']?.dispose();
-        }
-      }
+      _disposeProductControllers(product);
     }
     for (var dispatch in _partialDispatches) {
       (dispatch['nameController'] as TextEditingController).dispose();

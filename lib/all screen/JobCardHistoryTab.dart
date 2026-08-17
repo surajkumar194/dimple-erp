@@ -8,6 +8,18 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'dart:ui' as ui;
 
+String _hsnForCategory(String? category) {
+  if (category == 'MDF') return '44111200';
+  if (category == 'Laddu Paper') return '48062000';
+  return '48192090';
+}
+
+double _gstPctForCategory(String? category) {
+  if (category == 'MDF') return 18.0;
+  if (category == 'Laddu Paper') return 18.0;
+  return 5.0;
+}
+
 class JobCardHistoryTab extends StatefulWidget {
   const JobCardHistoryTab({super.key});
   @override
@@ -21,6 +33,7 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
   String _selectedDateFilter = 'All';
   String _selectedUnit = 'All';
   late AnimationController _animationController;
+
   @override
   void initState() {
     super.initState();
@@ -59,48 +72,31 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
     Map<String, dynamic> job,
   ) {
     final List products = job['products'] ?? [];
-    bool hasTray = false;
-    bool hasSalophin = false;
-    bool hasBoxCover = false;
-    bool hasInner = false;
-    bool hasBottom = false;
-    bool hasDie = false;
-    bool hasOther = false;
-    bool hasExtra = false;
+
+    // detect which sections exist
+    bool hasTray = false, hasSalophin = false, hasBoxCover = false;
+    bool hasInner = false, hasBottom = false, hasDie = false;
+    bool hasOther = false, hasExtra = false;
+
     for (var product in products) {
       final sections = product['sections'] as Map<String, dynamic>? ?? {};
-      if (sections['trayDetail'] != null &&
-          sections['trayDetail'].toString().isNotEmpty) {
-        hasTray = true;
-      }
-      if (sections['salophinDetail'] != null &&
-          sections['salophinDetail'].toString().isNotEmpty) {
+      if ((sections['trayDetail'] ?? '').toString().isNotEmpty) hasTray = true;
+      if ((sections['salophinDetail'] ?? '').toString().isNotEmpty)
         hasSalophin = true;
-      }
-      if (sections['boxCoverDetail'] != null &&
-          sections['boxCoverDetail'].toString().isNotEmpty) {
+      if ((sections['boxCoverDetail'] ?? '').toString().isNotEmpty)
         hasBoxCover = true;
-      }
-      if (sections['innerDetail'] != null &&
-          sections['innerDetail'].toString().isNotEmpty) {
+      if ((sections['innerDetail'] ?? '').toString().isNotEmpty)
         hasInner = true;
-      }
-      if (sections['bottomDetail'] != null &&
-          sections['bottomDetail'].toString().isNotEmpty) {
+      if ((sections['bottomDetail'] ?? '').toString().isNotEmpty)
         hasBottom = true;
-      }
-      if (sections['dieDetail'] != null &&
-          sections['dieDetail'].toString().isNotEmpty) {
-        hasDie = true;
-      }
-      if (sections['otherDetail'] != null &&
-          sections['otherDetail'].toString().isNotEmpty) {
+      if ((sections['dieDetail'] ?? '').toString().isNotEmpty) hasDie = true;
+      if ((sections['otherDetail'] ?? '').toString().isNotEmpty)
         hasOther = true;
-      }
-
-      final List extras = product['customExtraSections'] ?? [];
-      if (extras.isNotEmpty) hasExtra = true;
+      if ((product['customExtraSections'] as List? ?? []).isNotEmpty)
+        hasExtra = true;
     }
+
+    // section checkboxes
     bool includeTray = hasTray;
     bool includeSalophin = hasSalophin;
     bool includeBoxCover = hasBoxCover;
@@ -109,27 +105,32 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
     bool includeDie = hasDie;
     bool includeOther = hasOther;
     bool includeExtra = hasExtra;
+
+    // terms checkboxes
+    bool include50Advance = false;
+    bool includeBalance = false;
     bool includePaymentTerms = true;
-    bool include50PercentAdvance = false;
     bool includeFreightTerms = true;
     bool includePackingTerms = true;
     bool includeGSTTerms = true;
+
+
     showDialog(
       context: context,
       barrierDismissible: false,
       useRootNavigator: true,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setDialogState) {
             return Dialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
               elevation: 20,
               child: Container(
-                padding: const EdgeInsets.all(28),
+                padding: const EdgeInsets.all(24),
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  maxHeight: MediaQuery.of(context).size.height * 0.85,
                 ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
@@ -142,75 +143,56 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                       Colors.blue.shade50.withOpacity(0.3),
                     ],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.purple.withOpacity(0.2),
-                      blurRadius: 30,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
                 ),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Header with gradient icon
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(14),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
                                   Colors.purple.shade400,
                                   Colors.blue.shade400,
                                 ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
                               ),
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.purple.withOpacity(0.3),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
+                              borderRadius: BorderRadius.circular(14),
                             ),
                             child: const Icon(
                               Icons.cloud_download_rounded,
                               color: Colors.white,
-                              size: 32,
+                              size: 28,
                             ),
                           ),
-                          const SizedBox(width: 18),
+                          const SizedBox(width: 14),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 ShaderMask(
-                                  shaderCallback: (bounds) => LinearGradient(
+                                  shaderCallback: (b) => LinearGradient(
                                     colors: [
                                       Colors.purple.shade700,
                                       Colors.blue.shade700,
                                     ],
-                                  ).createShader(bounds),
+                                  ).createShader(b),
                                   child: const Text(
                                     'Download Options',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 22,
+                                      fontSize: 20,
                                       color: Colors.white,
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 4),
                                 Text(
                                   'Choose sections to include',
                                   style: TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     color: Colors.grey.shade600,
-                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
@@ -218,9 +200,8 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 24),
 
-                      // ✅ Product Sections (only show if they exist)
                       if (hasTray ||
                           hasSalophin ||
                           hasBoxCover ||
@@ -229,354 +210,242 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                           hasDie ||
                           hasOther ||
                           hasExtra) ...[
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.white,
-                                Colors.purple.shade50.withOpacity(0.2),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.purple.shade200,
-                              width: 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.purple.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  'Product Sections',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.purple.shade700,
-                                  ),
+                        _buildDialogSectionBox(
+                          title: 'Product Sections',
+                          color: Colors.purple,
+                          children: [
+                            if (hasTray)
+                              _buildCheckboxTile(
+                                'Tray',
+                                includeTray,
+                                (v) => setDialogState(
+                                  () => includeTray = v ?? true,
                                 ),
                               ),
-                              if (hasTray)
-                                _buildCheckboxTile(
-                                  'Tray',
-                                  includeTray,
-                                  (val) =>
-                                      setState(() => includeTray = val ?? true),
+                            if (hasSalophin)
+                              _buildCheckboxTile(
+                                'Salophin',
+                                includeSalophin,
+                                (v) => setDialogState(
+                                  () => includeSalophin = v ?? true,
                                 ),
-                              if (hasSalophin)
-                                _buildCheckboxTile(
-                                  'Salophin',
-                                  includeSalophin,
-                                  (val) => setState(
-                                    () => includeSalophin = val ?? true,
-                                  ),
+                              ),
+                            if (hasBoxCover)
+                              _buildCheckboxTile(
+                                'Box Cover',
+                                includeBoxCover,
+                                (v) => setDialogState(
+                                  () => includeBoxCover = v ?? true,
                                 ),
-                              if (hasBoxCover)
-                                _buildCheckboxTile(
-                                  'Box Cover',
-                                  includeBoxCover,
-                                  (val) => setState(
-                                    () => includeBoxCover = val ?? true,
-                                  ),
+                              ),
+                            if (hasInner)
+                              _buildCheckboxTile(
+                                'Inner',
+                                includeInner,
+                                (v) => setDialogState(
+                                  () => includeInner = v ?? true,
                                 ),
-                              if (hasInner)
-                                _buildCheckboxTile(
-                                  'Inner',
-                                  includeInner,
-                                  (val) => setState(
-                                    () => includeInner = val ?? true,
-                                  ),
+                              ),
+                            if (hasBottom)
+                              _buildCheckboxTile(
+                                'Bottom',
+                                includeBottom,
+                                (v) => setDialogState(
+                                  () => includeBottom = v ?? true,
                                 ),
-                              if (hasBottom)
-                                _buildCheckboxTile(
-                                  'Bottom',
-                                  includeBottom,
-                                  (val) => setState(
-                                    () => includeBottom = val ?? true,
-                                  ),
+                              ),
+                            if (hasDie)
+                              _buildCheckboxTile(
+                                'Die',
+                                includeDie,
+                                (v) => setDialogState(
+                                  () => includeDie = v ?? true,
                                 ),
-                              if (hasDie)
-                                _buildCheckboxTile(
-                                  'Die',
-                                  includeDie,
-                                  (val) =>
-                                      setState(() => includeDie = val ?? true),
+                              ),
+                            if (hasOther)
+                              _buildCheckboxTile(
+                                'Other',
+                                includeOther,
+                                (v) => setDialogState(
+                                  () => includeOther = v ?? true,
                                 ),
-                              if (hasOther)
-                                _buildCheckboxTile(
-                                  'Other',
-                                  includeOther,
-                                  (val) => setState(
-                                    () => includeOther = val ?? true,
-                                  ),
+                              ),
+                            if (hasExtra)
+                              _buildCheckboxTile(
+                                'Extra Sections',
+                                includeExtra,
+                                (v) => setDialogState(
+                                  () => includeExtra = v ?? true,
                                 ),
-                              if (hasExtra)
-                                _buildCheckboxTile(
-                                  'Extra Sections',
-                                  includeExtra,
-                                  (val) => setState(
-                                    () => includeExtra = val ?? true,
-                                  ),
-                                ),
-                            ],
-                          ),
+                              ),
+                          ],
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                       ],
 
-                      // ✅ Terms & Conditions - Always show with 4 options
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.white,
-                              Colors.blue.shade50.withOpacity(0.2),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.blue.shade200,
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.blue.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Text(
-                                'Terms & Conditions',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade700,
-                                ),
-                              ),
-                            ),
-                            _buildCheckboxTile(
-                              '50% advance for start working rest payment before delivery',
-                              include50PercentAdvance,
-                              (val) => setState(
-                                () => include50PercentAdvance = val ?? true,
-                              ),
-                            ),
-
-                            _buildCheckboxTile(
-                              'All payments within 15 days',
-                              includePaymentTerms,
-                              (val) => setState(
-                                () => includePaymentTerms = val ?? true,
-                              ),
-                            ),
-
-                            _buildCheckboxTile(
-                              'Freight charges extra',
-                              includeFreightTerms,
-                              (val) => setState(
-                                () => includeFreightTerms = val ?? true,
-                              ),
-                            ),
-                            _buildCheckboxTile(
-                              'Packing charges extra',
-                              includePackingTerms,
-                              (val) => setState(
-                                () => includePackingTerms = val ?? true,
-                              ),
-                            ),
-                            _buildCheckboxTile(
-                              'GST extra as per invoice',
-                              includeGSTTerms,
-                              (val) =>
-                                  setState(() => includeGSTTerms = val ?? true),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-
-                      // Download Buttons with gradients
-                      Row(
+                      _buildDialogSectionBox(
+                        title: 'Terms & Conditions',
+                        color: Colors.blue,
                         children: [
-                          // PDF Button
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.red.shade500,
-                                    Colors.red.shade700,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.red.withOpacity(0.4),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  _generateAndDownloadPDF(
-                                    context,
-                                    job,
-                                    sectionOptions: {
-                                      'tray': includeTray,
-                                      'salophin': includeSalophin,
-                                      'boxCover': includeBoxCover,
-                                      'inner': includeInner,
-                                      'bottom': includeBottom,
-                                      'die': includeDie,
-                                      'other': includeOther,
-                                      'extra': includeExtra,
-                                      'paymentTerms': includePaymentTerms,
-                                      'advance50':
-                                          include50PercentAdvance, // ✅ ADD
-
-                                      'freightTerms': includeFreightTerms,
-                                      'packingTerms': includePackingTerms,
-                                      'gstTerms': includeGSTTerms,
-                                    },
-                                  );
-                                },
-                                icon: const Icon(
-                                  Icons.picture_as_pdf_rounded,
-                                  size: 24,
-                                ),
-                                label: const Text(
-                                  'PDF',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  foregroundColor: Colors.white,
-                                  shadowColor: Colors.transparent,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 18,
-                                  ),
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                              ),
+                          _buildCheckboxTile(
+                            '50% advance payment is required to commence production',
+                            include50Advance,
+                            (v) => setDialogState(
+                              () => include50Advance = v ?? false,
                             ),
                           ),
-                          const SizedBox(width: 14),
-                          // JPG Button
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.blue.shade500,
-                                    Colors.blue.shade700,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.blue.withOpacity(0.4),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  _generateAndDownloadJPG(
-                                    context,
-                                    job,
-                                    sectionOptions: {
-                                      'tray': includeTray,
-                                      'salophin': includeSalophin,
-                                      'boxCover': includeBoxCover,
-                                      'inner': includeInner,
-                                      'bottom': includeBottom,
-                                      'die': includeDie,
-                                      'other': includeOther,
-                                      'extra': includeExtra,
-                                      'paymentTerms': includePaymentTerms,
-                                      'advance50': include50PercentAdvance,
-                                      'freightTerms': includeFreightTerms,
-                                      'packingTerms': includePackingTerms,
-                                      'gstTerms': includeGSTTerms,
-                                    },
-                                  );
-                                },
-                                icon: const Icon(Icons.image_rounded, size: 24),
-                                label: const Text(
-                                  'JPG',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  foregroundColor: Colors.white,
-                                  shadowColor: Colors.transparent,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 18,
-                                  ),
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                              ),
+                          _buildCheckboxTile('Balance payment must be paid before dispatch.', includeBalance,
+                           (v) => setDialogState(() => includeBalance = v ?? false)),
+                          _buildCheckboxTile(
+                            'Goods will be dispatched only after receipt of full payment.',
+                            includePaymentTerms,
+                            (v) => setDialogState(
+                              () => includePaymentTerms = v ?? true,
+                            ),
+                          ),
+                          _buildCheckboxTile(
+                            'Freight charges are extra.',
+                            includeFreightTerms,
+                            (v) => setDialogState(
+                              () => includeFreightTerms = v ?? true,
+                            ),
+                          ),
+                          _buildCheckboxTile(
+                            'Packing charges are extra.',
+                            includePackingTerms,
+                            (v) => setDialogState(
+                              () => includePackingTerms = v ?? true,
+                            ),
+                          ),
+                          _buildCheckboxTile(
+                            'GST will be charged as per applicable rates (MDF Products - 18%; Cardboard Boxes - 5%).',
+                            includeGSTTerms,
+                            (v) => setDialogState(
+                              () => includeGSTTerms = v ?? true,
                             ),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 24),
+
+                      // ── PDF Standard ────────────────────────────────────
+                      _buildDownloadButton(
+                        label: 'Download PDF (Standard)',
+                        subtitle: 'Images, GST breakdown — no HSN codes',
+                        icon: Icons.picture_as_pdf_rounded,
+                        colors: [Colors.red.shade500, Colors.red.shade700],
+                        onTap: () {
+                          Navigator.pop(context);
+                          _generateAndDownloadPDF(
+                            context,
+                            job,
+                            withHsn: false,
+                            sectionOptions: _buildSectionOptions(
+                              includeTray: includeTray,
+                              includeSalophin: includeSalophin,
+                              includeBoxCover: includeBoxCover,
+                              includeInner: includeInner,
+                              includeBottom: includeBottom,
+                              includeDie: includeDie,
+                              includeOther: includeOther,
+                              includeExtra: includeExtra,
+                              include50Advance: include50Advance,
+                              includeBalance: includeBalance,
+                              includePaymentTerms: includePaymentTerms,
+                              includeFreightTerms: includeFreightTerms,
+                              includePackingTerms: includePackingTerms,
+                              includeGSTTerms: includeGSTTerms,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 10),
+
+                      // ── PDF With HSN ────────────────────────────────────
+                      _buildDownloadButton(
+                        label: 'Download PDF (With HSN Codes)',
+                        subtitle:
+                            'MDF: 44111200 | Laddu Paper: 48062000 | Others: 48192090',
+                        icon: Icons.receipt_long_rounded,
+                        colors: [
+                          Colors.indigo.shade500,
+                          Colors.indigo.shade700,
+                        ],
+                        onTap: () {
+                          Navigator.pop(context);
+                          _generateAndDownloadPDF(
+                            context,
+                            job,
+                            withHsn: true,
+                            sectionOptions: _buildSectionOptions(
+                              includeTray: includeTray,
+                              includeSalophin: includeSalophin,
+                              includeBoxCover: includeBoxCover,
+                              includeInner: includeInner,
+                              includeBottom: includeBottom,
+                              includeDie: includeDie,
+                              includeOther: includeOther,
+                              includeExtra: includeExtra,
+                              include50Advance: include50Advance,
+                              includeBalance: includeBalance,
+                              includePaymentTerms: includePaymentTerms,
+                              includeFreightTerms: includeFreightTerms,
+                              includePackingTerms: includePackingTerms,
+                              includeGSTTerms: includeGSTTerms,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 10),
+
+                      // ── JPG ─────────────────────────────────────────────
+                      _buildDownloadButton(
+                        label: 'Download JPG',
+                        subtitle: 'Each page saved as separate image',
+                        icon: Icons.image_rounded,
+                        colors: [Colors.blue.shade500, Colors.blue.shade700],
+                        onTap: () {
+                          Navigator.pop(context);
+                          _generateAndDownloadJPG(
+                            context,
+                            job,
+                            sectionOptions: _buildSectionOptions(
+                              includeTray: includeTray,
+                              includeSalophin: includeSalophin,
+                              includeBoxCover: includeBoxCover,
+                              includeInner: includeInner,
+                              includeBottom: includeBottom,
+                              includeDie: includeDie,
+                              includeOther: includeOther,
+                              includeExtra: includeExtra,
+                              include50Advance: include50Advance,
+                              includeBalance: includeBalance,
+                              includePaymentTerms: includePaymentTerms,
+                              includeFreightTerms: includeFreightTerms,
+                              includePackingTerms: includePackingTerms,
+                              includeGSTTerms: includeGSTTerms,
+                            ),
+                          );
+                        },
+                      ),
                       const SizedBox(height: 14),
 
-                      // Cancel Button
+                      // ── Cancel ──────────────────────────────────────────
                       SizedBox(
                         width: double.infinity,
                         child: TextButton(
                           onPressed: () => Navigator.pop(context),
                           style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(
-                                color: Colors.grey.shade300,
-                                width: 1.5,
-                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              side: BorderSide(color: Colors.grey.shade300),
                             ),
                           ),
                           child: Text(
                             'Cancel',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: Colors.grey.shade700,
                             ),
@@ -594,7 +463,81 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
     );
   }
 
-  // ✅ Helper widget for checkbox tiles
+  Map<String, bool> _buildSectionOptions({
+    required bool includeTray,
+    required bool includeSalophin,
+    required bool includeBoxCover,
+    required bool includeInner,
+    required bool includeBottom,
+    required bool includeDie,
+    required bool includeOther,
+    required bool includeExtra,
+    required bool include50Advance,
+    required bool includeBalance,
+    required bool includePaymentTerms,
+    required bool includeFreightTerms,
+    required bool includePackingTerms,
+    required bool includeGSTTerms,
+  }) {
+    return {
+      'tray': includeTray,
+      'salophin': includeSalophin,
+      'boxCover': includeBoxCover,
+      'inner': includeInner,
+      'bottom': includeBottom,
+      'die': includeDie,
+      'other': includeOther,
+      'extra': includeExtra,
+      'advance50': include50Advance,
+      'balancePayment': includeBalance,
+      'paymentTerms': includePaymentTerms,
+      'freightTerms': includeFreightTerms,
+      'packingTerms': includePackingTerms,
+      'gstTerms': includeGSTTerms,
+    };
+  }
+
+  // ── Helper: dialog section box ─────────────────────────────────────────────
+  Widget _buildDialogSectionBox({
+    required String title,
+    required Color color,
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          ...children,
+          const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+
+  // ── Helper: checkbox tile ──────────────────────────────────────────────────
   Widget _buildCheckboxTile(
     String title,
     bool value,
@@ -605,15 +548,84 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
       onChanged: onChanged,
       title: Text(
         title,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
       ),
       activeColor: Colors.purple.shade600,
       checkColor: Colors.white,
       dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
     );
   }
 
+  // ── Helper: download button ────────────────────────────────────────────────
+  Widget _buildDownloadButton({
+    required String label,
+    required String subtitle,
+    required IconData icon,
+    required List<Color> colors,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(colors: colors),
+        boxShadow: [
+          BoxShadow(
+            color: colors[0].withOpacity(0.35),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, color: Colors.white, size: 26),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.white70,
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // HELPER METHODS
+  // ══════════════════════════════════════════════════════════════════════════
   String _onlyNumber(dynamic value) {
     return RegExp(r'\d+').stringMatch(value?.toString() ?? '') ?? '0';
   }
@@ -657,9 +669,13 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // PDF GENERATION — with withHsn flag
+  // ══════════════════════════════════════════════════════════════════════════
   Future<void> _generateAndDownloadPDF(
     BuildContext buttonContext,
     Map<String, dynamic> job, {
+    required bool withHsn,
     required Map<String, bool> sectionOptions,
   }) async {
     BuildContext? loadingContext;
@@ -667,8 +683,8 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
       context: buttonContext,
       barrierDismissible: false,
       useRootNavigator: true,
-      builder: (dialogContext) {
-        loadingContext = dialogContext;
+      builder: (ctx) {
+        loadingContext = ctx;
         return WillPopScope(
           onWillPop: () async => false,
           child: const Center(child: CircularProgressIndicator()),
@@ -678,14 +694,16 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
     try {
       final pdfData = await _generatePDFData(
         job,
+        withHsn: withHsn,
         sectionOptions: sectionOptions,
       );
       final jobNo = job['jobCardNumber'] ?? job['jobNo'] ?? 'N/A';
-
-    await Printing.layoutPdf(
-  onLayout: (PdfPageFormat format) async => pdfData,
-);
-
+      await Printing.layoutPdf(
+        onLayout: (_) async => pdfData,
+        name: withHsn
+            ? 'SalesOrder_${jobNo}_WithHSN.pdf'
+            : 'SalesOrder_$jobNo.pdf',
+      );
       if (buttonContext.mounted) {
         ScaffoldMessenger.of(buttonContext).showSnackBar(
           SnackBar(
@@ -711,170 +729,205 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // PDF DATA BUILDER — A to Z matching OrderHistoryScreen PDF
+  // ══════════════════════════════════════════════════════════════════════════
   Future<Uint8List> _generatePDFData(
     Map<String, dynamic> job, {
+    required bool withHsn,
     required Map<String, bool> sectionOptions,
   }) async {
     final pdf = pw.Document();
+    final ByteData qrData = await rootBundle.load(
+  'assets/qr.jpeg',
+);
+
+final qrImage = pw.MemoryImage(
+  qrData.buffer.asUint8List(),
+);
     final List products = job['products'] ?? [];
 
-    // Load company logo
-    Uint8List logoBytes;
+    // ── Logo ──────────────────────────────────────────────────────────────
+    pw.ImageProvider? logoImage;
     try {
       final data = await rootBundle.load('assets/logo.png');
-      logoBytes = data.buffer.asUint8List();
-    } catch (e) {
-      logoBytes = Uint8List(0);
+      logoImage = pw.MemoryImage(data.buffer.asUint8List());
+    } catch (_) {
+      try {
+        final data = await rootBundle.load('assets/dpl.png');
+        logoImage = pw.MemoryImage(data.buffer.asUint8List());
+      } catch (_) {}
     }
 
-    final logoImage = logoBytes.isNotEmpty ? pw.MemoryImage(logoBytes) : null;
-
-    final jobNo = job['jobCardNumber'] ?? job['jobNo'] ?? 'N/A';
-    DateTime date;
-
-    if (job['date'] is Timestamp) {
-      date = (job['date'] as Timestamp).toDate();
+    // ── Dates ─────────────────────────────────────────────────────────────
+    DateTime orderDate;
+    if (job['orderDate'] is Timestamp) {
+      orderDate = (job['orderDate'] as Timestamp).toDate();
+    } else if (job['date'] is Timestamp) {
+      orderDate = (job['date'] as Timestamp).toDate();
     } else if (job['createdAt'] is Timestamp) {
-      date = (job['createdAt'] as Timestamp).toDate();
+      orderDate = (job['createdAt'] as Timestamp).toDate();
     } else {
-      date = DateTime.now();
+      orderDate = DateTime.now();
     }
+    final String orderDateStr = DateFormat('dd-MM-yyyy').format(orderDate);
 
     final String customerName = job['customerName'] ?? job['customer'] ?? 'N/A';
-
     final String companyName =
         job['companyName'] ?? job['company'] ?? job['firmName'] ?? '';
 
-    // Load product images with timeout optimization
-    List<Map<String, dynamic>> productsWithImages = [];
+    // ── Load product images ───────────────────────────────────────────────
+    final List<Map<String, dynamic>> productsWithImages = [];
+
     for (var product in products) {
       final images = product['images'] as List<dynamic>? ?? [];
-      List<pw.MemoryImage> pdfImages = [];
-
+      final List<pw.MemoryImage> pdfImages = [];
       for (var imgUrl in images) {
         try {
           final response = await http
               .get(Uri.parse(imgUrl))
-              .timeout(const Duration(seconds: 3));
-
+              .timeout(const Duration(seconds: 5));
           if (response.statusCode == 200) {
             pdfImages.add(pw.MemoryImage(response.bodyBytes));
           }
-        } catch (_) {
-          // Skip failed images
-        }
+        } catch (_) {}
       }
 
-      final int qty = int.tryParse(product['quantity']?.toString() ?? '0') ?? 0;
-      final double rate =
+      final String category =
+          product['productCategory'] ?? product['category'] ?? '';
+      final double gstPct =
+          (product['gstPercent'] ?? _gstPctForCategory(category)).toDouble();
+      final double qty =
+          double.tryParse(product['quantity']?.toString() ?? '0') ?? 0;
+      final double price =
           double.tryParse(product['price']?.toString() ?? '0') ?? 0;
-      final double amount = qty * rate;
+      final double subAmount = qty * price;
+      final double gstAmt = (product['gstAmount'] != null)
+          ? (product['gstAmount'] as num).toDouble()
+          : subAmount * gstPct / 100;
 
-      productsWithImages.add({
-        'name': product['productName'] ?? product['name'] ?? 'N/A',
-        'quantity': product['quantity']?.toString() ?? '0',
-        'price': product['price']?.toString() ?? '0',
-        'amount': amount.toStringAsFixed(0),
-        'remarks': product['remarks'] ?? '',
-        'pdfImages': pdfImages,
-        'sections': product['sections'] ?? {},
-        'customExtraSections': product['customExtraSections'] ?? [],
-      });
-    }
-
-    double grandTotal = 0;
-    final double deliveryCharges =
-        double.tryParse(job['deliveryCharges']?.toString() ?? '0') ?? 0;
-
-    final double advanceAmount =
-        double.tryParse(job['advanceAmount']?.toString() ?? '0') ?? 0;
-
-    for (var product in productsWithImages) {
-      // ✅ MAIN PRODUCT AMOUNT (ALWAYS ADD)
-      grandTotal += double.tryParse(product['amount'] ?? '0') ?? 0;
-
+      // sections sub-totals (from section prices)
       final sections = product['sections'] as Map<String, dynamic>? ?? {};
-
-      // ✅ Add section amounts based on sectionOptions
-      if (sectionOptions['tray'] == true) {
-        grandTotal += _calcAmount(sections['trayQty'], sections['trayPrice']);
-      }
-      if (sectionOptions['salophin'] == true) {
-        grandTotal += _calcAmount(
+      double sectionSubAmt = 0;
+      if (sectionOptions['tray'] == true)
+        sectionSubAmt += _calcAmount(
+          sections['trayQty'],
+          sections['trayPrice'],
+        );
+      if (sectionOptions['salophin'] == true)
+        sectionSubAmt += _calcAmount(
           sections['salophinQty'],
           sections['salophinPrice'],
         );
-      }
-      if (sectionOptions['boxCover'] == true) {
-        grandTotal += _calcAmount(
+      if (sectionOptions['boxCover'] == true)
+        sectionSubAmt += _calcAmount(
           sections['boxCoverQty'],
           sections['boxCoverPrice'],
         );
-      }
-      if (sectionOptions['inner'] == true) {
-        grandTotal += _calcAmount(sections['innerQty'], sections['innerPrice']);
-      }
-      if (sectionOptions['bottom'] == true) {
-        grandTotal += _calcAmount(
+      if (sectionOptions['inner'] == true)
+        sectionSubAmt += _calcAmount(
+          sections['innerQty'],
+          sections['innerPrice'],
+        );
+      if (sectionOptions['bottom'] == true)
+        sectionSubAmt += _calcAmount(
           sections['bottomQty'],
           sections['bottomPrice'],
         );
-      }
-      if (sectionOptions['die'] == true) {
-        grandTotal += _calcAmount(sections['dieQty'], sections['diePrice']);
-      }
-      if (sectionOptions['other'] == true) {
-        grandTotal += _calcAmount(sections['otherQty'], sections['otherPrice']);
-      }
-
-      // ✅ Custom extras based on option
+      if (sectionOptions['die'] == true)
+        sectionSubAmt += _calcAmount(sections['dieQty'], sections['diePrice']);
+      if (sectionOptions['other'] == true)
+        sectionSubAmt += _calcAmount(
+          sections['otherQty'],
+          sections['otherPrice'],
+        );
       if (sectionOptions['extra'] == true) {
         final List extras = product['customExtraSections'] ?? [];
-        for (var extra in extras) {
-          grandTotal += _calcAmount(extra['qty'], extra['price']);
+        for (var ex in extras) {
+          sectionSubAmt += _calcAmount(ex['qty'], ex['price']);
         }
       }
+
+      // HSN code
+      final String hsnCode = (product['hsnCode']?.toString().isNotEmpty == true)
+          ? product['hsnCode'].toString()
+          : _hsnForCategory(category);
+
+      productsWithImages.add({
+        'productName': product['productName'] ?? product['name'] ?? 'N/A',
+        'productCategory': category,
+        'quantity': qty.toStringAsFixed(0),
+        'price': price.toStringAsFixed(2),
+        'subAmount': subAmount,
+        'gstPercent': gstPct,
+        'gstAmount': gstAmt,
+        'amount': subAmount + gstAmt,
+        'remarks': product['remarks'] ?? '',
+        'pdfImages': pdfImages,
+        'sections': sections,
+        'customExtraSections': product['customExtraSections'] ?? [],
+        'hsnCode': hsnCode,
+        'sectionSubAmt': sectionSubAmt,
+      });
     }
 
-    final double subTotal = grandTotal;
-    final double gstAmount = subTotal * 0.05;
-
-    final double totalWithDelivery = subTotal + gstAmount + deliveryCharges;
-
-    final double finalTotal = (totalWithDelivery - advanceAmount).clamp(
-      0,
-      double.infinity,
+    // ── Grand totals ──────────────────────────────────────────────────────
+    double subTotal = productsWithImages.fold(
+      0.0,
+      (s, p) => s + (p['subAmount'] as double),
     );
+    double totalGst = productsWithImages.fold(
+      0.0,
+      (s, p) => s + (p['gstAmount'] as double),
+    );
+    double deliveryCharges =
+        double.tryParse(job['deliveryCharges']?.toString() ?? '0') ?? 0;
+    double advanceAmount =
+        double.tryParse(job['advanceAmount']?.toString() ?? '0') ?? 0;
+    double grandTotal = subTotal + totalGst + deliveryCharges - advanceAmount;
 
+    // ── GST groups (for breakdown table like OrderHistoryScreen) ──────────
+    final Map<double, Map<String, double>> gstGroups = {};
+    for (final p in productsWithImages) {
+      final pct = p['gstPercent'] as double;
+      final sub = p['subAmount'] as double;
+      final gst = p['gstAmount'] as double;
+      gstGroups[pct] ??= {'taxable': 0.0, 'gstAmt': 0.0};
+      gstGroups[pct]!['taxable'] = gstGroups[pct]!['taxable']! + sub;
+      gstGroups[pct]!['gstAmt'] = gstGroups[pct]!['gstAmt']! + gst;
+    }
+    final sortedPcts = gstGroups.keys.toList()..sort();
+
+    // ── Terms lines ───────────────────────────────────────────────────────
+    List<String> termsLines = [];
+    if (sectionOptions['advance50'] == true)
+      termsLines.add(
+        '50% advance payment is required to commence production.',
+      );
+      if (sectionOptions['balancePayment'] == true && sectionOptions['paymentTerms'] == true) {
+        termsLines.add(
+          'Balance payment must be paid before dispatch.',
+        );
+      }
+    if (sectionOptions['paymentTerms'] == true)
+      termsLines.add(
+        'Goods will be dispatched only after receipt of full payment',
+      );
+    if (sectionOptions['freightTerms'] == true)
+      termsLines.add('Freight charges are extra.');
+    if (sectionOptions['packingTerms'] == true)
+      termsLines.add('Packing charges are extra.');
+    if (sectionOptions['gstTerms'] == true)
+      termsLines.add('GST will be charged as per applicable rates (MDF Products - 18%; Cardboard Boxes - 5%).');
+
+    // ═════════════════════════════════════════════════════════════════════
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) {
-          List<String> termsLines = []; // ⬅️ YE LINE YAHAN ADD KARO
-          if (sectionOptions['advance50'] == true) {
-            termsLines.add(
-              '50% advance for start working, rest payment before delivery.',
-            );
-            if (sectionOptions['paymentTerms'] == true) {
-              termsLines.add(
-                'All payments will be clear within 15 days of receiving goods.',
-              );
-            }
-          }
-
-          if (sectionOptions['freightTerms'] == true) {
-            termsLines.add('Freight charges will be extra.');
-          }
-          if (sectionOptions['packingTerms'] == true) {
-            termsLines.add('Packing charges will be extra.');
-          }
-          if (sectionOptions['gstTerms'] == true) {
-            termsLines.add('G.S.T will be charged extra as per invoice.');
-          }
-
+        build: (pw.Context ctx) {
           return [
-            // Header
+            // ── Header ──────────────────────────────────────────────────
             pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
@@ -898,8 +951,9 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                     ),
                     pw.SizedBox(height: 5),
                     pw.Text(
-                      'Grand Trunk Rd, near Navdeep Resorts, adjoining Sidak Resorts,\n'
-                      'West, Bhattian Ludhiana, Punjab - 141008\nContact No.: 9872518000, 7888696774',
+                      'Grand Trunk Rd, Near Navdeep Resorts, Adjoining Sidak Resorts,\n'
+                      'West, Bhattian Ludhiana, Punjab - 141008\n'
+                      'Contact No.: 9872518000, 7888696774',
                       style: const pw.TextStyle(fontSize: 10),
                     ),
                     pw.SizedBox(height: 3),
@@ -911,8 +965,8 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                 ),
               ],
             ),
-            pw.SizedBox(height: 10),
-            pw.Divider(thickness: 1),
+ pw.SizedBox(height: 5),
+              pw.Divider(thickness: 1),
             pw.Center(
               child: pw.Text(
                 'Estimate Order',
@@ -923,14 +977,14 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                 ),
               ),
             ),
-            pw.SizedBox(height: 6),
+            pw.SizedBox(height: 3),
             pw.Text(
               'Sales Order: ${job['jobCardNumber'] ?? job['jobNo'] ?? 'N/A'}',
               style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
             ),
-            pw.SizedBox(height: 10),
+            pw.SizedBox(height:7),
 
-            // Customer & Order Info Box
+            // ── Customer + Order info ────────────────────────────────────
             pw.Container(
               padding: const pw.EdgeInsets.all(14),
               decoration: pw.BoxDecoration(
@@ -953,21 +1007,16 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                           ),
                         ),
                         pw.Divider(),
-                        _buildPdfRow(
+                        _pdfInfoRow(
                           'Customer',
                           companyName.isNotEmpty
                               ? '$customerName\n$companyName'
                               : customerName,
-                          valueStyle: pw.TextStyle(
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.red800,
-                            fontSize: 14,
-                          ),
                         ),
-                        _buildPdfRow('Phone', job['phone'] ?? 'N/A'),
-                        _buildPdfRow('Location', job['location'] ?? 'N/A'),
+                        _pdfInfoRow('Phone', job['phone'] ?? 'N/A'),
+                        _pdfInfoRow('Location', job['location'] ?? 'N/A'),
                         if (job['salesPerson'] != null)
-                          _buildPdfRow('Sales Person', job['salesPerson']),
+                          _pdfInfoRow('Sales Person', job['salesPerson']),
                       ],
                     ),
                   ),
@@ -985,8 +1034,8 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                           ),
                         ),
                         pw.Divider(),
-                        _buildPdfRow('Order Date', _formatDate(date)),
-                        _buildPdfRow(
+                        _pdfInfoRow('Order Date', orderDateStr),
+                        _pdfInfoRow(
                           'Dispatch Date',
                           _formatDate(
                             job['deliveryDate'] ??
@@ -995,12 +1044,12 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                                 job['createdAt'],
                           ),
                         ),
-                        _buildPdfRow('Status', job['status'] ?? 'Pending'),
-                        _buildPdfRow(
+                        _pdfInfoRow('Status', job['status'] ?? 'Pending'),
+                        _pdfInfoRow(
                           'Dispatch Type',
                           job['dispatchType'] ?? 'N/A',
                         ),
-                        _buildPdfRow('Order Location', job['unit'] ?? 'N/A'),
+                        _pdfInfoRow('Order Location', job['unit'] ?? 'N/A'),
                       ],
                     ),
                   ),
@@ -1009,259 +1058,668 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
             ),
             pw.SizedBox(height: 15),
 
-            // Products Table
+            // ── Products Table ───────────────────────────────────────────
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.black, width: 0.8),
-              columnWidths: {
-                0: const pw.FixedColumnWidth(25),
-                1: const pw.FlexColumnWidth(1.8),
-                2: const pw.FlexColumnWidth(4.0),
-                3: const pw.FixedColumnWidth(40),
-                4: const pw.FixedColumnWidth(40),
-                5: const pw.FixedColumnWidth(60),
-              },
+              columnWidths: withHsn
+                  ? {
+                      0: const pw.FixedColumnWidth(25),
+                      1: const pw.FixedColumnWidth(55),
+                      2: const pw.FlexColumnWidth(1.8),
+                      3: const pw.FlexColumnWidth(3.5),
+                      4: const pw.FixedColumnWidth(38),
+                      5: const pw.FixedColumnWidth(45),
+                      6: const pw.FixedColumnWidth(55),
+                    }
+                  : {
+                      0: const pw.FixedColumnWidth(25),
+                      1: const pw.FlexColumnWidth(1.8),
+                      2: const pw.FlexColumnWidth(4.0),
+                      3: const pw.FixedColumnWidth(40),
+                      4: const pw.FixedColumnWidth(40),
+                      5: const pw.FixedColumnWidth(60),
+                    },
               children: [
+                // Header row
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.teal800),
-                  children: [
-                    _buildHeaderCell('Sr.'),
-                    _buildHeaderCell('SUMMARY'),
-                    _buildHeaderCell('DETAILS'),
-                    _buildHeaderCell('QTY'),
-                    _buildHeaderCell('RATE'),
-                    _buildHeaderCell('AMOUNT'),
-                  ],
+                  children: withHsn
+                      ? [
+                          _buildHeaderCell('Sr.'),
+                          _buildHeaderCell('HSN Code'),
+                          _buildHeaderCell('SUMMARY'),
+                          _buildHeaderCell('DETAILS'),
+                          _buildHeaderCell('QTY'),
+                          _buildHeaderCell('RATE'),
+                          _buildHeaderCell('AMOUNT'),
+                        ]
+                      : [
+                          _buildHeaderCell('Sr.'),
+                          _buildHeaderCell('SUMMARY'),
+                          _buildHeaderCell('DETAILS'),
+                          _buildHeaderCell('QTY'),
+                          _buildHeaderCell('RATE'),
+                          _buildHeaderCell('AMOUNT'),
+                        ],
                 ),
+
+                // Product rows + section rows
                 ...productsWithImages.asMap().entries.expand((entry) {
-                  final index = entry.key + 1;
-                  final product = entry.value;
+                  final idx = entry.key;
+                  final p = entry.value;
                   final List<pw.MemoryImage> imgs =
-                      product['pdfImages'] as List<pw.MemoryImage>;
-                  final sections =
-                      product['sections'] as Map<String, dynamic>? ?? {};
+                      p['pdfImages'] as List<pw.MemoryImage>;
+                  final sections = p['sections'] as Map<String, dynamic>? ?? {};
 
-                  List<pw.TableRow> rows = [];
-
-                  rows.add(
-                    pw.TableRow(
+                  final detailsCol = pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        _buildDataCell(index.toString(), center: false),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Text(
-                            product['name'] ?? 'Product',
-                            style: pw.TextStyle(
-                              fontSize: 12,
-                              fontWeight: pw.FontWeight.bold,
+                        if (imgs.isNotEmpty) buildImageGrid(imgs),
+                        if (imgs.isNotEmpty) pw.SizedBox(height: 2),
+                        if (p['remarks'].toString().isNotEmpty)
+                          pw.Text(
+                            p['remarks'],
+                            style: const pw.TextStyle(
+                              fontSize: 9,
+                              color: PdfColors.red800,
                             ),
                           ),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(4),
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              // ✅ IMAGES GRID
-                              if (imgs.isNotEmpty) buildImageGrid(imgs),
-
-                              if (imgs.isNotEmpty) pw.SizedBox(height: 6),
-
-                              // ✅ REMARKS
-                              if (product['remarks'] != null &&
-                                  product['remarks'].toString().isNotEmpty)
-                                pw.Text(
-                                  product['remarks'],
-                                  style: const pw.TextStyle(
-                                    fontSize: 12,
-                                    color: PdfColors.red800,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        _buildDataCell(
-                          _onlyNumber(product['quantity']),
-                          center: true,
-                        ),
-                        _buildDataCell(product['price'], center: true),
-                        _buildDataCell(product['amount'], center: true),
                       ],
                     ),
                   );
 
-                  // ✅ CONDITIONAL SECTIONS BASED ON OPTIONS
-                  if (sectionOptions['tray'] == true &&
-                      sections['trayDetail'] != null) {
-                    rows.add(_buildSectionRow('Tray', sections, 'tray'));
-                  }
-                  if (sectionOptions['salophin'] == true &&
-                      sections['salophinDetail'] != null) {
-                    rows.add(
-                      _buildSectionRow('Salophin', sections, 'salophin'),
-                    );
-                  }
-                  if (sectionOptions['boxCover'] == true &&
-                      sections['boxCoverDetail'] != null) {
-                    rows.add(
-                      _buildSectionRow('Box Cover', sections, 'boxCover'),
-                    );
-                  }
-                  if (sectionOptions['inner'] == true &&
-                      sections['innerDetail'] != null) {
-                    rows.add(_buildSectionRow('Inner', sections, 'inner'));
-                  }
-                  if (sectionOptions['bottom'] == true &&
-                      sections['bottomDetail'] != null) {
-                    rows.add(_buildSectionRow('Bottom', sections, 'bottom'));
-                  }
-                  if (sectionOptions['die'] == true &&
-                      sections['dieDetail'] != null) {
-                    rows.add(_buildSectionRow('Die', sections, 'die'));
-                  }
-                  if (sectionOptions['other'] == true &&
-                      sections['otherDetail'] != null) {
-                    rows.add(_buildSectionRow('Other', sections, 'other'));
-                  }
+                  List<pw.TableRow> rows = [];
 
-                  // ✅ EXTRA SECTIONS
-                  if (sectionOptions['extra'] == true) {
-                    final List extras = product['customExtraSections'] ?? [];
-                    for (var extra in extras) {
-                      rows.add(
-                        pw.TableRow(
-                          children: [
-                            _buildDataCell(''),
-                            pw.Padding(
-                              padding: const pw.EdgeInsets.all(4),
-                              child: pw.Text(
-                                extra['title'] ?? 'Extra',
-                                style: pw.TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: pw.FontWeight.bold,
+                  // Main product row
+                  rows.add(
+                    pw.TableRow(
+                      children: withHsn
+                          ? [
+                              _buildDataCell('${idx + 1}', center: false),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(4),
+                                child: pw.Column(
+                                  crossAxisAlignment:
+                                      pw.CrossAxisAlignment.center,
+                                  children: [
+                                    pw.Text(
+                                      p['hsnCode'],
+                                      style: pw.TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: pw.FontWeight.bold,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                    pw.Text(
+                                      'GST ${(p['gstPercent'] as double).toInt()}%',
+                                      style: const pw.TextStyle(
+                                        fontSize: 8,
+                                        color: PdfColors.grey700,
+                                      ),
+                                      textAlign: pw.TextAlign.center,
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                            _buildDataCell(
-                              extra['detail']?.toString() ?? '',
-                              center: false,
-                            ),
-                            _buildDataCell(extra['qty']?.toString() ?? '-'),
-                            _buildDataCell(extra['price']?.toString() ?? '-'),
-                            _buildDataCell(
-                              _calcAmount(extra['qty'], extra['price']) > 0
-                                  ? _calcAmount(
-                                      extra['qty'],
-                                      extra['price'],
-                                    ).toStringAsFixed(0)
-                                  : '-',
-                            ),
-                          ],
-                        ),
-                      );
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(4),
+                                child: pw.Text(
+                                  p['productName'],
+                                  style: pw.TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              detailsCol,
+                              _buildDataCell(p['quantity']),
+                              _buildDataCell(p['price']),
+                              _buildDataCell(
+                                (p['subAmount'] as double).toStringAsFixed(0),
+                              ),
+                            ]
+                          : [
+                              _buildDataCell('${idx + 1}', center: false),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(4),
+                                child: pw.Text(
+                                  p['productName'],
+                                  style: pw.TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              detailsCol,
+                              _buildDataCell(p['quantity']),
+                              _buildDataCell(p['price']),
+                              _buildDataCell(
+                                (p['subAmount'] as double).toStringAsFixed(0),
+                              ),
+                            ],
+                    ),
+                  );
+
+                  // Section rows
+                  if (sectionOptions['tray'] == true &&
+                      (sections['trayDetail'] ?? '').toString().isNotEmpty)
+                    rows.add(
+                      _buildSectionRow(
+                        'Tray',
+                        sections,
+                        'tray',
+                        withHsn: withHsn,
+                      ),
+                    );
+                  if (sectionOptions['salophin'] == true &&
+                      (sections['salophinDetail'] ?? '').toString().isNotEmpty)
+                    rows.add(
+                      _buildSectionRow(
+                        'Salophin',
+                        sections,
+                        'salophin',
+                        withHsn: withHsn,
+                      ),
+                    );
+                  if (sectionOptions['boxCover'] == true &&
+                      (sections['boxCoverDetail'] ?? '').toString().isNotEmpty)
+                    rows.add(
+                      _buildSectionRow(
+                        'Box Cover',
+                        sections,
+                        'boxCover',
+                        withHsn: withHsn,
+                      ),
+                    );
+                  if (sectionOptions['inner'] == true &&
+                      (sections['innerDetail'] ?? '').toString().isNotEmpty)
+                    rows.add(
+                      _buildSectionRow(
+                        'Inner',
+                        sections,
+                        'inner',
+                        withHsn: withHsn,
+                      ),
+                    );
+                  if (sectionOptions['bottom'] == true &&
+                      (sections['bottomDetail'] ?? '').toString().isNotEmpty)
+                    rows.add(
+                      _buildSectionRow(
+                        'Bottom',
+                        sections,
+                        'bottom',
+                        withHsn: withHsn,
+                      ),
+                    );
+                  if (sectionOptions['die'] == true &&
+                      (sections['dieDetail'] ?? '').toString().isNotEmpty)
+                    rows.add(
+                      _buildSectionRow(
+                        'Die',
+                        sections,
+                        'die',
+                        withHsn: withHsn,
+                      ),
+                    );
+                  if (sectionOptions['other'] == true &&
+                      (sections['otherDetail'] ?? '').toString().isNotEmpty)
+                    rows.add(
+                      _buildSectionRow(
+                        'Other',
+                        sections,
+                        'other',
+                        withHsn: withHsn,
+                      ),
+                    );
+
+                  // Extra sections
+                  if (sectionOptions['extra'] == true) {
+                    final List extras = p['customExtraSections'] ?? [];
+                    for (var ex in extras) {
+                      final extraCells = withHsn
+                          ? [
+                              _buildDataCell(''),
+                              _buildDataCell(''),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(4),
+                                child: pw.Text(
+                                  ex['title'] ?? 'Extra',
+                                  style: pw.TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              _buildDataCell(
+                                ex['detail']?.toString() ?? '',
+                                center: false,
+                              ),
+                              _buildDataCell(ex['qty']?.toString() ?? '-'),
+                              _buildDataCell(ex['price']?.toString() ?? '-'),
+                              _buildDataCell(
+                                _calcAmount(ex['qty'], ex['price']) > 0
+                                    ? _calcAmount(
+                                        ex['qty'],
+                                        ex['price'],
+                                      ).toStringAsFixed(0)
+                                    : '-',
+                              ),
+                            ]
+                          : [
+                              _buildDataCell(''),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.all(4),
+                                child: pw.Text(
+                                  ex['title'] ?? 'Extra',
+                                  style: pw.TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: pw.FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              _buildDataCell(
+                                ex['detail']?.toString() ?? '',
+                                center: false,
+                              ),
+                              _buildDataCell(ex['qty']?.toString() ?? '-'),
+                              _buildDataCell(ex['price']?.toString() ?? '-'),
+                              _buildDataCell(
+                                _calcAmount(ex['qty'], ex['price']) > 0
+                                    ? _calcAmount(
+                                        ex['qty'],
+                                        ex['price'],
+                                      ).toStringAsFixed(0)
+                                    : '-',
+                              ),
+                            ];
+                      rows.add(pw.TableRow(children: extraCells));
                     }
                   }
 
                   return rows;
                 }),
-                pw.TableRow(
-                  children: [
-                    _buildDataCell(''),
-                    _buildDataCell(''),
-                    _buildDataCell('SUB TOTAL', center: false),
-                    _buildDataCell(''),
-                    _buildDataCell(''),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(4),
-                      child: pw.Text(
-                        subTotal.toStringAsFixed(0),
-                        textAlign: pw.TextAlign.center,
-                        style: const pw.TextStyle(fontSize: 10),
-                      ),
-                    ),
-                  ],
-                ),
-                pw.TableRow(
-                  children: [
-                    _buildDataCell(''),
-                    _buildDataCell(''),
-                    _buildDataCell('GST @ 5%', center: false),
 
-                    _buildDataCell(''),
-                    _buildDataCell(''),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(4),
-                      child: pw.Text(
-                        gstAmount.toStringAsFixed(0),
-                        textAlign: pw.TextAlign.center,
-                        style: const pw.TextStyle(fontSize: 10),
-                      ),
-                    ),
-                  ],
-                ),
-                // DELIVERY CHARGES
-                // DELIVERY CHARGES
-                // pw.TableRow(
-                //   children: [
-                //     _buildDataCell(''),
-                //     _buildDataCell(''),
-                //     _buildDataCell('DELIVERY CHARGES', center: false),
-                //     _buildDataCell(''),
-                //     _buildDataCell(''),
-                //     pw.Padding(
-                //       padding: const pw.EdgeInsets.all(4),
-                //       child: pw.Text(
-                //         deliveryCharges.toStringAsFixed(0),
-                //         textAlign: pw.TextAlign.center,
-                //         style: const pw.TextStyle(fontSize: 10),
-                //       ),
-                //     ),
-                //   ],
-                // ),
-
-                // // ADVANCE
-                // pw.TableRow(
-                //   children: [
-                //     _buildDataCell(''),
-                //     _buildDataCell(''),
-                //     _buildDataCell('ADVANCE', center: false),
-                //     _buildDataCell(''),
-                //     _buildDataCell(''),
-                //     pw.Padding(
-                //       padding: const pw.EdgeInsets.all(4),
-                //       child: pw.Text(
-                //         '-${advanceAmount.toStringAsFixed(0)}',
-                //         textAlign: pw.TextAlign.center,
-                //         style: const pw.TextStyle(fontSize: 10),
-                //       ),
-                //     ),
-                //   ],
-                // ),
+                // Subtotal row
                 pw.TableRow(
-                  decoration: const pw.BoxDecoration(color: PdfColors.grey300),
-                  children: [
-                    _buildDataCell(''),
-                    _buildDataCell(''),
-                    _buildDataCell('GRAND TOTAL', center: false, fontSize: 12),
-                    _buildDataCell(''),
-                    _buildDataCell(''),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(4),
-                      child: pw.Text(
-                        finalTotal.toStringAsFixed(0),
-                        textAlign: pw.TextAlign.center,
-                        style: pw.TextStyle(
-                          fontSize: 12,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
+                  children: withHsn
+                      ? [
+                          _buildDataCell(''),
+                          _buildDataCell(''),
+                          _buildDataCell(''),
+                          _buildDataCell('SUBTOTAL', center: false),
+                          _buildDataCell(''),
+                          _buildDataCell(''),
+                          _buildDataCell(
+                            subTotal.toStringAsFixed(0),
+                            fontSize: 12,
+                          ),
+                        ]
+                      : [
+                          _buildDataCell(''),
+                          _buildDataCell(''),
+                          _buildDataCell('SUBTOTAL', center: false),
+                          _buildDataCell(''),
+                          _buildDataCell(''),
+                          _buildDataCell(
+                            subTotal.toStringAsFixed(0),
+                            fontSize: 12,
+                          ),
+                        ],
                 ),
               ],
             ),
-            pw.SizedBox(height: 1),
-            pw.Divider(thickness: 1, color: PdfColors.black),
-            // pw.SizedBox(height: 1),
+
+            pw.SizedBox(height: 10),
+
+            // ── GST Breakdown table (CGST + SGST split) ──────────────────
+            pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey600, width: 0.8),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  // GST table header
+                  pw.Container(
+                    color: PdfColors.blueGrey800,
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    child: pw.Row(
+                      children: [
+                        pw.Expanded(
+                          flex: 2,
+                          child: pw.Text(
+                            'Tax Rate',
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.white,
+                            ),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                        pw.Expanded(
+                          flex: 3,
+                          child: pw.Text(
+                            'Taxable Amt.',
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.white,
+                            ),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                        pw.Expanded(
+                          flex: 3,
+                          child: pw.Text(
+                            'CGST Amt.',
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.white,
+                            ),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                        pw.Expanded(
+                          flex: 3,
+                          child: pw.Text(
+                            'SGST Amt.',
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.white,
+                            ),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                        pw.Expanded(
+                          flex: 3,
+                          child: pw.Text(
+                            'Total Tax',
+                            style: pw.TextStyle(
+                              fontSize: 9,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.white,
+                            ),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // GST rows
+                  ...() {
+                    double sumTaxable = 0,
+                        sumCgst = 0,
+                        sumSgst = 0,
+                        sumTotalTax = 0;
+                    final List<pw.Widget> rows = [];
+
+                    for (int i = 0; i < sortedPcts.length; i++) {
+                      final pct = sortedPcts[i];
+                      final taxable = gstGroups[pct]!['taxable']!;
+                      final totalGstForGroup = gstGroups[pct]!['gstAmt']!;
+                      final cgst = totalGstForGroup / 2;
+                      final sgst = totalGstForGroup / 2;
+
+                      sumTaxable += taxable;
+                      sumCgst += cgst;
+                      sumSgst += sgst;
+                      sumTotalTax += totalGstForGroup;
+
+                      final bg = i % 2 == 0
+                          ? PdfColors.white
+                          : PdfColors.grey100;
+
+                      rows.add(
+                        pw.Container(
+                          color: bg,
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          child: pw.Row(
+                            children: [
+                              pw.Expanded(
+                                flex: 2,
+                                child: pw.Text(
+                                  '${pct.toInt()} %',
+                                  style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.blueGrey800,
+                                  ),
+                                  textAlign: pw.TextAlign.center,
+                                ),
+                              ),
+                              pw.Expanded(
+                                flex: 3,
+                                child: pw.Text(
+                                  taxable.toStringAsFixed(2),
+                                  style: const pw.TextStyle(fontSize: 9),
+                                  textAlign: pw.TextAlign.center,
+                                ),
+                              ),
+                              pw.Expanded(
+                                flex: 3,
+                                child: pw.Text(
+                                  cgst.toStringAsFixed(2),
+                                  style: const pw.TextStyle(fontSize: 9),
+                                  textAlign: pw.TextAlign.center,
+                                ),
+                              ),
+                              pw.Expanded(
+                                flex: 3,
+                                child: pw.Text(
+                                  sgst.toStringAsFixed(2),
+                                  style: const pw.TextStyle(fontSize: 9),
+                                  textAlign: pw.TextAlign.center,
+                                ),
+                              ),
+                              pw.Expanded(
+                                flex: 3,
+                                child: pw.Text(
+                                  totalGstForGroup.toStringAsFixed(2),
+                                  style: pw.TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.orange900,
+                                  ),
+                                  textAlign: pw.TextAlign.center,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+
+                      // Totals row after last entry
+                      if (i == sortedPcts.length - 1) {
+                        rows.add(
+                          pw.Container(
+                            color: PdfColors.grey200,
+                            padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            child: pw.Row(
+                              children: [
+                                pw.Expanded(
+                                  flex: 2,
+                                  child: pw.Text(
+                                    'Total',
+                                    style: pw.TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: pw.FontWeight.bold,
+                                    ),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                                pw.Expanded(
+                                  flex: 3,
+                                  child: pw.Text(
+                                    sumTaxable.toStringAsFixed(2),
+                                    style: pw.TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: pw.FontWeight.bold,
+                                    ),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                                pw.Expanded(
+                                  flex: 3,
+                                  child: pw.Text(
+                                    sumCgst.toStringAsFixed(2),
+                                    style: pw.TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: pw.FontWeight.bold,
+                                    ),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                                pw.Expanded(
+                                  flex: 3,
+                                  child: pw.Text(
+                                    sumSgst.toStringAsFixed(2),
+                                    style: pw.TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: pw.FontWeight.bold,
+                                    ),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                                pw.Expanded(
+                                  flex: 3,
+                                  child: pw.Text(
+                                    sumTotalTax.toStringAsFixed(2),
+                                    style: pw.TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: pw.FontWeight.bold,
+                                      color: PdfColors.orange900,
+                                    ),
+                                    textAlign: pw.TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                    return rows;
+                  }(),
+
+                  // Delivery charges row
+                  if (deliveryCharges > 0)
+                    pw.Container(
+                      color: PdfColors.white,
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      child: pw.Row(
+                        children: [
+                          pw.Expanded(
+                            flex: 8,
+                            child: pw.Text(
+                              'Delivery Charges',
+                              style: const pw.TextStyle(fontSize: 9),
+                            ),
+                          ),
+                          pw.Expanded(
+                            flex: 6,
+                            child: pw.Text(
+                              'Rs${deliveryCharges.toStringAsFixed(0)}',
+                              style: const pw.TextStyle(fontSize: 9),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Advance row
+                  if (advanceAmount > 0)
+                    pw.Container(
+                      color: PdfColors.white,
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      child: pw.Row(
+                        children: [
+                          pw.Expanded(
+                            flex: 8,
+                            child: pw.Text(
+                              'Advance Paid',
+                              style: const pw.TextStyle(fontSize: 9),
+                            ),
+                          ),
+                          pw.Expanded(
+                            flex: 6,
+                            child: pw.Text(
+                              '-Rs${advanceAmount.toStringAsFixed(0)}',
+                              style: const pw.TextStyle(
+                                fontSize: 9,
+                                color: PdfColors.red,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Grand Total row
+                  pw.Container(
+                    color: PdfColors.green100,
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    child: pw.Row(
+                      children: [
+                        pw.Expanded(
+                          flex: 8,
+                          child: pw.Text(
+                            'GRAND TOTAL',
+                            style: pw.TextStyle(
+                              fontSize: 11,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.green900,
+                            ),
+                          ),
+                        ),
+                        pw.Expanded(
+                          flex: 6,
+                          child: pw.Text(
+                            'Rs${grandTotal.toStringAsFixed(0)}',
+                            style: pw.TextStyle(
+                              fontSize: 11,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.green900,
+                            ),
+                            textAlign: pw.TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(height: 2),
+
+            // ── Footer ───────────────────────────────────────────────────
             pw.Center(
               child: pw.Text(
                 'All Rights Reserved © Dimple Packaging Pvt. Ltd.',
@@ -1273,48 +1731,99 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                 textAlign: pw.TextAlign.center,
               ),
             ),
-            pw.SizedBox(height: 2),
 
-            // ✅ CONDITIONAL TERMS & CONDITIONS
-
-            // Only show T&C section if at least one option is selected
-            // ✅ CONDITIONAL TERMS & CONDITIONS (MATCH TABLE WIDTH)
+            // ── Terms & Conditions ────────────────────────────────────────
             if (termsLines.isNotEmpty)
               pw.Container(
-                width: double.infinity, // 🔥 SAME AS TABLE
-                padding: const pw.EdgeInsets.symmetric(
-                  vertical: 14,
-                  horizontal: 16,
-                ),
+                width: double.infinity,
+               // margin: const pw.EdgeInsets.only(top: 8),
+                padding: const pw.EdgeInsets.all(12),
                 decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey700, width: 1.2),
+                  border: pw.Border.all(color: PdfColors.grey700),
                   borderRadius: pw.BorderRadius.circular(10),
                   color: PdfColors.grey100,
-                  boxShadow: [
-                    pw.BoxShadow(
-                      color: PdfColors.grey300,
-                      blurRadius: 4,
-                      //  offset: const pw.Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
                     pw.Text(
                       'Terms & Conditions',
-                      textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         fontSize: 14,
                         fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.red,
+                        color: PdfColors.red800,
                       ),
                     ),
-                    pw.SizedBox(height: 6),
+                    pw.SizedBox(height: 1),
+                    
+pw.Container(
+  padding: const pw.EdgeInsets.all(6),
+  decoration: pw.BoxDecoration(
+    border: pw.Border.all(color: PdfColors.grey400),
+    borderRadius: pw.BorderRadius.circular(8),
+  ),
+  child: pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+
+      pw.Expanded(
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+
+            pw.Text(
+              'Bank Details',
+              style: pw.TextStyle(
+                fontSize: 8,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue800,
+              ),
+            ),
+
+            pw.SizedBox(height: 1),
+
+            _pdfInfoRow(
+              'Account Title',
+              'DIMPLE PACKAGING PRIVATE LIMITED',
+            ),
+
+            _pdfInfoRow(
+              'Account Number',
+              '924030018463563',
+            ),
+
+            _pdfInfoRow(
+              'IFSC',
+              'UTIB0000042',
+            ),
+
+            _pdfInfoRow(
+              'Bank',
+              'Axis Bank Ltd., Mall Road, Ludhiana',
+            ),
+
+            _pdfInfoRow(
+              'SWIFT',
+              'AXISINBB042',
+            ),
+          ],
+        ),
+      ),
+
+      pw.SizedBox(width: 10),
+
+      pw.Container(
+        width: 90,
+        height: 80,
+        child: pw.Image(qrImage),
+      ),
+    ],
+  ),
+),
                     pw.Text(
                       termsLines.join('\n'),
                       textAlign: pw.TextAlign.center,
-                      style: const pw.TextStyle(fontSize: 11, lineSpacing: 3),
+                      style: const pw.TextStyle(fontSize: 11, lineSpacing: 1.1),
                     ),
                   ],
                 ),
@@ -1327,50 +1836,110 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
     return pdf.save();
   }
 
+  // ── Section row builder with withHsn support ───────────────────────────────
   pw.TableRow _buildSectionRow(
     String label,
     Map<String, dynamic> sections,
-    String prefix,
-  ) {
-    return pw.TableRow(
-      children: [
-        _buildDataCell(''),
-        pw.Padding(
-          padding: const pw.EdgeInsets.all(4),
-          child: pw.Text(label, style: const pw.TextStyle(fontSize: 12)),
-        ),
-        _buildDataCell(
-          sections['${prefix}Detail']?.toString() ?? '',
-          center: false,
-        ),
-        _buildDataCell(
-          sections['${prefix}Qty']?.toString() ?? '-',
-          center: true,
-        ),
-        _buildDataCell(
-          sections['${prefix}Price']?.toString() ?? '-',
-          center: true,
-        ),
-        _buildDataCell(
-          _calcAmount(sections['${prefix}Qty'], sections['${prefix}Price']) > 0
-              ? _calcAmount(
-                  sections['${prefix}Qty'],
-                  sections['${prefix}Price'],
-                ).toStringAsFixed(0)
-              : '-',
-          center: true,
-        ),
-      ],
+    String prefix, {
+    required bool withHsn,
+  }) {
+    final cells = withHsn
+        ? [
+            _buildDataCell(''),
+            _buildDataCell(''),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text(label, style: const pw.TextStyle(fontSize: 12)),
+            ),
+            _buildDataCell(
+              sections['${prefix}Detail']?.toString() ?? '',
+              center: false,
+            ),
+            _buildDataCell(
+              sections['${prefix}Qty']?.toString() ?? '-',
+              center: true,
+            ),
+            _buildDataCell(
+              sections['${prefix}Price']?.toString() ?? '-',
+              center: true,
+            ),
+            _buildDataCell(
+              _calcAmount(
+                        sections['${prefix}Qty'],
+                        sections['${prefix}Price'],
+                      ) >
+                      0
+                  ? _calcAmount(
+                      sections['${prefix}Qty'],
+                      sections['${prefix}Price'],
+                    ).toStringAsFixed(0)
+                  : '-',
+              center: true,
+            ),
+          ]
+        : [
+            _buildDataCell(''),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text(label, style: const pw.TextStyle(fontSize: 12)),
+            ),
+            _buildDataCell(
+              sections['${prefix}Detail']?.toString() ?? '',
+              center: false,
+            ),
+            _buildDataCell(
+              sections['${prefix}Qty']?.toString() ?? '-',
+              center: true,
+            ),
+            _buildDataCell(
+              sections['${prefix}Price']?.toString() ?? '-',
+              center: true,
+            ),
+            _buildDataCell(
+              _calcAmount(
+                        sections['${prefix}Qty'],
+                        sections['${prefix}Price'],
+                      ) >
+                      0
+                  ? _calcAmount(
+                      sections['${prefix}Qty'],
+                      sections['${prefix}Price'],
+                    ).toStringAsFixed(0)
+                  : '-',
+              center: true,
+            ),
+          ];
+    return pw.TableRow(children: cells);
+  }
+
+  pw.Widget _pdfInfoRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.SizedBox(
+            width: 70,
+            child: pw.Text(
+              '$label:',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold,fontSize: 8 ),
+            ),
+          ),
+          pw.Expanded(child: pw.Text(value, style: const pw.TextStyle(fontSize: 8))),
+        ],
+      ),
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // JPG GENERATION
+  // ══════════════════════════════════════════════════════════════════════════
   Future<void> _generateAndDownloadJPG(
     BuildContext buttonContext,
     Map<String, dynamic> job, {
     required Map<String, bool> sectionOptions,
   }) async {
     BuildContext? loadingContext;
-
     showDialog(
       context: buttonContext,
       barrierDismissible: false,
@@ -1379,32 +1948,25 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
         return const Center(child: CircularProgressIndicator());
       },
     );
-
     try {
       final pdfData = await _generatePDFData(
         job,
+        withHsn: false,
         sectionOptions: sectionOptions,
       );
-
       final jobNo = job['jobCardNumber'] ?? job['jobNo'] ?? 'N/A';
       int pageIndex = 1;
-
       await for (final page in Printing.raster(pdfData, dpi: 200)) {
         final ui.Image image = await page.toImage();
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-
         if (byteData == null) continue;
-
         final pngBytes = byteData.buffer.asUint8List();
-
         await Printing.sharePdf(
           bytes: pngBytes,
-          filename: 'ProformaInvoice_${jobNo}_Page_$pageIndex.png',
+          filename: 'SalesOrder_${jobNo}_Page_$pageIndex.png',
         );
-
         pageIndex++;
       }
-
       if (buttonContext.mounted) {
         ScaffoldMessenger.of(buttonContext).showSnackBar(
           SnackBar(
@@ -1429,6 +1991,9 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
     }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // UI BUILD
+  // ══════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1471,9 +2036,7 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 10),
-
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -1482,9 +2045,7 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                   ),
                   child: Image.asset('assets/dpl.png', height: 36),
                 ),
-
                 const SizedBox(width: 8),
-
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1525,9 +2086,7 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
         ),
         child: Column(
           children: [
-            // Modern AppBar with gradient
-
-            // Enhanced Search Bar
+            // Search Bar
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
               child: Container(
@@ -1578,21 +2137,17 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                       horizontal: 20,
                     ),
                   ),
-                  onChanged: (value) {
-                    setState(() {
-                      _searchText = value.toLowerCase();
-                    });
-                  },
+                  onChanged: (value) =>
+                      setState(() => _searchText = value.toLowerCase()),
                 ),
               ),
             ),
 
-            // Enhanced Filters
+            // Filters
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
               child: Row(
                 children: [
-                  // Date Filter
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
@@ -1646,26 +2201,22 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                         ],
                         onChanged: (val) async {
                           if (val == null) return;
-
                           if (val == 'Custom') {
                             final range = await showDateRangePicker(
                               context: context,
                               firstDate: DateTime(2020),
                               lastDate: DateTime.now(),
-                              builder: (context, child) {
-                                return Theme(
-                                  data: ThemeData.light().copyWith(
-                                    colorScheme: ColorScheme.light(
-                                      primary: Colors.purple.shade600,
-                                      onPrimary: Colors.white,
-                                    ),
+                              builder: (context, child) => Theme(
+                                data: ThemeData.light().copyWith(
+                                  colorScheme: ColorScheme.light(
+                                    primary: Colors.purple.shade600,
+                                    onPrimary: Colors.white,
                                   ),
-                                  child: child!,
-                                );
-                              },
+                                ),
+                                child: child!,
+                              ),
                             );
                             if (range == null) return;
-
                             setState(() {
                               _selectedDateFilter = val;
                               _selectedDateRange = range;
@@ -1681,8 +2232,6 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                     ),
                   ),
                   const SizedBox(width: 14),
-
-                  // Unit Filter
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
@@ -1737,9 +2286,8 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                             child: Text('Collage Road'),
                           ),
                         ],
-                        onChanged: (val) {
-                          setState(() => _selectedUnit = val ?? 'All');
-                        },
+                        onChanged: (val) =>
+                            setState(() => _selectedUnit = val ?? 'All'),
                       ),
                     ),
                   ),
@@ -1803,7 +2351,6 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
 
                   final docs = snapshot.data!.docs.where((doc) {
                     final data = doc.data() as Map<String, dynamic>;
-
                     final jobNo =
                         (data['jobCardNumber'] ??
                                 data['jobNo'] ??
@@ -1811,62 +2358,50 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                                 doc.id)
                             .toString()
                             .toLowerCase();
-
                     final customer =
                         (data['customerName'] ?? data['customer'] ?? '')
                             .toString()
                             .toLowerCase();
-
                     final status = (data['status'] ?? '')
                         .toString()
                         .toLowerCase();
-
                     final searchMatch =
                         jobNo.contains(_searchText) ||
                         customer.contains(_searchText) ||
                         status.contains(_searchText);
-
                     final unit = (data['unit'] ?? '').toString();
                     final unitMatch =
                         _selectedUnit == 'All' || unit == _selectedUnit;
-
-                    Timestamp? ts = data['updatedAt'] ?? data['date'];
+                    final Timestamp? ts = data['updatedAt'] ?? data['date'];
                     if (ts == null) return false;
-
                     final createdDate = ts.toDate();
                     final now = DateTime.now();
-
                     bool dateMatch = true;
-
                     if (_selectedDateFilter == 'Day') {
                       final start = DateTime(now.year, now.month, now.day);
-                      final end = start.add(const Duration(days: 1));
-
                       dateMatch =
                           createdDate.isAfter(
                             start.subtract(const Duration(milliseconds: 1)),
                           ) &&
-                          createdDate.isBefore(end);
+                          createdDate.isBefore(
+                            start.add(const Duration(days: 1)),
+                          );
                     } else if (_selectedDateFilter == 'Week') {
-                      final start = now.subtract(
-                        Duration(days: now.weekday - 1),
-                      );
                       final weekStart = DateTime(
-                        start.year,
-                        start.month,
-                        start.day,
+                        now.year,
+                        now.month,
+                        now.day - (now.weekday - 1),
                       );
-                      final weekEnd = weekStart.add(const Duration(days: 7));
-
                       dateMatch =
                           createdDate.isAfter(
                             weekStart.subtract(const Duration(milliseconds: 1)),
                           ) &&
-                          createdDate.isBefore(weekEnd);
+                          createdDate.isBefore(
+                            weekStart.add(const Duration(days: 7)),
+                          );
                     } else if (_selectedDateFilter == 'Month') {
                       final monthStart = DateTime(now.year, now.month, 1);
                       final monthEnd = DateTime(now.year, now.month + 1, 1);
-
                       dateMatch =
                           createdDate.isAfter(
                             monthStart.subtract(
@@ -1888,22 +2423,19 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                             ),
                           );
                     }
-
                     return searchMatch && unitMatch && dateMatch;
                   }).toList();
 
                   docs.sort((a, b) {
                     final ad = a.data() as Map<String, dynamic>;
                     final bd = b.data() as Map<String, dynamic>;
-
                     final at = (ad['updatedAt'] ?? ad['date']) as Timestamp?;
                     final bt = (bd['updatedAt'] ?? bd['date']) as Timestamp?;
-
-                    final adate = at?.toDate() ?? DateTime(2000);
-                    final bdate = bt?.toDate() ?? DateTime(2000);
-
-                    return bdate.compareTo(adate);
+                    return (bt?.toDate() ?? DateTime(2000)).compareTo(
+                      at?.toDate() ?? DateTime(2000),
+                    );
                   });
+
                   if (docs.isEmpty) {
                     return Center(
                       child: Column(
@@ -1972,20 +2504,21 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                       final status = data['status'] ?? 'Pending';
                       final priority = data['priority'] ?? 'Low';
                       final unit = data['unit'] ?? 'N/A';
-                      final deliveryDate = data['deliveryDate'];
                       final customer =
                           data['customerName'] ?? data['customer'] ?? 'N/A';
                       final products = data['products'] as List<dynamic>? ?? [];
-
                       int totalQuantity = 0;
                       for (var product in products) {
-                        final qty = product['quantity'] ?? '0';
-                        totalQuantity += int.tryParse(qty.toString()) ?? 0;
+                        totalQuantity +=
+                            int.tryParse(
+                              product['quantity']?.toString() ?? '0',
+                            ) ??
+                            0;
                       }
-
                       final orderDate = _formatDate(
                         data['orderDate'] ?? data['updatedAt'],
                       );
+
                       return FadeTransition(
                         opacity: _animationController,
                         child: SlideTransition(
@@ -2076,7 +2609,7 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                                                           ],
                                                         ).createShader(bounds),
                                                     child: Text(
-                                                      jobNo,
+                                                      jobNo.toString(),
                                                       style: const TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -2188,9 +2721,7 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                                       ),
                                     ],
                                   ),
-
                                   const SizedBox(height: 12),
-
                                   Row(
                                     children: [
                                       Expanded(
@@ -2211,6 +2742,7 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
                                       ),
                                     ],
                                   ),
+                                  const SizedBox(height: 16),
                                   Container(
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
@@ -2349,7 +2881,6 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
   Widget _buildModernStatusChip(String status) {
     List<Color> colors;
     IconData icon;
-
     switch (status.toLowerCase()) {
       case 'completed':
         colors = [Colors.green.shade400, Colors.green.shade700];
@@ -2367,7 +2898,6 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
         colors = [Colors.grey.shade400, Colors.grey.shade700];
         icon = Icons.help_outline_rounded;
     }
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
@@ -2401,7 +2931,6 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
 
   Widget _buildModernPriorityChip(String priority) {
     List<Color> colors;
-
     switch (priority.toLowerCase()) {
       case 'high':
         colors = [Colors.red.shade400, Colors.red.shade700];
@@ -2409,12 +2938,9 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
       case 'medium':
         colors = [Colors.amber.shade400, Colors.amber.shade700];
         break;
-      case 'low':
       default:
         colors = [Colors.cyan.shade400, Colors.cyan.shade700];
-        break;
     }
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -2440,29 +2966,19 @@ class _JobCardHistoryTabState extends State<JobCardHistoryTab>
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// SHARED HELPERS (same as other files)
+// ══════════════════════════════════════════════════════════════════════════════
 pw.Widget buildImageGrid(List<pw.MemoryImage> images) {
   if (images.isEmpty) return pw.SizedBox();
-
   const double fixedHeight = 90;
-
-  int columns;
-  if (images.length == 1) {
-    columns = 1;
-  } else if (images.length == 2) {
-    columns = 2;
-  } else {
-    columns = 3;
-  }
-
+  final int columns = images.length == 1 ? 1 : (images.length == 2 ? 2 : 3);
   return pw.SizedBox(
     height: fixedHeight,
     child: pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: List.generate(columns, (index) {
-        if (index >= images.length) {
-          return pw.Expanded(child: pw.SizedBox());
-        }
-
+        if (index >= images.length) return pw.Expanded(child: pw.SizedBox());
         return pw.Expanded(
           child: pw.Padding(
             padding: const pw.EdgeInsets.all(2),
@@ -2470,32 +2986,6 @@ pw.Widget buildImageGrid(List<pw.MemoryImage> images) {
           ),
         );
       }),
-    ),
-  );
-}
-
-pw.Widget _buildPdfRow(String label, String value, {pw.TextStyle? valueStyle}) {
-  return pw.Padding(
-    padding: const pw.EdgeInsets.symmetric(vertical: 2),
-    child: pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.SizedBox(
-          width: 120,
-          child: pw.Text(
-            '$label:',
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          ),
-        ),
-        pw.Expanded(
-          child: pw.Text(
-            value,
-            style: valueStyle, // 👈 yahan apply hoga
-            softWrap: true,
-            maxLines: null, // ← full text show karega
-          ),
-        ),
-      ],
     ),
   );
 }

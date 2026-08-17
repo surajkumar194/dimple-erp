@@ -9,17 +9,13 @@ import 'package:sizer/sizer.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
-  } catch (e) {
-    print("❌ Firebase init error: $e");
-  }
-
+  } catch (e) {}
   runApp(const MyApp());
 }
 
@@ -46,7 +42,6 @@ class MyApp extends StatelessWidget {
 
 class AppModeHandler extends StatelessWidget {
   const AppModeHandler({super.key});
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
@@ -63,27 +58,15 @@ class AppModeHandler extends StatelessWidget {
                 body: Center(child: CircularProgressIndicator()),
               );
             }
-
-            // 🔥 Get mode
             String mode = "live";
             if (modeSnapshot.data!.data() != null) {
               mode = modeSnapshot.data!.get('mode') ?? "live";
             }
-
             final user = authSnapshot.data;
-
             print("🔥 CURRENT MODE: $mode");
-
-            // =========================
-            // 🔴 DEMO MODE
-            // =========================
             if (mode == "demo") {
               return const LoginScreen(isDemo: true);
             }
-
-            // =========================
-            // 🟢 LIVE MODE
-            // =========================
             if (user != null) {
               return const MainScreen();
             } else {
